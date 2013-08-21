@@ -1,0 +1,116 @@
+# Makefile.db  -*- mode: makefile -*-
+
+SHELL=/bin/bash
+
+NW=input-processing.nw
+NOTANGLE=notangle -RCHUNK input-processing.nw > CHUNK
+
+# for shell script, extract and make executable
+SH=$(NOTANGLE);chmod +x CHUNK
+
+# for sql script, just extract
+SQL=$(NOTANGLE)
+
+.PHONY : all
+all: db \
+ deeds_all deeds_relevant\
+ taxroll_all taxroll_relevant\
+ census cenus_added\
+ geocoding\
+ observations
+
+.PHONY : db
+db: $(NW)
+	echo NOTANGLE=$(NOTANGLE)
+	echo SCRIPT=$(SCRIPT)
+	$(subst CHUNK,db-create-database.sh,$(SH))
+	$(subst CHUNK,db-create-database.sql,$(SQL))
+	./db-create-database.sh
+
+.PHONY : deeds_all
+deeds_all: $(NW)
+	$(subst CHUNK,db-populate-deeds-all.sh,$(SH))
+	$(subst CHUNK,db-populate-deeds-all.sql,$(SQL))
+	-./db-populate-deeds-all.sh
+
+
+.PHONY : deeds_relevant
+# THE DEPENCIES DON'T WORK BECAUSE THE SCRIPT FOR deeds-all fails
+# TRY PUTTING HYPHEN AT START OF COMMAND LINE
+# hyphens added but not tested
+deeds_relevant: $(NW) #deeds_all
+	$(subst CHUNK,db-populate-deeds-relevant.sh,$(SH))
+	$(subst CHUNK,db-populate-deeds-relevant.sql,$(SQL))
+	-./db-populate-deeds-relevant.sh
+
+.PHONY : taxroll_all
+taxroll_all: $(NW)
+	$(subst CHUNK,db-populate-taxroll-all.sh,$(SH))
+	$(subst CHUNK,db-populate-taxroll-all.sql,$(SQL))
+	-./db-populate-taxroll-all.sh
+
+.PHONY : taxroll_relevant
+taxroll_relevant: $(NW)  #taxroll_all
+	$(subst CHUNK,db-populate-taxroll-relevant.sh,$(SH))
+	$(subst CHUNK,db-populate-taxroll-relevant.sql,$(SQL))
+	-./db-populate-taxroll-relevant.sh
+
+.PHONY : census
+census: $(NW)
+	$(subst CHUNK,db-populate-census.sh,$(SH))
+	$(subst CHUNK,db-populate-taxroll-relevant.sql,$(SQL))
+	-./db-populate-census.sh
+
+.PHONY : census_added
+census_added: $(NW) census
+	$(subst CHUNK,db-add-census-columns.sh,$(SH))
+	$(subst CHUNK,db-add-census-columns.sql,$(SQL))
+	-./db-add-census-columns.sh
+
+.PHONY : geocoding
+geocoding: $(NW)
+	$(subst CHUNK,db-populate-geocoding.sh,$(SH))
+	$(subst CHUNK,db-populate-geocoding.sql,$(SQL))
+	-./db-populate-geocoding.sh
+
+.PHONY : observations 
+observations: $(NW) #deeds_relevant taxroll_relevant census_added geocoding
+	$(subst CHUNK,db-join.sh,$(SH))
+	$(subst CHUNK,db-join.sql,$(SQL))
+	-./db-join.sh
+
+.PHONY : free
+free: $(NW)
+	$(subst CHUNK,db-free.sh,$(SH))
+	$(subst CHUNK,db-free.sql,$(SQL))
+	./db-free.sh
+
+################################################################################
+## analyses
+################################################################################
+
+.PHONY : analyses
+analyses: analyses-deeds analyses-taxroll
+
+analyses-deeds: $(NW)
+	$(subst CHUNK,db-analyze-deeds-all.sh,$(SH))
+	$(subst CHUNK,db-analyze-deeds-all.sql,$(SQL))
+	./db-analyze-deeds-all.sh
+
+analyses-taxroll: $(NW)
+	$(subst CHUNK,db-explore-taxroll-all.sh,$(SH))
+	$(subst CHUNK,db-explore-taxroll-all.sql,$(SQL))
+	./db-explore-taxroll-all.sh
+
+
+
+################################################################################
+.PHONY: clean
+	rm db-populate-*.sh
+	rm db-populate-*.sql
+
+
+
+
+
+

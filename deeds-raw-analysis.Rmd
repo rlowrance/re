@@ -1,0 +1,340 @@
+Analysis of Raw Deeds File
+========================================================
+
+This R Markdown document performs an analysis of the 8 raw deeds files.
+
+Settings Control Execution
+--------------------------
+
+Turn warnings into errors
+```{r}
+options(warn=2)
+```
+
+These settings control execution.
+
+```{r}
+settings <- list(testing=FALSE
+                 ,dir.laufer="../data/raw/from-laufer-2010-05-11"
+                 ,debugging=TRUE
+                 )
+```
+
+The working directory is `r getwd()`.
+
+Read Input Files
+-----------
+
+The input files come from Steve Laufer. Each has a suffix number that
+identifies the file. The files are compressed. Only certain fields are 
+analyzed, so the remaining are dropped
+
+```{r}
+ReadOne <- function(num) {
+  path <- paste(settings$dir.laufer,
+                "/deeds/CAC06037F",
+                num,
+                ".txt.gz",
+                sep="")
+  df <- read.table(path, header=TRUE, sep="\t", quote="", comment.char="", na.strings="",
+                   stringsAsFactors=FALSE,
+                   encoding="UTF-8",
+                   nrows=ifelse(settings$testing,1000,-1))
+  if (FALSE & settings$debugging) {
+    cat("num", num, "\n")
+    print(names(df))
+    str(df$APN.UNFORMATTED)
+    str(df$APN.FORMATTED)
+    str(df$ORIGINAL.APN)  # not present
+    str(df$SALE.DATE)
+    str(df$RECORDING.DATE)
+    str(df$DOCUMENT.TYPE.CODE)
+    str(df$TRANSACTION.TYPE.CODE)
+    str(df$MULTI.APN.FLAG.CODE)
+    str(df$MULTI.APN.COUNT)
+    str(df$PRI.CAT.CODE)
+    summary(df)
+  }
+  if (length(df$ORIGINAL.APN) != 0)
+    stop("found original apn field")
+  if (length(df$LATITUDE) != 0)
+    stop("found latitude field")
+  if (length(df$LONGITUDE) != 0)
+    stop("found longitude field")
+  r <- data.frame(APN.UNFORMATTED=df$APN.UNFORMATTED,
+                  APN.FORMATTED=df$APN.FORMATTED,
+                  APN.SEQUENCE.NUMBER=df$APN.SEQUENCE.NUMBER,
+                  SALE.AMOUNT=df$SALE.AMOUNT,
+                  SALE.CODE=df$SALE.CODE,
+                  SALE.DATE=df$SALE.DATE,
+                  RECORDING.DATE=df$RECORDING.DATE,
+                  SALE.CODE=df$SALE.CODE,
+                  DOCUMENT.TYPE.CODE=df$DOCUMENT.TYPE.CODE,
+                  TRANSACTION.TYPE.CODE=df$TRANSACTION.TYPE.CODE,
+                  MULTI.APN.FLAG.CODE=df$MULTI.APN.FLAG.CODE,
+                  MULTI.APN.COUNT=df$MULTI.APN.COUNT,
+                  PRI.CAT.CODE=df$PRI.CAT.CODE)
+  cat(sprintf("read %d records from file %d\n", nrow(r), num))
+  r
+}
+
+ReadAll <- function() {
+  r <- rbind(ReadOne(1),
+             ReadOne(2),
+             ReadOne(3),
+             ReadOne(4),
+             ReadOne(5),
+             ReadOne(6),
+             ReadOne(7),
+             ReadOne(8))
+}
+
+deeds <- ReadAll()
+```
+
+In file 5, data record 945 has an NA value for APN.FORMATTED. Replace it, otherwise the factors
+don't merge. Also, many other records in file 5 have this problem.
+
+```{r}
+r5 <- ReadOne(5)
+deeds <- rbind(ReadOne(1), ReadOne(2), ReadOne(3), ReadOne(4))
+str(r5)
+str(r5$APN.FORMATTED)
+sum(is.na(r5$APN.FORMATTED))
+```
+
+Summarize
+-----------
+
+Note that read.table's stringsAsFactors=FALSE is not honored.
+
+```{r}
+str(deeds)
+summary(deeds)
+```
+
+APNs
+---------
+
+Deeds has `r nrow(deeds)` observations.
+
+First few APNs
+
+```{r}
+deeds$APN.UNFORMATTED[1:10]
+deeds$APN.FORMATTED[1:10]
+```
+
+Both unformatted and formatted APNs are often not present
+
+field|num present|num missing
+-----|-----------|-----------
+APN.FORMATTED|`r sum(!is.na(deeds$APN.FORMATTED))` | `r sum(is.na(deeds$APN.FORMATTED))`
+APN.UNFORMATTED|`r sum(!is.na(deeds$APN.UNFORMATTED))` | `r sum(is.na(deeds$APN.UNFORMATTED))`
+
+Determine whether the APN fields can be converted to an integer.
+```{r}
+only.digits <- "^[0123456789]+$"
+apn.formatted.is.numeric <- grepl(only.digits, gsub("-", "", deeds$APN.FORMATTED))
+num.numeric.formatted <- sum(apn.formatted.is.numeric)
+apn.unformatted.is.numeric <- grepl(only.digits, deeds$APN.UNFORMATTED)
+num.numeric.unformatted <- sum(apn.unformatted.is.numeric)
+```
+`r num.numeric.formatted`  of the formatted APNs convert to integers.
+
+`r num.numeric.unformatted` of the unformatted APNs convert to integers. 
+
+
+
+APN SEQUENCE NUMBERs
+--------------------
+
+The sequence numbers are all in {0, 1}.
+```{r}
+table(deeds$APN.SEQUENCE.NUMBER, useNA="ifany")
+```
+
+Price
+------------
+
+Whas price for the entire parcel?
+
+Code|Meaning
+----|------
+C|CONFIRMED
+E|ESTIMATED
+F|SALE PRICE (FULL)
+L|SALE PRICE (PARTIAL)
+N|NOT OF PUBLIC RECORD
+P|SALE PRICE (PARTIAL)
+R|LEASE
+U|UNKNOWN
+V|VERIFIED
+
+```{r}
+table(deeds$SALE.CODE, useNA="ifany")
+```
+
+Distribution of sale amounts, when price is in full.
+
+```{r}
+full.price.indices <- which(deeds$SALE.CODE=="F")
+full.prices <- deeds$SALE.AMOUNT[full.price.indices]
+hist(full.prices, breaks=100, col="blue")
+```
+
+Distribution of non-zero sales prices
+```{r}
+hist(full.prices[which(full.prices != 0)], breaks=100, col="blue")
+```
+
+Boxplot of sale amounts, when price is in full.
+```{r}
+boxplot(full.prices, col="blue")
+```
+
+Prices over time should increase.
+```{r}
+year <- (deeds$RECORDING.DATE / 10000)[full.price.indices]
+plot(year, full.prices, pch=19, col="blue")
+```
+
+
+
+
+
+
+Transaction Dates
+-----------------
+
+The sale date is missing `r sum(is.na(deeds$SALE.DATE))` times.
+
+The recording date is missing `r sum(is.na(deeds$RECORDING.DATE))` times.
+
+Document Types
+--------------
+
+Code|Meaning
+----|-------
+C|CONSTRUCTION LOAN
+CD|CORRECTION DEED
+F|FINAL JUDGEMENT
+G|GRANT DEED
+L|LIS PENDENS - NON CALIFORNIA
+L|LIENS (STATEWIDE CA)
+N|NOTICE OF DEFAULT
+Q|QUIT CLAIM
+R|RELEASE
+S|LOAN ASSIGNMENT 
+T|DEED OF TRUST
+U|FORECLOSURE
+X|MULTI CNTY/ST OR OPEN-END MORTGAGE
+Z|NOMINAL
+
+
+Most of the deeds are Grant(G) deeds. Trust deeds (T) are present.
+```{r}
+table(deeds$DOCUMENT.TYPE.CODE, useNA="ifany")
+```
+
+Transaction Types
+-----------------
+
+Meaning of codes (from CoreLogic's documentation file):
+
+Code | Meaning
+-----|--------
+001|RESALE
+002|REFINANCE
+003|SUBDIVISION/NEW CONSTRUCTION
+004|TIMESHARE
+006|CONSTRUCTION LOAN 
+007|SELLER CARRYBACK
+009|NOMINAL
+
+```{r}
+table(deeds$TRANSACTION.TYPE.CODE, useNA="ifany")
+```
+
+Sale Code
+---------
+
+Sale code is the financial consideration.
+
+Code|Meaning
+----|------
+C|CONFIRMED
+E|ESTIMATED
+F|SALE PRICE (FULL)
+L|SALE PRICE (PARTIAL)
+N|NOT OF PUBLIC RECORD
+P|SALE PRICE (PARTIAL)
+R|LEASE
+U|UNKNOWN
+V|VERIFIED
+
+Distribution of sale codes
+```{r}
+table(deeds$SALE.CODE, useNA="ifany")
+```
+
+
+
+Multi APNs on One Deed
+----------------------
+
+Distribution of number of parcels in the deed:
+```{r}
+table(deeds$MULTI.APN.COUNT, useNA="ifany")
+```
+
+I'm going to assume that 0 in the count means 1.
+```{r}
+assumed.1.parcel <- deeds$MULTI.APN.COUNT == 0 | deeds$MULTI.APN.COUNT == 1
+```
+
+That assumption means that I will say `r sum(assumed.1.parcel)` deeds are for 1 parcel.
+
+Code|Meaning
+----|---
+D|MULTI / DETAIL PARCEL SALE
+M|MULTIPLE PARCEL SALE
+S|SPLIT PARCEL SALE
+
+Instead of assuming the 0 count is actually 1, I could use the MULTI APN FLAG CODE.
+
+Distribution of MULTI.APN.FLAG.CODE
+```{r}
+table(deeds$MULTI.APN.FLAG.CODE, useNA="ifany")
+```
+
+Conclusion: Use the MULTI APN FLAG CODE would result in a slightly different count. (Examine
+the NA field in the above table.)
+
+Arms-Length Sale
+-----------------
+
+Code|Meaning
+----|-----
+A|ARMS LENGTH TRANSACTION
+B|NON ARMS LENGTH - PURCHASE
+C|NON ARMS LENGTH - NON PURCHASE
+D|NON PURCHASE
+E|TIMESHARE
+F|NOTICE OF DEFAULT
+G|ASSIGNMENT
+H|RELEASE
+
+Distribution of PRI.CAT.CODE
+```{r}
+table(deeds$PRI.CAT.CODE, useNA="ifany")
+```
+
+Many non-arms-length deeds are present.
+
+
+
+
+
+
+

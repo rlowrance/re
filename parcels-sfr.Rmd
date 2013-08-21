@@ -1,0 +1,201 @@
+# parcels-sfr.Rmd
+
+Create the output file holding the single-family-residential parcels. 
+
+In order to cope with having only 16 GB of RAM on my system, only features 
+needed downstream in the pipeline are retained.
+
+Files read and the deeds files the Laufer directory. This directory contains
+the file Steve Laufer used in his experiments.
+
+```{r}
+laufer.dir="../data/raw/from-laufer-2010-05-11"
+
+```
+
+Files written.
+
+```{r}
+dir.output="../data/v6/output/"
+path.parcels.out <- paste(dir.output,
+                          "parcels-sfr.csv",
+                          sep="")
+```
+
+## Control the script
+
+Set script control variables.
+
+```{r}
+testing <- FALSE
+```
+
+Initialize R.
+
+```{r}
+options(warn=2)  # turn warnings into errors
+set.seed(1)      # random number generator seed
+require("compiler")
+enableJIT(3)     # 3 ==> maximum JIT level
+```
+
+Source files here, now that the JIT level is set
+
+```{r}
+source("RemoveNonInformative.R")
+```
+
+## Define function to read a taxroll file
+
+The taxroll files contain the parcels.
+
+Define a global variable to keep track of number of non-sfr parcels.
+```{r}
+num.not.sfr <- 0
+```
+
+Define function.
+
+```{r}
+ReadParcelsFile <- function(num) {
+  path <- paste(laufer.dir,
+                "/tax/CAC06037F",
+                num,
+                ".txt.gz",
+                sep="")
+  cat("reading tax file", path, "\n")
+  df <- read.table(path,
+                   header=TRUE,
+                   sep="\t",
+                   quote="",
+                   comment="",
+                   stringsAsFactors=FALSE,
+                   na.strings="",
+                   nrows=ifelse(testing,1000,-1))
+  cat("records in", path, nrow(df), "\n")
+  
+  # select the fields we want
+  r <-
+    data.frame(APN.UNFORMATTED=df$APN.UNFORMATTED,
+               APN.FORMATTED=df$APN.FORMATTED,
+               CENSUS.TRACT=df$CENSUS.TRACT,
+               ZONING=df$ZONING,
+               UNIVERSAL.LAND.USE.CODE=df$UNIVERSAL.LAND.USE.CODE,
+               VIEW=df$VIEW,
+               LOCATION.INFLUENCE.CODE=df$LOCATION.INFLUENCE.CODE,
+               NUMBER.OF.BUILDINGS=df$NUMBER.OF.BUILDINGS,
+               PROPERTY.CITY=df$PROPERTY.CITY,
+               PROPERTY.ZIPCODE=df$PROPERTY.ZIPCODE,
+               TOTAL.VALUE.CALCULATED=df$TOTAL.VALUE.CALCULATED,
+               LAND.VALUE.CALCULATED=df$LAND.VALUE.CALCULATED,
+               IMPROVEMENT.VALUE.CALCULATED=df$IMPROVEMENT.VALUE.CALCULATED,
+               TAX.YEAR=df$TAX.YEAR,
+               LAND.SQUARE.FOOTAGE=df$LAND.SQUARE.FOOTAGE,
+               UNIVERSAL.BUILDING.SQUARE.FEET=df$UNIVERSAL.BUILDING.SQUARE.FEET,
+               LIVING.SQUARE.FEET=df$LIVING.SQUARE.FEET,
+               YEAR.BUILT=df$YEAR.BUILT,
+               EFFECTIVE.YEAR.BUILT=df$EFFECTIVE.YEAR.BUILT,
+               BEDROOMS=df$BEDROOM,
+               TOTAL.ROOMS=df$TOTAL.ROOMS,
+               TOTAL.BATHS.CALCULATED=df$TOTAL.BATHS.CALCULATED,
+               AIR.CONDITIONING.CODE=df$AIR.CONDITIONING.CODE,
+               BASEMENT.FINISH.CODE=df$BASEMENT.FINISH.CODE,
+               BLDG.CODE=df$BLDG.CODE,
+               BLDG.IMPROVEMENT.CODE=df$BLDG.IMPROVEMENT.CODE,
+               CONDITION.CODE=df$CONDITION.CODE,
+               CONSTRUCTION.TYPE.CODE=df$CONSTRUCTION.TYPE.CODE,
+               EXTERIOR.WALLS.CODE=df$EXTERIOR.WALLS.CODE,
+               FIREPLACE.INDICATOR.FLAG=df$FIREPLACE.INDICATOR.FLAG,
+               FIREPLACE.NUMBER=df$FIREPLACE.NUMBER,
+               FIREPLACE.TYPE.CODE=df$FIREPLACE.TYPE.CODE,
+               FOUNDATION.CODE=df$FOUNDATION.CODE,
+               FLOOR.CODE=df$FLOOR.CODE,
+               FRAME.CODE=df$FRAME.CODE,
+               GARAGE.CODE=df$GARAGE.CODE,
+               HEATING.CODE=df$HEATING.CODE,
+               MOBILE.HOME.INDICATOR.FLAG=df$MOBILE.HOME.INDICATOR.FLAG,
+               PARKING.SPACES=df$PARKING.SPACE,
+               PARKING.TYPE.CODE=df$PARKING.TYPE.CODE,
+               POOL.FLAG=df$POOL.FLAG,
+               POOL.CODE=df$POOL.CODE,
+               QUALITY.CODE=df$QUALITY.CODE,
+               ROOF.COVER.CODE=df$ROOF.COVER.CODE,
+               ROOF.TYPE.CODE=df$ROOF.TYPE.CODE,
+               STORIES.CODE=df$STORIES.CODE,
+               STYLE.CODE=df$STYLE.CODE,
+               UNITS.NUMBER=df$UNITS.NUMBER,
+               ELECTRIC.ENERGY.CODE=df$ELECTRIC.ENERGY.CODE,
+               FUEL.CODE=df$FUEL.CODE,
+               SEWER.CODE=df$SEWER.CODE,
+               WATER.CODE=df$WATER.CODE,
+               parcel.file.number=rep(num,nrow(df)),
+               parcel.record.number=1:nrow(df))
+  df <- NULL  # try to return RAM
+  
+  # keep only single-family residence parcels
+  # CHECK FOR NAs
+  sfr <- r$UNIVERSAL.LAND.USE.CODE == 163
+  not.sfr <- sum(!sfr)
+  num.not.sfr <<- num.not.sfr + not.sfr
+  cat(sprintf("dropping %d parcels that are not SFR\n",
+              not.sfr))
+  r <- r[sfr, ]
+  cat("number of SFR parcels", nrow(r), "\n")
+  r
+}
+```
+
+## Read the parcels
+
+Concatenate them into one big data frame.
+
+```{r}
+df.all <- rbind(ReadParcelsFile(1),
+                ReadParcelsFile(2),
+                ReadParcelsFile(3),
+                ReadParcelsFile(4),
+                ReadParcelsFile(5),
+                ReadParcelsFile(6),
+                ReadParcelsFile(7),
+                ReadParcelsFile(8))
+
+  cat("number of SFR parcels retained", nrow(df.all), "\n")
+  cat(sprintf("across all parcels files, dropped %d that were not SFR\n",
+              num.not.sfr))
+```
+
+## Drop features that are non-informative
+
+```{r}
+df.all <- RemoveNonInformative(df.all, cat)
+cat("parcels columns retained (others dropped because non informative)\n")
+for (colname in colnames(df.all)) {
+  cat(" ", colname, "\n")
+}
+```      
+  
+## Remove duplicate parcels
+
+```{r}
+  nondups <- unique(df.all)
+  cat(sprintf("dropped %d parcels that were duplicates of others\n",
+              nrow(df.all) - nrow(nondups)))
+  cat("number of unique relevant parcels", nrow(nondups), "\n")
+
+  # try to return some memory to the OS
+  df.all <- NULL
+  gc()
+```
+
+## Write unique parcels to CSV
+
+```{r}
+cat("writing unique single-family parcels to",
+    path.parcels.out, "\n")
+write.csv(nondups,
+          file=path.parcels.out,
+          quote=FALSE)
+cat("finished\n")
+```
+
+

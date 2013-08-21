@@ -1,0 +1,1 @@
+./CreateEstimates.sh --algo=knn --dataDir=../../data/ --k=24 --obs=1A --pieces=100 --acti

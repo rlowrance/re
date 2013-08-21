@@ -1,0 +1,145 @@
+This is pdfTeX, Version 3.1415926-1.40.10 (TeX Live 2009/Debian) (format=pdflatex 2012.8.2)  12 NOV 2012 08:54
+entering extended mode
+ %&-line parsing enabled.
+**input-processing.tex
+(./input-processing.tex
+LaTeX2e <2009/09/24>
+Babel <v3.8l> and hyphenation patterns for english, usenglishmax, dumylang, noh
+yphenation, loaded.
+(/usr/share/texmf-texlive/tex/latex/base/article.cls
+Document Class: article 2007/10/19 v1.4h Standard LaTeX document class
+(/usr/share/texmf-texlive/tex/latex/base/size10.clo
+File: size10.clo 2007/10/19 v1.4h Standard LaTeX file (size option)
+)
+\c@part=\count79
+\c@section=\count80
+\c@subsection=\count81
+\c@subsubsection=\count82
+\c@paragraph=\count83
+\c@subparagraph=\count84
+\c@figure=\count85
+\c@table=\count86
+\abovecaptionskip=\skip41
+\belowcaptionskip=\skip42
+\bibindent=\dimen102
+)
+(/usr/share/texmf/tex/plain/misc/noweb.sty
+\nwmarginglue=\dimen103
+\codehsize=\dimen104
+\codemargin=\dimen105
+\nwdefspace=\dimen106
+\equivbox=\box26
+LaTeX Font Info:    External font `cmex10' loaded for size
+(Font)              <7> on input line 79.
+LaTeX Font Info:    External font `cmex10' loaded for size
+(Font)              <5> on input line 79.
+\plusequivbox=\box27
+\nwcodetopsep=\skip43
+\nwcodepenalty=\count87
+\nwbreakcodespace=\dimen107
+\@original@textwidth=\dimen108
+\nwcodecommentsep=\skip44
+\@nwlopage=\count88
+\@nwhipage=\count89
+\@nwlosub=\count90
+\@nwhisub=\count91
+\@nwpagetemp=\count92
+\@nwpagecount=\count93
+\sub@page=\count94
+\@nwalph@n=\count95
+\nw@chunkcount=\count96
+\@commacount=\count97
+\nwix@counter=\count98
+) (./input-processing.aux)
+\openout1 = `input-processing.aux'.
+
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 1.
+LaTeX Font Info:    ... okay on input line 1.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 1.
+LaTeX Font Info:    ... okay on input line 1.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 1.
+LaTeX Font Info:    ... okay on input line 1.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 1.
+LaTeX Font Info:    ... okay on input line 1.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 1.
+LaTeX Font Info:    ... okay on input line 1.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 1.
+LaTeX Font Info:    ... okay on input line 1.
+LaTeX Font Info:    Try loading font information for OMS+cmr on input line 9.
+
+(/usr/share/texmf-texlive/tex/latex/base/omscmr.fd
+File: omscmr.fd 1999/05/25 v2.5h Standard LaTeX font definitions
+)
+LaTeX Font Info:    Font shape `OMS/cmr/m/n' in size <10> not available
+(Font)              Font shape `OMS/cmsy/m/n' tried instead on input line 9.
+
+Overfull \hbox (5.0446pt too wide) in paragraph at lines 9--17
+\OT1/cmtt/m/n/10 data/raw/deeds-all-columns/CAC06037F?.txt\OT1/cmr/m/n/10 . The
+se are tab-separated
+ []
+
+[1{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}
+
+]
+Overfull \hbox (2.27806pt too wide) in paragraph at lines 76--78
+[]\OT1/cmr/m/n/10 Set sqlite3 com-mand line op-tions to stop pro-cess-ing if an
+ er-ror oc-curs (\OT1/cmtt/m/n/10 -bail\OT1/cmr/m/n/10 ). 
+ []
+
+[2] [3] [4] [5] [6] [7]
+LaTeX Font Info:    External font `cmex10' loaded for size
+(Font)              <8> on input line 325.
+LaTeX Font Info:    External font `cmex10' loaded for size
+(Font)              <6> on input line 325.
+ [8] [9]
+Overfull \hbox (1.87563pt too wide) in paragraph at lines 395--396
+[]\OT1/cmr/m/n/10 non-purchase, about 5.8 mil-lion (pos-si-bly many of these ar
+e mortgage-related) 
+ []
+
+[10] [11] [12] [13] [14] [15] [16] [17] [18] [19] [20] [21] [22] [23] [24]
+[25] [26]
+Overfull \hbox (65.05968pt too wide) in paragraph at lines 1126--1129
+[]\OT1/cmr/m/n/10 One group is com-prised of nu-mer-i-cal in-for-ma-tion fields
+, in-clud-ing \OT1/cmtt/m/n/10 effective[]year[]built\OT1/cmr/m/n/10 ,
+ []
+
+[27] [28] [29] [30]
+Overfull \hbox (9.8074pt too wide) in paragraph at lines 1254--1258
+[]\OT1/cmr/m/n/10 Several fields have un-usu-ally high max-i-mum val-ues: \OT1/
+cmtt/m/n/10 bedrooms\OT1/cmr/m/n/10 , \OT1/cmtt/m/n/10 total[]rooms\OT1/cmr/m/n
+/10 ,
+ []
+
+[31] [32] [33] [34] [35] [36] [37] [38] [39] [40] [41] [42] [43] [44] [45]
+[46] [47] [48] [49]
+Overfull \hbox (4.05547pt too wide) in paragraph at lines 2009--2011
+[]\OT1/cmr/m/n/10 All that needs to be done is to join the four ta-bles to form
+ ta-ble \OT1/cmtt/m/n/10 observations\OT1/cmr/m/n/10 . 
+ []
+
+[50] [51] [52] [53] [54] (./input-processing.aux) ) 
+Here is how much of TeX's memory you used:
+ 612 strings out of 495061
+ 7527 string characters out of 1182622
+ 73836 words of memory out of 3000000
+ 3853 multiletter control sequences out of 15000+50000
+ 8353 words of font info for 31 fonts, out of 3000000 for 9000
+ 28 hyphenation exceptions out of 8191
+ 25i,6n,19p,676b,299s stack positions out of 5000i,500n,10000p,200000b,50000s
+</usr/share/texmf-texlive/fo
+nts/type1/public/amsfonts/cm/cmbx10.pfb></usr/share/texmf-texlive/fonts/type1/p
+ublic/amsfonts/cm/cmbx12.pfb></usr/share/texmf-texlive/fonts/type1/public/amsfo
+nts/cm/cmmi10.pfb></usr/share/texmf-texlive/fonts/type1/public/amsfonts/cm/cmmi
+8.pfb></usr/share/texmf-texlive/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/
+share/texmf-texlive/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/share/texmf-t
+exlive/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/share/texmf-texlive/font
+s/type1/public/amsfonts/cm/cmti10.pfb></usr/share/texmf-texlive/fonts/type1/pub
+lic/amsfonts/cm/cmtt10.pfb></usr/share/texmf-texlive/fonts/type1/public/amsfont
+s/cm/cmtt12.pfb>
+Output written on input-processing.pdf (54 pages, 217029 bytes).
+PDF statistics:
+ 216 PDF objects out of 1000 (max. 8388607)
+ 0 named destinations out of 1000 (max. 500000)
+ 1 words of extra memory for PDF output out of 10000 (max. 10000000)
+

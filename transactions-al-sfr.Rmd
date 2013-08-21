@@ -1,0 +1,172 @@
+# transactions-al-sfr.Rmd
+
+Create the transactions-al-sfr.csv file containing all transactions for
+arms-length deeds for single-family-residential parcels.
+
+Join the deeds and parcels files on the best APN (defined below), not the
+formatted or unformatted APN.
+
+Paths to files read.
+
+```{r}
+dir.output="../data/v6/output/"
+path.census <- paste(dir.output, "census.csv", sep="")
+path.deeds <- paste(dir.output, "deeds-al.csv", sep="")
+path.parcels <- paste(dir.output, "parcels-sfr.csv", sep="")
+path.geocoding <- "../data/raw/geocoding.tsv"
+```
+
+Files written.
+
+```{r}
+path.out <- paste(dir.output, "transactions-al-sfr.csv", sep="")
+```
+
+## Control the script
+
+Set script control variables.
+
+```{r}
+testing <- FALSE
+```
+
+Initialize R.
+
+```{r}
+options(warn=2)  # turn warnings into errors
+set.seed(1)      # random number generator seed
+require("compiler")
+enableJIT(3)     # 3 ==> maximum JIT level
+```
+
+Source files here, now that the JIT level is set
+
+```{r}
+source("BestApns.R")
+source("RemoveNonInformative.R")
+```
+
+## Read census file
+
+```{r}
+census <- read.table(path.census,
+                     header=TRUE,
+                     sep="\t",
+                     quote="",
+                     comment.char="",
+                     stringsAsFactors=FALSE,
+                     nrows=ifelse(testing, 1000, -1))                  
+cat("number of census records read", nrow(census), "\n")
+```
+## Read deeds file
+
+```{r}
+deeds <- read.csv(path.deeds,
+                  header=TRUE,
+                  quote="",
+                  comment="",
+                  stringsAsFactors=FALSE,
+                  nrows=ifelse(testing, 1000, -1))
+cat("number of deeds records read", nrow(deeds), "\n")
+```
+
+## Read geocoding
+
+```{r}
+geocoding <- read.table(path.geocoding,
+                        header=TRUE,
+                        sep="\t",
+                        quote="",
+                        comment="",
+                        stringsAsFactor=FALSE,
+                        na.strings="",
+                        nrows=ifelse(testing, 1000, -1))
+cat("number of geocoding records read", nrow(geocoding), "\n")
+```
+
+## Read parcels file
+
+```{r}
+parcels <- read.csv(path.parcels,
+               header=TRUE,
+               quote="",
+               comment="",
+               stringsAsFactors=FALSE,
+               nrows=ifelse(testing, 1000, -1))
+cat("number of parcels records read", nrow(parcels), "\n")
+```
+
+  
+## Create the transactions
+
+Find best APNs from the deeds and parcels.
+
+```{r}
+deeds$apn.recoded <- BestApns(deeds$APN.UNFORMATTED,
+                              deeds$APN.FORMATTED)
+
+# show some examples
+deeds$APN.UNFORMATTED[1:100]
+deeds$APN.FORMATTED[1:100]
+as.character(deeds$apn.recoded)[1:100] 
+
+parcels$apn.recoded <- BestApns(parcels$APN.UNFORMATTED,
+                                parcels$APN.FORMATTED)
+# show some examples
+parcels$APN.UNFORMATTED[1:100]
+parcels$APN.FORMATTED[1:100]
+as.character(parcels$apn.recoded)[1:100]
+```
+
+Merge the deeds and parcels.
+```{r}
+m1 <- merge(deeds, parcels, by="apn.recoded",
+            suffixes=c(".deeds", ".parcels"))
+cat("number of deeds and parcels with common recoded.apn",
+    nrow(m1),
+    "\n")
+deeds <- NULL    # try to release RAM
+parcels <- NULL
+gc()
+```
+
+Merge in the census data
+```{r}
+m2 <- merge(m1, census, by.x="CENSUS.TRACT", by.y = "census.tract")
+cat("number of common deeds and parcels with known CENSUS.TRACT",
+    nrow(m2),
+    "\n")
+census <- NULL
+gc()
+```
+
+Merge in the geocoding data. Note: Some of the latitudes and longitudes are 
+zero, an invalid value. Pass these along because some algorithms may be able
+to cope with these values.
+```{r}
+m3 <- merge(m2, geocoding, by.x="apn.recoded", by.y="G.APN")
+cat("number of transactions, after considering geocoding",
+    nrow(m3),
+    "\n")
+geocoding <- NULL
+gc()
+```
+
+Drop some extraneous features.
+```{r}
+m3$X.deeds <- NULL
+m3$APN.UNFORMATTED.deeds <- NULL
+m3$APN.FORMATTED.deeds <- NULL
+m3$X.parcels <- NULL
+m3$APN.UNFORMATTED.parcels <- NULL
+```
+
+Write transactions file
+```{r}
+write.csv(m3, path.out)
+cat("number of transactions written:", nrow(m3), "\n")
+```
+
+```{r}
+cat("Finished\n")
+```

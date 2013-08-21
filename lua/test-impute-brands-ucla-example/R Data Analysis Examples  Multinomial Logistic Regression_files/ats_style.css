@@ -1,0 +1,57 @@
+/*
+Generic Stylesheet
+Uses fixed type sizes (i.e. 12px/18px). User can not scale fonts.
+
+In future use relative sizes
+Pixels         NN                IE               Size
+--------------------------------------------------------------------
+10px           x-small           xx-small         1
+12px           small             x-small          2
+
+*/
+
+
+h1 { font-family: "Times New Roman", serif; color: #FF0000; text-align: Left }
+h2 { font-family: "Times New Roman", serif; color: rgb(255,0,0); text-align: Left; }
+h3 { font-family: "Times New Roman", serif; color: rgb(255,0,0); text-align: Left; }
+h4 { font-family: "Times New Roman", serif; color: rgb(255,0,0); text-align: Left; }
+pre { font-family: "Courier New", Courier, monospace;}
+.text { font-family: "Times New Roman", serif; }
+.graybar { font-family: "Times New Roman", serif; font-weight: bold }
+.headline { color: rgb(0,51,51); font-size: 12pt; }
+
+body { font-family: "Times New Roman", serif; background-color: #ffffff; }
+
+xmp.command {
+	font-weight: bold;
+}
+
+.crumbs {
+	font-size: 11px;
+	font-family: Verdana,Arial,Helvetica,Sans-Serif;
+	color: #000000;
+	letter-spacing: 0px;
+	padding: 1px 1px 3px 4px;
+}
+DIV.crumbs A {
+	color: #000000;
+	text-decoration: underline;
+}
+DIV.crumbs A:hover {
+	color: #ff0000;
+	text-decoration: underline;
+}
+
+p.pad {
+	padding-left: 15px;
+	margin-top: 0px;
+}
+
+p.version {
+  font-size: .9em;
+}
+
+.comment{
+	color: rgb(0,0,0) ;
+}
+  

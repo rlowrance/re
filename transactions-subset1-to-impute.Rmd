@@ -1,0 +1,432 @@
+# transactions-subset1-to-impute.Rmd
+
+Determine features in subset 1 that are to be imputed.
+
+Analyze the qualitative features in subset 1 file to provide information 
+to write the report and to determine which features should be imputed.
+
+Files read and written:
+
+```{r}
+input.file <- "transactions-subset1.csv"
+table1.file <- "transactions-subset1-analyze-qualitative-features.tex"
+table2.file <- "transactions-subset1-analyze-imputed-features.tex"
+imputed.file <- "transactions-subset1-to-impute.csv"
+```
+
+Output files created:
+* `r table1.file`: table for report showing all qualitative features 
+* `r imputed.file`: csv containing names of features that should be imputed
+
+## Control the script
+
+Set script control variables.
+
+```{r}
+testing <- FALSE
+output.dir <- "../data/v6/output/"
+script.name <- "createSubset1Imputed"
+path.input.file <- paste(output.dir, input.file, sep="")
+path.table1.file <- paste(output.dir, table1.file, sep="")
+path.table2.file <- paste(output.dir, table2.file, sep="")
+path.imputed.file <- paste(output.dir, imputed.file, sep="")
+```
+
+Initialize R.
+```{r}
+options(warn=2)  # turn warnings into errors
+set.seed(1)      # random number generator seed
+require("compiler")
+enableJIT(3)     # 3 ==> maximum JIT level
+```
+
+Source files here, now that the JIT level is set
+```{r}
+# nothing to source for now
+```
+
+## Read the input
+
+Read input transactions into dataframe `t`.
+
+```{r}
+path.input.file
+t <- read.csv(path.input.file,
+              nrows=ifelse(testing, 1000, -1))
+
+str(t)
+summary(t)
+```
+
+## Summary of qualitative features (table 1)
+
+This code generates table1.
+
+````{r}
+table1Lines <- list()
+
+# These function accumulate their results into the global table1Lines
+# The goal is to write the table to a txt file that is imported into the latex
+# documentation file. That way I don't have to copy and paste results.
+# The table in the txt file comes into latex as a verbatim block. Maybe later
+# it can be turned into a latex table with fancy formatting.
+
+Header1 <- function() {
+  # Write the header
+  table1Lines <<- list("\\begin{verbatim}")
+  table1Lines <<- c(table1Lines, "NUMBER OF UNIQUES CODES AND NUMBER OF MISSING CODES")
+  table1Lines <<- c(table1Lines, "Number of Uniques Includes Any NAs")
+  table1Lines <<- c(table1Lines, " ")
+  line <- sprintf("%40s %11s %11s %12s", 
+                  "Qualitative Feature", "Num Uniques", "Num NAs", "Fraction NAs")
+  table1Lines <<- c(table1Lines, line)
+}
+
+Detail1 <- function(columnName) {
+  # Write a detail line
+  values <- t[[columnName]]
+  #str(values)
+  nUniques <- length(unique(values))
+  nNAs <- sum(is.na(values))
+  fractionNAs <- nNAs / nrow(t)
+  line <- sprintf("%40s %11d %11d %12.4f", columnName, nUniques, nNAs, fractionNAs)  
+  invisible(table1Lines <<- c(table1Lines, line))
+
+  #Data1(columnName, nUniques, nNAs, fractionNAs)
+  #paste(columnName, "|", nUniques, "|", nNAs, "|", fractionNAs, sep="")
+}
+
+Footer1 <- function() {
+  # Write the footer
+  table1Lines <<- c(table1Lines, "\\end{verbatim}")
+}
+```
+
+Now generate table 1.
+
+```{r}
+Header1()
+Detail1("RESALE.NEW.CONSTRUCTION.CODE")
+Detail1("ZONING")
+Detail1("VIEW")
+Detail1("LOCATION.INFLUENCE.CODE")
+Detail1("AIR.CONDITIONING.CODE")
+Detail1("CONDITION.CODE")
+Detail1("CONSTRUCTION.TYPE.CODE")
+Detail1("EXTERIOR.WALLS.CODE")
+Detail1("FIREPLACE.TYPE.CODE")
+Detail1("FOUNDATION.CODE")
+Detail1("FLOOR.CODE")
+Detail1("FRAME.CODE")
+Detail1("GARAGE.CODE")
+Detail1("HEATING.CODE")
+Detail1("PARKING.TYPE.CODE")
+Detail1("POOL.FLAG")
+Detail1("POOL.CODE")
+Detail1("QUALITY.CODE")
+Detail1("ROOF.COVER.CODE")
+Detail1("ROOF.TYPE.CODE")
+Detail1("STYLE.CODE")
+Detail1("SEWER.CODE")
+Detail1("WATER.CODE")
+Footer1() 
+```
+
+Print table 1 into the HMTL document for ease of reviewing.
+```{r}
+str(table1Lines)
+```
+
+Write table1 to external file.
+
+```{r}
+writeLines(as.character(table1Lines), con=path.table1.file)
+```
+
+## Details on Qualitative Fields
+
+Consider each feature then decide what to do with it
+* Drop fields that cannot be used. Delete these features from the `t` data frame.
+* Recode fields that need to be fixed up. Replace original variable with new one.
+* Remember names of features that will be imputed in a later step.
+* Sometime both recoded the field and remember it for later imputation.
+
+Keep track of names of features for the imputation.
+```{r}
+imputedFeatures <- list()
+```
+
+### RESALE NEW CONSTRUCTION CODE retained
+
+```{r}
+table(t$RESALE.NEW.CONSTRUCTION.CODE, useNA="ifany")
+```
+
+### ZONING imputed
+
+```{r}
+#table(t$ZONING, useNA="ifany")   DROP, because the long print out clutters the HTML file
+imputedFeatures <- c(imputedFeatures, "ZONING")
+```
+
+### VIEW droped
+
+```{r}
+table(t$VIEW, useNA="ifany")
+t$VIEW <- NULL
+```
+
+### LOCATION INFLUENCE CODE recoded
+
+```{r}
+table(t$LOCATION.INFLUENCE.CODE, useNA="ifany")
+t$LOCATION.INFLUENCE.CODE.recoded <- ifelse(is.na(t$LOCATION.INFLUENCE.CODE),
+                                            "NOT SPECIAL",
+                                            t$LOCATION.INFLUENCE.CODE)
+t$LOCATION.INFLUENCE.CODE <- NULL
+table(t$LOCATION.INFLUENCE.CODE.recoded, useNA="ifany")
+```
+
+### AIR CONDITIONING CODE recoded
+
+```{r}
+table(t$AIR.CONDITIONING.CODE, useNA="ifany")
+# set missing values to 000 which is the code for non
+t$AIR.CONDITIONING.CODE.recoded <- ifelse(is.na(t$AIR.CONDITIONING.CODE),
+                                          "000",
+                                          t$AIR.CONDITIONING.CODE)
+t$AIR.CONDITIONING.CODE <- NULL
+```
+
+### CONDITION CODE imputed
+
+```{r}
+table(t$CONDITION.CODE, useNA="ifany")
+imputedFeatures <- c(imputedFeatures, "CONDITION.CODE")
+```
+
+### CONSTRUCTION TYPE CODE imputed
+
+```{r}
+table(t$CONSTRUCTION.TYPE.CODE, useNA="ifany")
+imputedFeatures <- c(imputedFeatures, "CONSTRUCTION.TYPE.CODE")
+```
+
+### EXTERIOR WALLS CODE imputed
+
+```{r}
+table(t$EXTERIOR.WALLS.CODE, useNA="ifany") # to be imputed
+imputedFeatures <- c(imputedFeatures, "EXTERIOR.WALLS.CODE")
+```
+
+### FIREPLACE TYPE CODE dropped
+
+```{r}
+table(t$FIREPLACE.TYPE.CODE, useNA="ifany")
+t$FIREPLACE.TYPE.CODE <- NULL
+```
+### FOUNDATION CODE recoded imputed
+
+```{r}
+table(t$FOUNDATION.CODE, useNA="ifany")
+t$FOUNDATION.CODE.recoded <- ifelse(t$FOUNDATION.CODE == "001",
+                                    NA,
+                                    t$FOUNDATION.CODE)
+t$FOUNDATION.CODE <- NULL
+table(t$FOUNDATION.CODE.recoded, useNA="ifany")
+imputedFeatures <- c(imputedFeatures, "FOUNDATION.CODE.recoded")
+```
+
+### FLOOR CODE dropped
+
+```{r}
+table(t$FLOOR.CODE, useNA="ifany")
+t$FLOOR.CODE <- NULL
+```
+
+### FRAME CODE dropped
+
+```{r}
+table(t$FRAME.CODE, useNA="ifany")
+t$FRAME.CODE <- NULL
+```
+
+### GARAGE CODE recoded
+
+```{r}
+table(t$GARAGE.CODE, useNA="ifany")
+# set missing values to 000 which is the code for no garage
+t$GARAGE.CODE.recoded <- ifelse(is.na(t$GARAGE.CODE),
+                                "000",
+                                t$GARAGE.CODE)
+t$GARAGE.CODE <- NULL
+```
+
+### HEATING CODE imputed
+
+```{r}
+table(t$HEATING.CODE, useNA="ifany")
+imputedFeatures <- c(imputedFeatures, "HEATING.CODE")
+```
+
+### PARKING TYPE CODE recoded imputed
+
+```{r}
+# When parking type is missing, often there are zero parking spaces
+table(t$PARKING.TYPE.CODE, useNA="ifany")
+table(t$PARKING.SPACES, useNA="ifany")
+table(t$PARKING.TYPE.CODE, t$PARKING.SPACES, useNA="ifany")
+# set missing PARKING TYPE CODE to 000 (no parking space) iff PARKING SPACE == 0
+t$PARKING.TYPE.CODE.recoded <- ifelse(is.na(t$PARKING.TYPE.CODE),
+                                      ifelse(t$PARKING.SPACES == 0,
+                                             "000", 
+                                             NA),
+                                      t$PARKING.TYPE.CODE)
+imputedFeatures <- c(imputedFeatures, "PARKING.TYPE.CODE.recoded")
+```
+
+### POOL FLAG recoded
+
+```{r}
+poolFlagTable <- table(t$POOL.FLAG, useNA="ifany")
+poolFlagTable
+poolFlagTableNAs <- poolFlagTable[length(poolFlagTable)]
+poolFlagTableNAs
+```
+
+The only valid value is Y
+```{r}
+t$POOL.FLAG.recoded <- ifelse(is.na(t$POOL.FLAG) | t$POOL.FLAG == "N",
+                              "N",
+                              "Y")
+t$POOL.FLAG <- NULL
+```
+
+### POOL CODE recoded
+
+Is POOL CODE present when POOL FLAG recoded is "Y"?
+```{r}
+poolCodeTable <- table(t$POOL.CODE, useNA="ifany")
+poolCodeTable
+poolCodeTableNAs <- poolCodeTable[length(poolCodeTable)]
+if (poolCodeTableNAs != poolFlagTableNAs)
+  stop("assumption about POOL CODE and POOL FLAG NA counts is wrong")
+# set missing values to 000 which means no pool
+t$POOL.CODE.recoded <- ifelse(is.na(t$POOL.CODE),
+                              "000",
+                              t$POOL.CODE)
+t$POOL.CODE <- NULL
+```
+
+### QUALITY CODE imputed
+
+```{r]}
+table(t$QUALITY.CODE, useNA="ifany")
+imputedFeatures <- c(imputedFeatures, "QUALITY.CODE")
+```
+
+### ROOF COVER CODE imputed
+
+```{r}
+table(t$ROOF.COVER.CODE, useNA="ifany") 
+imputedFeatures <- c(imputedFeatures, "ROOF.COVER.CODE")
+```
+
+### ROOF TYPE CODE imputed
+
+```{r}
+table(t$ROOF.TYPE.CODE, useNA="ifany")
+imputedFeatures <- c(imputedFeatures, "ROOF.TYPE.CODE")
+```
+
+### STYLE CODE imputed
+
+```{r}
+table(t$STYLE.CODE, useNA="ifany")
+imputedFeatures <- c(imputedFeatures, "STYLE.CODE")
+```
+
+### SEWER CODE dropped
+
+```{r}
+table(t$SEWER.CODE, useNA="ifany")
+t$SEWER.CODE <- NULL
+```
+
+### WATER CODE imputed
+
+```{r}
+table(t$WATER.CODE, useNA="ifany")
+imputedFeatures <- c(imputedFeatures, "WATER.CODE")
+```
+
+
+
+## Qualitative fields containing missing values that are to be imputed
+
+All the fields to be imputed.
+```{r}
+imputedFeatures
+```
+
+Write csv containing names of features to be imputed.
+```{r}
+cat("featureName\n", file=path.imputed.file)
+for (imputedFeature in imputedFeatures) {
+  cat(paste(imputedFeature, "\n", sep=""), file=path.imputed.file, append=TRUE)
+}
+```
+
+Code to create external table of number of NAs in fields to be imputed.
+
+````{r}
+table2Lines <- list()  # the lines accumulate into this global variable
+runningTotal <- 0
+
+Header2 <- function() {
+  # Write the header
+  table2Lines <<- list("\\begin{verbatim}")
+  table2Lines <<- c(table2Lines, "NUMBER OF MISSING CODES IN FIELDS TO BE IMPUTED")
+  table2Lines <<- c(table2Lines, " ")
+  line <- sprintf("%40s %11s", "Feature", "Num NAs")
+  table2Lines <<- c(table2Lines, line)
+}
+
+Detail2 <- function(columnName) {
+  # Write a detail line
+  values <- t[[columnName]]
+  nNAs <- sum(is.na(values))
+  runningTotal <<- runningTotal + nNAs
+  line <- sprintf("%40s %11d", columnName, nNAs)  
+  invisible(table2Lines <<- c(table2Lines, line))
+}
+
+Footer2 <- function() {
+  # Write the footer
+  table2Lines <<- c(table2Lines, "\\end{verbatim}")
+}
+```
+
+Now generate table 1.
+
+```{r}
+Header2()
+for (imputedFeature in imputedFeatures) {
+  Detail2(imputedFeature)
+}
+Footer2()
+```
+
+Print table 2 into the HMTL document for ease of reviewing.
+```{r}
+str(table2Lines)
+```
+
+Write table2 to external file.
+
+```{r}
+writeLines(as.character(table2Lines), con=path.table2.file)
+```
+
+Determine 
+"finished"

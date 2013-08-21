@@ -1,0 +1,52 @@
+# Makefile.apop -*- mode: makefile -*-
+# run from build directory: make -f ../src.git/Makefile.apop [TARGET] [macros]
+# using 21st Century C's guidelines
+
+OBJS+=glibSpecializations.o
+OBJS+=imputeMissingCodes.o
+
+PGMS+=imputeMissingCodes
+PGMS+=test-no-main-reference
+
+# handle command line macro definitions  name=value
+# COMPILER=[clang|gcc]
+# OPTIMIZATION=[|-O1|-O2|-O3]
+
+ifndef COMPILER
+COMPILER=clang
+#CC=clang
+endif
+
+ifndef OPTIMIZATION
+OPTIMIZATION=
+endif
+
+# `pkg-config --cflags apohenia` is empty
+# `pkg-config --libs apophenia ` includes gsl
+PKGS=apophenia glib-2.0
+
+INCLUDES=-Iusr/include/apophenia `pkg-config --cflags $(PKGS)`
+CFLAGS=-c -Wall -Werror -std=gnu99 -g $(OPTIMIZATION) $(INCLUDES)
+LDLIBS=`pkg-config --libs $(PKGS)` -lm -lc
+
+# run from build directory, so say where the source files are
+SRC= ../src.git
+vpath %.c $(SRC)
+vpath %.h $(SRC)
+
+# allow command line to override CC, the c compiler to use
+# set default value for CC
+
+%.o : %.c
+	# COMPILER=$(COMPILER)
+	# OPTIMIZATION=$(OPTIMIZATION)
+	$(COMPILER) $(CFLAGS) $< -o $@
+
+all: $(PGMS)
+
+imputeMissingCodes: imputeMissingCodes.o Log.o glibSpecializations.o
+	#$(COMPILER) $^ $(LDLIBS) -o $@
+	$(COMPILER) $^ $(LDLIBS) -o $@
+
+testNoMainReference: testNoMainReference.o
+	$(COMPILER) $^ $(LDLIBS) -o $@

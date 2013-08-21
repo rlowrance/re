@@ -1,0 +1,92 @@
+-- cvLoss-test.lua
+-- unit test
+
+require 'all'
+
+test = {}
+tester = Tester()
+
+function test.knn()
+   local v = makeVerbose(true, 'test.knn')
+   setRandomSeeds()
+
+   local function makeFittedModel(alpha, globalObsIndex, kappa, extraArg)
+      local v = makeVerbose(true, 'makeFittedModel')
+      v('alpha', alpha)
+      v('globalObsIndex', globalObsIndex)
+      v('kappa', kappa)
+      v('extraArg', extraArg)
+
+      affirm.is(alpa, 'alpha')
+      affirm.isIntegerPositive(globalObsIndex, 'globalObsIndex')
+      affirm.isSequence(kappa, 'kappa')
+      affirm.isTable(extraArg, 'extraArg')
+
+      -- make xs and ys for the model from the fold's transactions
+      local fold = kappa[globalObsIndex]
+      local modelNObs = 0
+      for i = 1, #kappa do
+         if kappa[i] == fold then
+            modelNObs = modelNObs + 1
+         end
+      end
+
+      local modelXs = torch.Tensor(modelNObs, extraArg.nDims)
+      local modelYs = torch.Tensor(modelNobs)
+
+      local modelObsIndex = 0
+      for i = 1, #kappa do
+         if kappa[i] == fold then
+            modelObsIndex = modelObsIndex + 1
+            modelXs[modelObsIndex] = extraArg.xs[i]
+            modelYs[modelObsIndex] = extraArg.ys[i]
+         end
+      end
+
+      local model = Knn(modelXs, modelYs, extraArg.maxK)
+      -- no training to do
+      return model
+   end -- makeFittedModel
+
+
+   local alphas = {1, 2}
+   local data = {}
+   local nObs = 10
+   local nDims = 3
+   local xs = torch.Tensor(nObs, nDims)
+   local ys = torch.Tensor(nObs)
+   for i = 1, nObs do
+      ys[i] = 10 * i
+      for j = 1, nDims do
+         xs[i][j] = i
+      end
+   end
+
+
+   extraArg = {}
+   extraArg.nObs = nObs
+   extraArg.nDims = nDims
+   extraArg.xs = xs
+   extraArg.ys = ys
+   extraArg.maxK = 4
+   makeFittedModelExtraArg = extraArg
+
+   cvLoss = CvLoss()
+   local function cvLossFunction(alpha, i, kappa)
+      local loss = cvLoss:cvLoss(alpha, i, kappa, 
+                                 makeFittedModel, makeFittedModelExtraArg)
+      return loss
+   end -- makeFittedModel
+
+   local nFold = 3
+   local alphaStar, lossTable = crossValidation(alphas,
+                                                cvLossFunction,
+                                                nFold,
+                                                nObs)
+   v('alphaStar', alphaStar)
+   v('lossTable', lossTable)
+   tester:assert(false, 'write tests')
+end -- test.knn
+
+tester:add(test)
+tester:run(true) -- true ==> verbose

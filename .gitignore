@@ -1,0 +1,15 @@
+bin
+db-*
+*~
+*.o
+*.RProj
+.Rproj.user
+.classpath
+.project
+.RData
+.Rhistory
+.settings
+#*#
+/java/doc/
+*.html
+*.md

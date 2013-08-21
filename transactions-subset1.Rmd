@@ -1,0 +1,738 @@
+# transaction-subset1.Rmd
+
+Create output file transactions-subset1.csv.
+
+Also create two output analysis files:
+* transactions-subset1-ranges.tex : ranges of features used to create the subset
+* transactions-subset1-excluded.tex: number of observations excluded by each criterion in isolation
+
+The input file is transactions-al-sfr.csv. 
+
+## Initialize
+
+Set control variables.
+
+```{r}
+testing <- FALSE
+output.dir <- "../data/v6/output/"
+path.input <- paste(output.dir, "transactions-al-sfr.csv", sep="")
+path.output <- paste(output.dir, "transactions-subset1.csv", sep="")
+path.ranges <- paste(output.dir, "transactions-subset1-ranges.tex", sep="")
+path.excluded <- paste(output.dir, "transactions-subset1-excluded.tex", sep="")
+```
+
+Initialize R.
+```{r}
+options(warn=2)  # turn warnings into errors
+set.seed(1)      # random number generator seed
+require("compiler")
+enableJIT(3)     # 3 ==> maximum JIT level
+```
+
+Source other files here, now that the JIT level is set.
+
+```{r}
+# nothing to source for now
+```
+
+## Read the transactions into variable t.
+
+```{r}
+t <- read.csv(path.input,
+              nrows=ifelse(testing, 1000, -1)) 
+```
+
+## Summarize the resulting data frame.
+```{r}
+str(t)
+summary(t)
+```
+
+## Transaction count
+Number of transactions in input file:
+```{r}
+nrow(t)
+```
+
+## Overview of features used to form the subset
+
+Code to generate table of ranges.
+
+```{r}
+table1Lines <- list()
+
+# These function accumulate their results into the global table1Lines
+# The goal is to write the table to a txt file that is imported into the latex
+# documentation file. That way I don't have to copy and paste results.
+# The table in the txt file comes into latex as a verbatim block. Maybe later
+# it can be turned into a latex table with fancy formatting.
+
+Header1 <- function(feature, min, max, nNAs) {
+  table1Lines <<- list("\\begin{verbatim}")
+  table1Lines <<- c(table1Lines, "SUMMARY OF FEATURES USED TO GENERATE THE SUBSET")
+  table1Lines <<- c(table1Lines, " ")
+  line <- sprintf("%40s %10s %10s %10s", "Feature", "Min", "Max", "Num NAs")
+  table1Lines <<- c(table1Lines, line)
+}
+
+Data1 <- function(feature, min, max, nNAs) {
+  line <- sprintf("%40s %10s %10s %10s", feature, min, max, nNAs)  
+  #cat("newline", line, "\n")
+  invisible(table1Lines <<- c(table1Lines, line))
+}
+
+Footer1 <- function() {
+  table1Lines <<- c(table1Lines, "\\end{verbatim}")
+}
+
+# These functions build the table
+Continuous <- function(feature) {
+  values <- t[[feature]]
+  value.min <- min(values, na.rm=TRUE)
+  value.max <- max(values, na.rm=TRUE)
+  value.nNAs <- sum(is.na(values))
+  Data1(feature, value.min, value.max, value.nNAs)
+}
+
+Discrete <- function(feature) {
+  values <- t[[feature]]
+  value.min <- "-"
+  value.max <- "-"
+  value.nNAs <- sum(is.na(values))
+  Data1(feature, value.min, value.max, value.nNAs)
+}
+```
+
+Generate the table.
+
+```{r}
+Header1()
+Continuous("SALE.DATE")
+Continuous("RECORDING.DATE")
+Continuous("SALE.AMOUNT")
+Discrete("DOCUMENT.TYPE.CODE")
+Discrete("TRANSACTION.TYPE.CODE")
+Discrete("SALE.CODE")
+Discrete("MULTI.APN.FLAG.CODE")
+Continuous("MULTI.APN.COUNT")
+Continuous("NUMBER.OF.BUILDINGS")
+Continuous("TOTAL.VALUE.CALCULATED")
+Continuous("LAND.VALUE.CALCULATED")
+Continuous("IMPROVEMENT.VALUE.CALCULATED")
+Continuous("LAND.SQUARE.FOOTAGE")
+Continuous("UNIVERSAL.BUILDING.SQUARE.FEET")
+Continuous("LIVING.SQUARE.FEET")
+Continuous("EFFECTIVE.YEAR.BUILT")
+Continuous("BEDROOMS")
+Continuous("TOTAL.ROOMS")
+Continuous("TOTAL.BATHS.CALCULATED")
+Continuous("G.LATITUDE")
+Continuous("G.LONGITUDE")
+Footer1()
+```
+
+Display the generated lines in the HTML file.
+
+```{r}
+str(table1Lines)
+```
+
+Write lines to external file.
+```{r}
+writeLines(as.character(table1Lines), con=path.ranges)
+```
+
+
+## Constraint on transaction date
+
+The constraint is that a sale date must be inferable. Often SALE DATE is missing, but RECORDING DATE is always present.
+```{r}
+sum(is.na(t$SALE.DATE))
+sum(is.na(t$RECORDING.DATE))
+```
+
+The plan is to infer missing SALE DATE values by subtracting the mean difference between
+the SALE DATE and RECORDING DATE for known observations.
+
+```{r}
+ToDate <- function(v) {
+  # Value: vector of adjusted sales dates
+  c <- as.character(v)
+  c2 <- gsub("00$", "15", c) # move dates like 1991-01-00 to 1991-01-15
+  dates <- as.Date(c2, "%Y%m%d")
+  dates
+}
+```
+
+After adjustment, many of the sales dates are bad.
+```{r}
+adjusted.sale.date <- ToDate(t$SALE.DATE)
+sum(is.na(adjusted.sale.date))
+```
+
+All the recording dates adjust to valid dates.
+```{r}
+adjusted.recording.date <- ToDate(t$RECORDING.DATE)
+sum(is.na(adjusted.recording.date))
+```
+
+Comparing the raw dates
+```{r}
+t$SALE.DATE[1:10]
+t$RECORDING.DATE[1:10]
+```
+
+Comparing the adjusted dates
+```{r}
+adjusted.sale.date[1:10]
+adjusted.recording.date[1:10]
+```
+
+
+The mean differences for known sales dates:
+```{r}
+adjusted.sale.date.present <- !is.na(adjusted.sale.date)
+diff <- adjusted.recording.date[adjusted.sale.date.present] - adjusted.sale.date[adjusted.sale.date.present] 
+diff[1:10]
+mean.diff <- mean(diff)
+mean.diff
+````
+
+Create new features to hold the transaction date. Determine number of records without a transaction date.
+```{r}
+t$transaction.date <- as.Date(ifelse(is.na(adjusted.sale.date),
+                                   adjusted.recording.date - mean.diff,
+                                   adjusted.sale.date),
+                            origin="1970-01-01")
+ok.transaction.date <- !is.na(t$transaction.date)
+sum(!ok.transaction.date)
+```
+
+Comparing all the dates
+```{r}
+t$SALE.DATE[1:10]
+t$RECORDING.DATE[1:10]
+adjusted.sale.date[1:10]
+adjusted.recording.date[1:10]
+transaction.date[1:10]
+```
+
+
+## Constraints on SALE AMOUNT
+
+Range of sale amount includes 0 and some very large values.
+```{r}
+summary(t$SALE.AMOUNT)
+boxplot(t$SALE.AMOUNT, col="blue")
+```
+
+The sale amount should not be zero nor over $85 million. The $85 million
+amount come from the Wall Street Journal on January 7, 2013, which reported that 
+the most expensive Los Angeles house every sold had a price of $85 million.
+
+Number of observations dropped by constraining SALE AMOUNT > 0.
+```{r}
+ok.sale.amount.positive <- t$SALE.AMOUNT > 0
+sum(!ok.sale.amount.positive)
+```
+
+Count of number of observerations dropped by constraining SALE AMOUNT , sale.amount.max.cutoff:
+```{r}
+sale.amount.max.cutoff <- 85e6
+sum(!(t$SALE.AMOUNT < sale.amount.max.cutoff))
+```
+
+Count number of observations dropped by constaining SALE AMOUNT < $85 million.
+
+```{r}
+sum(!(t$SALE.AMOUNT < 85000000))
+```
+
+Number of observations dropped by constraining to postive sales amount less than $85 million:
+```{r}
+ok.sale.amount.not.too.large <- t$SALE.AMOUNT < 85000000
+sum(!ok.sale.amount.not.too.large)
+```
+
+Define constraint and count excluded obs
+```{r}
+ok.sale.amount <- t$SALE.AMOUNT > 0 & t$SALE.AMOUNT <= sale.amount.max.cutoff
+sum(!ok.sale.amount)
+```
+
+## Constraints on DOCUMENT TYPE CODE
+
+The DOCUMENT TYPE CODES is the type of transfer document recorded. The codes are:
+
+Code|Meaning
+----|-------
+C|CONSTRUCTION LOAN
+CD|CORRECTION DEED
+F|FINAL JUDGEMENT
+G|GRANT DEED
+L|LIS PENDENS - NON CALIFORNIA
+L|LIENS (STATEWIDE CA)
+N|NOTICE OF DEFAULT
+Q|QUIT CLAIM
+R|RELEASE
+S|LOAN ASSIGNMENT 
+T|DEED OF TRUST
+U|FORECLOSURE
+X|MULTI CNTY/ST OR OPEN-END MORTGAGE
+Z|NOMINAL
+
+```{r}
+table(t$DOCUMENT.TYPE.CODE, useNA="ifany")
+```
+
+We want only Grant (G) and Trust (T) deeds.
+
+Number of observations dropped by constraining on Grant and Trust deeds only:
+```{r}
+ok.document.type.code <- t$DOCUMENT.TYPE.CODE == "G" | t$DOCUMENT.TYPE.CODE == "T"
+sum(!ok.document.type.code)
+```
+
+## Constraint on TRANSACTION TYPE CODE
+
+This field records the type of transaction. The codes are 
+
+Code | Meaning
+-----|--------
+001|RESALE
+002|REFINANCE
+003|SUBDIVISION/NEW CONSTRUCTION
+004|TIMESHARE
+006|CONSTRUCTION LOAN 
+007|SELLER CARRYBACK
+009|NOMINAL
+
+```{r}
+table(t$TRANSACTION.TYPE.CODE, useNA="ifany")
+```
+
+We want only resales of existing properties and new construction sales.
+
+Number of observations dropped by constraining only on type of sale:
+```{r}
+ok.transaction.type.code <-
+  (!is.na(t$TRANSACTION.TYPE.CODE) & 
+   (t$TRANSACTION.TYPE.CODE == 1 | t$TRANSACTION.TYPE.CODE == 3))
+sum(!ok.transaction.type.code)
+```
+
+## Constraint on SALE CODE
+
+Sale code is the financial consideration.
+
+Code|Meaning
+----|------
+C|CONFIRMED
+E|ESTIMATED
+F|SALE PRICE (FULL)
+L|SALE PRICE (PARTIAL)
+N|NOT OF PUBLIC RECORD
+P|SALE PRICE (PARTIAL)
+R|LEASE
+U|UNKNOWN
+V|VERIFIED
+
+```{r}
+table(t$SALE.CODE, useNA="ifany")
+```
+
+We want to use only the deeds that record the full sales price.
+
+Number of observations by constraining only on financial consideration:
+```{r}
+ok.sale.code <- !is.na(t$SALE.CODE) & t$SALE.CODE == "F"
+sum(!ok.sale.code)
+```
+
+## Constraint on MULTI APN FLAG CODE and MULTI APN COUNT
+
+We want to retain only transactions that are for one parcel.
+
+Meanings of MULTI APN FLAG CODE.
+
+Code|Meaning
+----|---
+D|MULTI / DETAIL PARCEL SALE
+M|MULTIPLE PARCEL SALE
+S|SPLIT PARCEL SALE
+
+
+MULTI APN FLAG CODE is mostly missing. An undefined X code is also used.
+```{r}
+table(t$MULTI.APN.FLAG.CODE, useNA="ifany")
+```
+
+MULTI APN COUNT if often zero.
+```{r}
+table(t$MULTI.APN.COUNT, useNA="ifany")
+```
+
+I assumed that a one-parcel sale meets these criteria:
+
+- Has NA value in MULTI APN FLAG CODE
+- Has a MULTI APN COUNT of 0 or 1
+
+Number of observations dropped by constraining only on one parcel:
+```{r}
+ok.one.parcel <- is.na(t$MULTI.APN.FLAG.CODE) & t$MULTI.APN.COUNT <= 1
+sum(!ok.one.parcel)
+```
+
+## Constraint on number of buildings
+
+We should have  one building;
+```{r}
+table(t$NUMBER.OF.BUILDINGS, useNA="ifany")
+ok.number.of.buildings <- t$NUMBER.OF.BUILDINGS == 1
+sum(!ok.number.of.buildings)
+```
+
+## Constraint on assessed value
+
+The value of the property is estimated by the tax assessor. It's broken down into the land 
+value and the improvement value. 
+
+We want no transactions where either is zero or where there sum is zero.
+```{r}
+summary(t$TOTAL.VALUE.CALCULATED)
+summary(t$LAND.VALUE.CALCULATED)
+summary(t$IMPROVEMENT.VALUE.CALCULATED)
+```
+
+
+
+Some values exceed the known maximum of $85,000,000. IS THIS TRUE?
+```{r}
+summary(t$TOTAL.VALUE.CALCULATED)
+summary(t$LAND.VALUE.CALCULATED)
+summary(t$IMPROVEMENT.VALUE.CALCULATED)
+```
+
+Number of obs eliminated by max value constraint:
+```{r}
+max.value <- 85000000
+assessed.value.not.zero <- 
+  t$TOTAL.VALUE.CALCULATED > 0 & 
+  t$LAND.VALUE.CALCULATED > 0 & 
+  t$IMPROVEMENT.VALUE.CALCULATED > 0
+assessed.value.not.too.large <- 
+  t$TOTAL.VALUE.CALCULATED < max.value & 
+  t$LAND.VALUE.CALCULATED < max.value & 
+  t$IMPROVEMENT.VALUE.CALCULATED < max.value
+ok.assessed.value <- assessed.value.not.zero & assessed.value.not.too.large
+sum(!ok.assessed.value)
+```
+
+## Constraint on LAND SQUARE FOOTAGE
+
+Some observations have no land and some have a huge amount of land.
+
+```{r}
+summary(t$LAND.SQUARE.FOOTAGE)
+```
+
+Quantiles
+```{r}
+quantile(t$LAND.SQUARE.FOOTAGE, probs=seq(0, 1, .05))
+q <- quantile(t$LAND.SQUARE.FOOTAGE, probs=seq(.95, 1, .01))
+q
+```
+
+Set max land to 99th percentile
+```{r}
+max.land <- q[5]
+max.land
+```
+
+Number of observations dropped
+```{r}
+ok.land.square.footage <- t$LAND.SQUARE.FOOTAGE > 0 & t$LAND.SQUARE.FOOTAGE <= max.land
+sum(!ok.land.square.footage)
+```
+
+
+## Constraint on UNIVERSAL BUILDING SQUARE FEET
+
+Some observations have no square feet, some huge:
+```{r}
+summary(t$UNIVERSAL.BUILDING.SQUARE.FEET)
+```
+
+Number of observations dropped by constraining only to some square feet:
+```{r}
+sum(!(t$UNIVERSAL.BUILDING.SQUARE.FEET > 0))
+```
+
+Consider reasonable up to the 99th percentile
+```{r}
+quantile(t$UNIVERSAL.BUILDING.SQUARE.FEET, probs=seq(0, 1, .05))
+q <- quantile(t$UNIVERSAL.BUILDING.SQUARE.FEET, probs=seq(.95, 1, .01))
+q
+max.building <- q[5]
+max.building
+```
+
+Number of observations dropped
+```{r}
+ok.universal.building.square.feet <- 
+  t$UNIVERSAL.BUILDING.SQUARE.FEET > 0 & t$UNIVERSAL.BUILDING.SQUARE.FEET <= max.building
+sum(!ok.universal.building.square.feet)
+```
+
+## Constraint on LIVING SQUARE FEET
+
+Some observations have no square feet, some huge:
+```{r}
+summary(t$LIVING.SQUARE.FEET)
+```
+
+Consider reasonable up to the 99th percentile
+```{r}
+quantile(t$LIVING.SQUARE.FEET, probs=seq(0, 1, .05))
+q <- quantile(t$LIVING.SQUARE.FEET, probs=seq(0.95, 1, .01))
+q
+max.living <- q[5]
+```
+
+Number of observations dropped 
+```{r}
+ok.living.square.feet <- t$LIVING.SQUARE.FEET > 0 & t$LIVING.SQUARE.FEET <= max.living
+sum(!ok.living.square.feet)
+```
+
+
+## Constraints on YEAR BUILT
+
+We use this field during imputation. It should not be zero
+.
+```{r}
+summary(t$YEAR.BUILT)
+```
+
+Number of observations dropped only by constraining to some year built:
+```{r}
+ok.year.built <- t$YEAR.BUILT > 0
+sum(!ok.year.built)
+```
+
+Distribution of year built
+```{r}
+table(t$YEAR.BUILT, useNA = "ifany")
+```
+
+## Constraints on EFFECTIVE YEAR BUILT
+
+This is the last year of remodeling. It should not be zero.
+
+```{r}
+summary(t$EFFECTIVE.YEAR.BUILT)
+```
+
+Number of observations dropped only by constraining to some effective year built:
+```{r}
+ok.effective.year.built <- t$EFFECTIVE.YEAR.BUILT > 0
+sum(!ok.effective.year.built)
+```
+
+Distribution of EYB
+```{r}
+table(t$EFFECTIVE.YEAR.BUILT, useNA = "ifany")
+```
+
+
+## Constraint on TOTAL ROOMS
+
+We allow zero bedrooms and zero bathrooms (could be an outhouse), but not zero total rooms.
+
+```{r}
+summary(t$BEDROOMS)
+summary(t$TOTAL.BATHS.CALCULATED)
+summary(t$TOTAL.ROOMS)
+```
+
+Percentiles
+```{r}
+quantile(t$TOTAL.ROOMS, probs=seq(0, 1, 0.05))
+q <- quantile(t$TOTAL.ROOMS, probs = seq(.95, 1, .01))
+q
+max.total.rooms <- q[5]
+max.total.rooms
+```
+
+Constraint on total rooms
+```{r}
+ok.total.rooms <- t$TOTAL.ROOMS > 0 & t$TOTAL.ROOMS <= max.total.rooms
+sum(!ok.total.rooms)
+```
+
+distributions of other rooms conditioned on ok.total.rooms
+```{r}
+table(t$BEDROOMS[ok.total.rooms], useNA="ifany")
+table(t$TOTAL.BATHS.CALCULATED[ok.total.rooms], useNA="ifany")
+```
+## Constraing on UNITS NUMBER
+
+Number of residential units or apartments.
+```{r}
+table(t$UNITS.NUMBER, usNA="ifAny")
+ok.units.number <- t$UNITS.NUMBER == 1
+sum(!ok.units.number)
+```
+
+## Constraint on Geocoding
+
+Ranges
+```{r}
+summary(t$G.LATITUDE)
+summary(t$G.LONGITUDE)
+ok.geocoding <- t$G.LATITUDE != 0 & t$G.LONGITUDE != 0
+sum(!ok.geocoding)
+```
+
+# Effect of all constraints
+
+```{r}
+totalExcluded <- 
+  sum(!ok.sale.amount) +
+  sum(!ok.document.type.code) +
+  sum(!ok.transaction.type.code) +
+  sum(!ok.sale.code) +
+  sum(!ok.one.parcel) +
+  sum(!ok.number.of.buildings) +
+  sum(!ok.assessed.value) +
+  sum(!ok.land.square.footage) +
+  sum(!ok.universal.building.square.feet) +
+  sum(!ok.living.square.feet) +
+  sum(!ok.year.built) +
+  sum(!ok.effective.year.built) +
+  sum(!ok.total.rooms) +
+  sum(!ok.units.number) +
+  sum(!ok.geocoding)
+totalExcluded
+```
+Function to write a text file
+```{r}
+table2Lines <- list()
+
+Header2 <- function() {
+  table2Lines <<- list("\\begin{verbatim}")
+  table2Lines <<- c(table2Lines, "NUMBER OF OBSERVATIONS EXCLUDED BY EACH CRITERION IN ISOLATION")
+  table2Lines <<- c(table2Lines, " ")
+  line <- sprintf("%45s %12s", "Constraining Feature", "Num Excluded")
+  table2Lines <<- c(table2Lines, line)
+}
+
+Data2 <- function(constraint, nExcluded) {
+  line <- sprintf("%45s %12d", constraint, nExcluded)  
+  invisible(table2Lines <<- c(table2Lines, line))
+}
+
+Footer2 <- function() {
+  table2Lines <<- c(table2Lines, "\\end{verbatim}")
+}
+
+# These functions build the table
+IfOnly <- function(constraintName, selectionVar) {
+  excluded <- sum(!selectionVar)
+  Data2(constraintName, excluded)
+}
+
+IfOnlyNum <- function(constraintName, num) {
+  Data2(constraintName, num)
+}
+```
+
+Generate the file.
+
+```{r}
+Header2()
+IfOnly("SALE AMOUNT", ok.sale.amount)
+IfOnly("DOCUMENT TYPE CODE", ok.document.type.code)
+IfOnly("TRANSACTION TYPE CODE", ok.transaction.type.code)
+IfOnly("SALE CODE", ok.sale.code)
+IfOnly("one parcel", ok.one.parcel)
+IfOnly("NUMBER OF BUILDINGS", ok.number.of.buildings)
+IfOnly("assessed value", ok.assessed.value)
+IfOnly("LAND SQUARE FOOTAGE", ok.land.square.footage)
+IfOnly("UNIVERSAL BUILDING SQUARE FEET", ok.universal.building.square.feet)
+IfOnly("LIVING SQUARE FEET", ok.living.square.feet)
+IfOnly("YEAR BUILT", ok.year.built)
+IfOnly("EFFECTIVE YEAR BUILT", ok.effective.year.built)
+IfOnly("TOTAL ROOMS", ok.total.rooms)
+IfOnly("UNITS NUMBER", ok.units.number)
+IfOnly("geocoding", ok.geocoding)
+IfOnlyNum("*TOTAL EXCLUDED*", totalExcluded)
+Footer2()
+```
+
+Display file in HTML.
+```{r}
+str(table2Lines)
+```
+
+Write file.
+```{r}
+writeLines(as.character(table2Lines), con=path.excluded)
+```
+
+# Write the subset
+
+```{r}
+# check lengths for debugging
+length(ok.sale.amount)
+length(ok.document.type.code)
+length(ok.transaction.type.code)
+length(ok.sale.code)
+length(ok.one.parcel)
+length(ok.number.of.buildings)
+length(ok.assessed.value)
+length(ok.land.square.footage)
+length(ok.universal.building.square.feet)
+length(ok.living.square.feet)
+length(ok.year.built)
+length(ok.effective.year.built)
+length(ok.total.rooms)
+length(ok.geocoding)
+
+# retain obs that are OK on all criteria
+ok <- 
+  ok.sale.amount &
+  ok.document.type.code &
+  ok.transaction.type.code &
+  ok.sale.code &
+  ok.one.parcel &
+  ok.number.of.buildings &
+  ok.assessed.value &
+  ok.land.square.footage &
+  ok.universal.building.square.feet &
+  ok.living.square.feet &
+  ok.year.built &
+  ok.effective.year.built &
+  ok.total.rooms &
+  ok.geocoding
+ 
+# give X a better name
+t$transaction.obs.number <- t$X
+t$X <- NULL
+
+s <- t[ok,]
+nodups <- unique(s)
+
+nrow(t)       # number of transactions
+nrow(s)       # number of observations in sample
+nrow(nodups)  # number of non-duplicate observations in sample
+
+
+# check that the de-duplication had no effect
+if (nrow(s) != nrow(nodups))
+  stop("de-duping found something to eliminate")
+
+summary(nodups)
+
+write.csv(nodups, path.output)
+```

@@ -1,0 +1,224 @@
+// Storage.c
+
+#include <assert.h>
+#include <stdint.h>
+#include <stdio.h>
+
+#include "Storage.h"
+
+#define T Storage_T
+
+////////////////////////////////////////////////////////////////////////////////
+// fail
+////////////////////////////////////////////////////////////////////////////////
+
+static void fail(char * msg) {
+  fprintf(stderr, "%s\n", msg);
+  exit(1);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Storage_apply
+////////////////////////////////////////////////////////////////////////////////
+
+T Storage_apply(T self, double f(double, void* uv), void *uv)
+{
+  assert(self);
+  const uint32_t size = self->size;
+  for (uint32_t i = 0; i < size; i++) {
+    double result = f(Storage_get(self, i), uv);
+    Storage_set(self, i, result);
+  }
+  return self;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Storage_arrayP
+////////////////////////////////////////////////////////////////////////////////
+
+double *
+Storage_arrayP(T self)
+{
+  assert(self);
+  return self->arrayP;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Storage_decrement
+////////////////////////////////////////////////////////////////////////////////
+
+void 
+Storage_decrement(T self)
+{
+  assert(self);
+  assert(self->nReferences > 0);
+  self->nReferences--;
+  if (self->nReferences == 0) {
+    free(self->arrayP);    // free the array
+    free(self);            // free the descriptor struct
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Storage_fill
+////////////////////////////////////////////////////////////////////////////////
+
+T 
+Storage_fill(T self, double value)
+{
+  assert(self);
+  for (unsigned i = 0; i < self->size; i++) {
+    Storage_set(self, i, value);
+  }
+  return self;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Storage_free
+////////////////////////////////////////////////////////////////////////////////
+
+void Storage_free(T *selfP)
+{
+  assert(selfP);
+  assert(*selfP);
+  assert((*selfP)->nReferences == 1);
+  Storage_decrement(*selfP);
+  *selfP = NULL;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Storage_increment
+////////////////////////////////////////////////////////////////////////////////
+
+void Storage_increment(T self) 
+{
+  assert(self);
+  self->nReferences++;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Storage_new
+////////////////////////////////////////////////////////////////////////////////
+
+T 
+Storage_new(unsigned size) 
+{
+  struct T *self = malloc(sizeof(struct T));
+  if (!self) fail("Storage_new: unable to allocate Storage_t struct");
+
+  double *arrayP = malloc(sizeof(double) * size);
+  if (!arrayP) fail("Storage_new: unable to allocate array");
+
+  self->size = size;
+  self->nReferences = 1;
+  self->arrayP = arrayP;
+
+  return self;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Storage_newCopy
+////////////////////////////////////////////////////////////////////////////////
+
+T 
+Storage_newCopy(T existing) 
+{
+  struct T *self = malloc(sizeof(struct T));
+  if (!self) fail("Storage_new: unable to allocate Storage_t struct");
+
+  double *arrayP = malloc(sizeof(double) * existing->size);
+  if (!arrayP) fail("Storage_new: unable to allocate array");
+
+  self->size = existing->size;
+  self->nReferences = 1;
+  self->arrayP = arrayP;
+  for (unsigned i = 0; i < existing->size; i++)
+    *(arrayP + i) = existing->arrayP[i];
+
+  return self;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Storage_nReferences
+////////////////////////////////////////////////////////////////////////////////
+
+uint32_t
+Storage_nReferences(T self)
+{
+  assert(self);
+  return self->nReferences;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Storage_print
+////////////////////////////////////////////////////////////////////////////////
+
+void
+Storage_print(T self, FILE* file)
+{
+  assert(self);
+  assert(file);
+
+  Storage__print_header(self, file);
+
+  // print the elements
+  for (unsigned i = 0; i < 10 && i < self->size; i++) {
+    fprintf(stderr, " [%u]=%f", i, Storage_get(self, i));
+  }
+  if (self->size >= 10)
+    fprintf(stderr, " ...");
+  fprintf(stderr, "\n");
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Storage__print_header
+////////////////////////////////////////////////////////////////////////////////
+
+void
+Storage__print_header(T self, FILE* file)
+{
+  assert(self);
+  assert(file);
+
+  fprintf(stderr, "Storage@%p size %u nReferences %u\n",
+          (void*) self, self->size, self->nReferences);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Storage_resize
+////////////////////////////////////////////////////////////////////////////////
+
+T
+Storage_resize(T self, uint32_t newSize)
+{
+  assert(self);
+  assert(self->arrayP);
+  
+  double *newArrayP = malloc(sizeof(double) * newSize);
+  if (!newArrayP) fail("Storage_new: unable to allocate array");
+  self->size = newSize;
+
+  // copy previous values
+  for (unsigned i = 0; i < newSize; i++) {
+    *(newArrayP + i) = self->arrayP[i];
+  }
+
+  double *oldArrayP = self->arrayP;
+  self->arrayP = newArrayP;
+  free(oldArrayP);
+
+  return self;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Storage_size
+////////////////////////////////////////////////////////////////////////////////
+
+uint32_t
+Storage_size(T self)
+{
+  assert(self);
+  return self->size;
+}

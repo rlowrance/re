@@ -1,0 +1,165 @@
+# census.Rmd
+
+Create the output file census.csv
+
+Files read.
+
+```{r}
+path.census.in <- "../data/raw/neighborhood-data/census.csv"
+
+```
+
+Files written.
+
+```{r}
+dir.output="../data/v6/output/"
+path.census.out <- paste(dir.output,
+                         "census.csv",
+                         sep="")
+```
+
+## Control the script
+
+Set script control variables.
+
+```{r}
+testing <- FALSE
+```
+
+Initialize R.
+
+```{r}
+options(warn=2)  # turn warnings into errors
+set.seed(1)      # random number generator seed
+require("compiler")
+enableJIT(3)     # 3 ==> maximum JIT level
+```
+
+Source files here, now that the JIT level is set
+
+```{r}
+# nothing to source
+```
+
+## Read data
+
+```{r}
+# skip first line, as it contains hard-to-interpret feature names
+# and easy-to-interpret feature names are in the second line
+df <- read.table(path.census.in,
+                 header=TRUE,
+                 skip=1, 
+                 sep="\t",
+                 comment.char="",
+                 stringsAsFactors=FALSE,
+                 na.strings="")
+head(df)
+```
+
+## Isolate the census tract feature
+
+```{r}
+geo.id2 <- df$Geography.Identifier2
+fips.code <- floor(geo.id2/1000000)
+census.tract <-geo.id2 - fips.code * 1000000
+
+floor(geo.id2)[1:10]
+census.tract[1:10]
+```
+
+## Create new feature average commute time
+
+```{r}
+not.home = "Workers.16.years.and.over..Did.not.work.at.home"
+workers.not.at.home <- df[[not.home]]
+
+time <- function(specification) {
+  result <- paste(not.home,
+                  "..Travel.time.to.work..",
+                  specification,
+                  ".minutes",
+                  sep="")
+  result
+  }
+
+commute.less.5 <- df[[time("Less.than.5")]]
+commute.5.to.9 <- df[[time("5.to.9")]]
+commute.10.to.14 <- df[[time("10.to.14")]]
+commute.15.to.19 <- df[[time("15.to.19")]]
+commute.20.to.24 <- df[[time("20.to.24")]]
+commute.25.to.29 <- df[[time("25.to.29")]]
+commute.30.to.34 <- df[[time("30.to.34")]]
+commute.35.to.39 <- df[[time("35.to.39")]]
+commute.40.to.44 <- df[[time("40.to.44")]]
+commute.45.to.59 <- df[[time("45.to.59")]]
+commute.60.to.89 <- df[[time("60.to.89")]]
+commute.more.90 <- df[[time("90.or.more")]]
+
+avg.commute <-
+  ((commute.less.5 * ((0 + 5) / 2)) +
+     (commute.5.to.9 * ((5 + 9) / 2)) +
+     (commute.10.to.14 * ((10 + 14) / 2)) +
+     (commute.15.to.19 * ((15 + 19) / 2)) +
+     (commute.20.to.24 * ((20 + 24) / 2)) +
+     (commute.25.to.29 * ((25 + 29) / 2)) +
+     (commute.30.to.34 * ((30 + 34) / 2)) +
+     (commute.35.to.39 * ((35 + 39) / 2)) +
+     (commute.40.to.44 * ((40 + 44) / 2)) +
+     (commute.45.to.59 * ((45 + 59) / 2)) +
+     (commute.60.to.89 * ((60 + 89) / 2)) +
+     (commute.more.90 * 120)
+   ) /
+  workers.not.at.home
+
+head(avg.commute)
+```
+
+## Create new feature median household income
+
+```{r}
+median.household.income <- df$Households..Median.household.income.in.1999
+head(median.household.income)
+```
+
+## Create new feature fraction of houses that are owner occupied
+
+```{r}
+occupied.housing.units <- df$Occupied.housing.units..Total
+owner.occupied.units <- df$Occupied.housing.units..Owner.occupied
+
+fraction.owner.occupied <- owner.occupied.units / occupied.housing.units
+head(fraction.owner.occupied)
+```
+
+## Create output file
+
+```{r}
+r <- data.frame(census.tract=census.tract,
+                avg.commute=avg.commute,
+                median.household.income=median.household.income,
+                fraction.owner.occupied=fraction.owner.occupied)
+
+# drop records with NaN values in the newly-created variables
+missing.commute <- is.na(r$avg.commute)
+missing.income <- is.na(r$median.household.income)
+missing.occupied <- is.na(r$fraction.owner.occupied)
+
+cat("# of missing commute", sum(missing.commute), "\n")
+cat("# of missing income", sum(missing.income), "\n")
+cat("# of missing occupied", sum(missing.occupied), "\n")
+
+some.missing <- missing.commute | missing.income | missing.occupied
+cat("# with some missing", sum(some.missing), "\n")
+
+a <- r[!some.missing,]  # drop observations with any missing value
+cat("# obs retained", nrow(a))
+
+write.table(a,
+            path.census.out,
+            row.names=FALSE,
+            quote=FALSE,
+            sep="\t")  # same separator as original file
+
+head(a)
+```
+

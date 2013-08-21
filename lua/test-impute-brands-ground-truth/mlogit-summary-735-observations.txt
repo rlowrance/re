@@ -1,0 +1,27 @@
+# results from the mlogit model for the ground truth
+# 735 observations
+Call:
+mlogit(formula = brand ~ 1 | female + age, data = mldata, reflevel = "1", 
+    method = "nr", print.level = 0)
+
+Frequencies of alternatives:
+      1       2       3 
+0.56190 0.16871 0.26939 
+
+nr method
+25 iterations, 0h:0m:0s 
+g'(-H)^-1g = 6.68E-07 
+gradient close to zero 
+
+Coefficients :
+                Estimate Std. Error t-value Pr(>|t|)
+2:(intercept)  -1279.433 181592.204 -0.0070   0.9944
+3:(intercept)  -2667.351 266719.638 -0.0100   0.9920
+2:female          40.488   8195.237  0.0049   0.9961
+3:female          40.562   9960.546  0.0041   0.9968
+2:age             40.622   5769.374  0.0070   0.9944
+3:age             80.857   8083.106  0.0100   0.9920
+
+Log-Likelihood: -2.4558e-07
+McFadden R^2:  1 
+Likelihood ratio test : chisq = 1436.9 (p.value = < 2.22e-16)

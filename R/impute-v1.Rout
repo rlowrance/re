@@ -1,0 +1,134 @@
+
+R version 2.15.0 (2012-03-30)
+Copyright (C) 2012 The R Foundation for Statistical Computing
+ISBN 3-900051-07-0
+Platform: x86_64-pc-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> # impute-v1.R
+> # Print coefficients for FOUNDATION CODE imputation
+> 
+> library("mlogit")
+Loading required package: Formula
+Loading required package: statmod
+Loading required package: lmtest
+Loading required package: zoo
+
+Attaching package: ‘zoo’
+
+The following object(s) are masked from ‘package:base’:
+
+    as.Date, as.Date.numeric
+
+Loading required package: maxLik
+Loading required package: miscTools
+Loading required package: MASS
+> 
+> projectdir <- "/home/roy/Dropbox/nyu-thesis-project/"
+> obs1featuresdir <- paste(projectdir, "data/generated-v4/obs1a/features/", sep="")
+> 
+> # convert file name to field name
+> #filename.to.fieldname <- function(filename) {
+> #  gsub("-", ".", filename)
+> #}
+> 
+> # return vector from csv file
+> # filename is also the only column in the file
+> read.feature <- function(filename) {
++   filepath <- paste(obs1featuresdir, filename, ".csv", sep="")
++   df <- read.csv(filepath, sep="|")
++   df[,1]
++ }
+> 
+> # return vector from a FOUNDATION-CODE-is-<code>.csv file
+> read.foundation.feature <- function(code) {
++   filename <- paste("FOUNDATION-CODE-is-", code, sep="")
++   read.feature(filename)
++ }
+> 
+> # print indices that contain a 1
+> one.indices <- function(x) {
++   for (i in 1:217376) {
++     if (x[[i]] == 1) print(i)
++   }
++ }
+> 
+> # Read in all the features used in Obs 2R but from obs 1A
+> acres       <- read.feature("ACRES-log-std")
+> bedrooms    <- read.feature("BEDROOMS-std")
+> commute     <- read.feature("census-avg-commute-std")
+> income      <- read.feature("census-income-log-std")
+> ownership   <- read.feature("census-ownership-std")
+> day         <- read.feature("day-std")
+> improvement <- read.feature("IMPROVEMENT-VALUE-CALCULATED-log-std")
+> land        <- read.feature("LAND-VALUE-CALCULATED-log-std")
+> latitude    <- read.feature("latitude-std")
+> living      <- read.feature("LIVING-SQUARE-FEET-log-std")
+> longitude   <- read.feature("longitude-std")
+> parking     <- read.feature("PARKING-SPACES-std")
+> percent     <- read.feature("percent-improvement-value-std")
+> pool        <- read.feature("POOL-FLAG-is-1")
+> price       <- read.feature("SALE-AMOUNT-log-std")
+> baths       <- read.feature("TOTAL-BATHS-CALCULATED-std")
+> type        <- read.feature("TRANSACTION-TYPE-CODE-is-3")
+> year        <- read.feature("YEAR-BUILT-std")
+> 
+> # Read in FOUNDATION CODE levels from files FOUNDATION-CODE-is-<level>.csv
+> # where <level> is in { 001, CRE, MSN, PIR, RAS, SLB, UCR};
+> # level numbers:          1    2    3    4    5    6    7
+> # each vector value is either 0 or 1
+> print("starting to read features")
+[1] "starting to read features"
+> foundation.code.is.001 <- read.foundation.feature("001")
+> foundation.code.is.cre <- read.foundation.feature("CRE")
+> foundation.code.is.msn <- read.foundation.feature("MSN")
+> foundation.code.is.pir <- read.foundation.feature("PIR")
+> foundation.code.is.ras <- read.foundation.feature("RAS")
+> foundation.code.is.slb <- read.foundation.feature("SLB")
+> foundation.code.is.ucr <- read.foundation.feature("UCR")
+> 
+> # Combine FOUNDATION CODE levels into one categorial feature FOUNDATION CODE with level 1 .. 7
+> foundation.code <- (foundation.code.is.001 * 1) +
++                    (foundation.code.is.cre * 2) +
++                    (foundation.code.is.msn * 3) +
++                    (foundation.code.is.pir * 4) +
++                    (foundation.code.is.ras * 5) +
++                    (foundation.code.is.slb * 6) +
++                    (foundation.code.is.ucr * 7)
+>   
+> # convert data into form suitable for mlogit
+> # ref: www.ats.ucle.edu/stat/r/dae/mlogit.htm
+> print("starting to convert data to mlogit form")
+[1] "starting to convert data to mlogit form"
+> df <- data.frame(
++   acres=acres,
++   bedrooms=bedrooms,
++   foundation.code=foundation.code)
+> df$foundation.code <- as.factor(df$foundation.code)
+> mldata<-mlogit.data(df, varying=NULL, choice="foundation.code", shape="wide")
+> 
+> # Run the logit model
+> print("starting to run mlogit model")
+[1] "starting to run mlogit model"
+> mlogit.model <-
++   mlogit(foundation.code ~1|
++          acres+bedrooms+commute+income+ownership+day+improvement+land+
++          latitue+living+longitude+parking+percent+pool+price+baths+type+year,
++          data=mldata,
++          reflevel=1)
+Error in eval(expr, envir, enclos) : object 'latitue' not found
+Calls: mlogit ... model.frame.Formula -> model.frame -> model.frame.default -> eval -> eval
+Execution halted

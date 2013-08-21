@@ -1,0 +1,168 @@
+# deeds-al.Rmd
+
+Create the output file holding the arms-length deeds. In order to cope with having only
+16 GB of RAM on my system, only features needed downstream in the pipeline are retained.
+
+Files read and the deeds files the Laufer directory. This directory contains
+the file Steve Laufer used in his experiments.
+
+```{r}
+laufer.dir="../data/raw/from-laufer-2010-05-11"
+
+```
+
+Files written.
+
+```{r}
+dir.output="../data/v6/output/"
+path.deeds.out <- paste(dir.output,
+                         "deeds-al.csv",
+                         sep="")
+```
+
+## Control the script
+
+Set script control variables.
+
+```{r}
+testing <- FALSE
+```
+
+Initialize R.
+
+```{r}
+options(warn=2)  # turn warnings into errors
+set.seed(1)      # random number generator seed
+require("compiler")
+enableJIT(3)     # 3 ==> maximum JIT level
+```
+
+Source files here, now that the JIT level is set
+
+```{r}
+source("RemoveNonInformative.R")
+```
+
+## Define function to read a deeds file
+
+Use a global variable to keep track of bad arms length deeds.
+```{r}
+not.arms.length <- 0
+```
+
+Read one deeds file with suffix "num" in its file name.
+
+```{r}
+  ReadDeedsFile <- function(num) {
+    # Args:
+    # num: number of input file; in {1, 2, ..., 8}
+    #
+    # Value:
+    # data frame containing selected features from the arms-length deeds
+    # Also update not.arms.length global variable
+
+    # read the deeds file
+    # Note: In file 5, data record 945 has an NA value for APN.FORMATTED
+    path <- paste(laufer.dir,
+                  "/deeds/CAC06037F",
+                  num,
+                  ".txt.gz",
+                  sep="")
+    cat("\nreading deeds file", path, "\n")
+    # NOTE: Don't convert strings to factors, because the other input
+    # files may have different values than this file
+    df <- read.table(path,
+                     header=TRUE,
+                     sep="\t",
+                     quote="",
+                     comment.char="",
+                     stringsAsFactors=FALSE,
+                     na.strings="",
+                     nrows=ifelse(testing,1000,-1))
+
+    cat("records in", path, nrow(df), "\n")
+
+    # keep the features we want
+    # add features to trace back to original source
+    r <- data.frame(APN.UNFORMATTED=df$APN.UNFORMATTED
+                    ,APN.FORMATTED=df$APN.FORMATTED
+                    ,SALE.DATE=df$SALE.DATE
+                    ,RECORDING.DATE=df$RECORDING.DATE
+                    ,SALE.AMOUNT=df$SALE.AMOUNT
+                    ,DOCUMENT.TYPE.CODE=df$DOCUMENT.TYPE.CODE
+                    ,TRANSACTION.TYPE.CODE=df$TRANSACTION.TYPE.CODE
+                    ,SALE.CODE=df$SALE.CODE
+                    ,MULTI.APN.FLAG.CODE=df$MULTI.APN.FLAG.CODE
+                    ,MULTI.APN.COUNT=df$MULTI.APN.COUNT
+                    ,PRI.CAT.CODE=df$PRI.CAT.CODE
+                    ,RESALE.NEW.CONSTRUCTION.CODE=df$RESALE.NEW.CONSTRUCTION.CODE
+                    ,deed.file.number=rep(num, nrow(df))
+                    ,deed.record.number=1:nrow(df)
+                    )
+
+
+    # keep only arms-length deeds and deeds with numeric apns
+    al <- r$PRI.CAT.CODE == "A"  # arms-length deeds
+    num.al <- sum(al)
+    not.al <- nrow(r) - num.al
+    cat("numer of deeds in file", nrow(r), "\n")
+    cat("number of non-arms-length deeds", not.al, "\n")
+
+    cat("dropping deeds that are not arms length\n")
+    r <- r[al,]
+
+    # keep track of bad records
+    not.arms.length <<- not.arms.length + not.al
+    r
+  }
+```
+
+## Read the deed file
+
+Concatenate all the deeds files into one data frame.
+
+```{r}
+df.all <- rbind(ReadDeedsFile(1),
+                ReadDeedsFile(2),
+                ReadDeedsFile(3),
+                ReadDeedsFile(4),
+                ReadDeedsFile(5),
+                ReadDeedsFile(6),
+                ReadDeedsFile(7),
+                ReadDeedsFile(8))
+
+  
+cat("number of deeds records with not at arms length", not.arms.length, "\n")
+cat("number of deeds records at arms length", nrow(df.all), "\n") 
+```
+
+## Drop features that are non-informative
+
+```{r}
+df.all <- RemoveNonInformative(df.all, cat)
+cat("deeds columns retained (others dropped because non informative)\n")
+for (colname in colnames(df.all)) {
+  cat(" ", colname, "\n")
+}
+```
+
+## Remove duplicate deeds
+
+Duplicate deeds cause problems in some downstream processes in the pipeline. So remove
+any duplicates.
+
+```{r}
+nondups <- unique(df.all)
+cat(sprintf("dropped %d deeds that were duplicates of others\n",
+            nrow(df.all) - nrow(nondups)))
+cat("number of unique relevant deeds", nrow(nondups), "\n")
+```
+
+## Write unique deeds to csv
+
+```{r}
+cat("writing unique arms-length deeds to", path.deeds.out, "\n")
+write.csv(nondups,
+          file=path.deeds.out,
+          quote=FALSE)
+```

@@ -1,0 +1,26 @@
+
+Call:
+mlogit(formula = brand ~ 1 | female + age, data = mldata, reflevel = "1", 
+    method = "nr", print.level = 0)
+
+Frequencies of alternatives:
+      1       2       3 
+0.55293 0.16463 0.28245 
+
+nr method
+27 iterations, 0h:0m:1s 
+g'(-H)^-1g = 9.45E-07 
+gradient close to zero 
+
+Coefficients :
+                Estimate Std. Error t-value Pr(>|t|)
+2:(intercept)  -1393.918 151894.475 -0.0092   0.9927
+3:(intercept)  -2917.185 224319.559 -0.0130   0.9896
+2:female          44.326   6837.441  0.0065   0.9948
+3:female          44.362   8345.036  0.0053   0.9958
+2:age             44.254   4825.821  0.0092   0.9927
+3:age             88.406   6793.698  0.0130   0.9896
+
+Log-Likelihood: -3.4765e-07
+McFadden R^2:  1 
+Likelihood ratio test : chisq = 14431 (p.value = < 2.22e-16)

@@ -1,0 +1,97 @@
+# nextsteps.org
+* 10-02
+plan for tomorrow
+- Fix bug in createAndFixModel: train on non-fold observations
+- Write external makeFittedModel function
+- Unit test external makeFittedModel function
+
+restart module CvLoss.lua and CvLoss-test.lua
+- get unit test to run
+- write external makeFittedModel and unit test
+- rework unit test for CvLoss to use external makeFittedModel
+
+actual:
+
+* 09-12
+plan
+- Completion-test: complete unit testing
+- indent comment under function header (allow emacs folding)
+- start using emacs folding
+
+wip today
+- Completion:__init add lambda as arg DONE
+- Completion: re-indent function comments DONE
+- Completion-test:test.learnLbfgs debug this
+- Completion-test:test._gradient use checkGradient also
+- Completion-test:test._nonReguarlizedLoss DONE
+- Completion-test:test_sampleGradient DONE
+
+
+actual:
+- Completion rewrote many methods
+- Completion added lambda as an instance variable
+- Decide to run all the tests, stubbing out ones that must be redone
+  Helps to debug method and instance variable changes
+
+* 09-11
+plan:
+- Completion._opFunc write and unit test
+- Completion.trainLbfgs write and unit test
+- Completion.trainSgd write and unit test
+
+wip:
+- write and ut Completion.makeOpfunc
+- add lambda as parameter to Completion constructor DONE
+- remove lambda from Completion:loss DONE
+- remove lambda from Completion:gradient DONE
+- remove lambda from Completion:_sampleGradient
+
+actual:
+
+* 2012-09-06
+
+Finished unit testing of IncompleteMatrix:_opFunc for all points
+
+next steps:
+- test _opFunc for random point. maybe new tests._opFuncRandom() ?
+- test _opFunc for specified point
+- test _generateRandomIndices. Test written, need to enable
+- enable and run all unit tests
+
+* 2012-09-05
+
+Working on unit testing IncompleteMatrix.lua
+
+Rewriting method _opFunc, for which need function and module
+shuffleSequence.lua
+
+Next steps
+- unit test _generateRandomIndices.lua
+- rework _opFunc, case for random points
+- unit test _opFunc: all 3 cases
+
+Then continue unit testing IncompleteMatrix.
+
+* outline
+date: 
+last thing I was doing
+what I hoped to do next; files involved
+
+* example
+LineParser.java: finished handling comments. (Already did the block
+comments and macros)
+
+Todo:
+- design work on how to do command subsitution
+- implement all command types except Symbol, blah blah which have
+  already been implemented
+- finish command table
+- unit tests for command table
+
+ref:
+http://www.drdobbs.com/architecture-and-design/leave-breadcrumbs-for-yourself/240006675?cid=DDJ_nl_upd_2012-09-05_h&elq=ef1c900cbe5046c98c61c03ba9c49a67
+
+
+
+
+
