@@ -1,4 +1,4 @@
-#!/home/rel292/local/bin/torch
+#!/home/rel292/local/bin/torch-lua
 ---- count number of records in standard in reduce function
 -- this is the reduce
 -- input is in some arbitrary order

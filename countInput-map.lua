@@ -1,4 +1,4 @@
-#!/home/rel292/local/bin/torch
+#!/home/rel292/local/bin/torch-lua
 -- count number of records and bytes in stdin map function
 -- stdin format: records consisting of pairs of strings
 --   (keyname --> count)
