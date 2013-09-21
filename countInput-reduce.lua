@@ -8,11 +8,13 @@
 -- output is total for each key value
 -- NOTE: keys are arbitary strings, not restricted to value named above
 
+require 'getKeyValue'
+
 local lastKey = nil
 local count = 0
 for line in io.stdin:lines('*l') do
     if line == nil then break end
-    local key, value = string.match(line, '^(.*)\t(.*)$')
+    local key, value = getKeyValue(line)
     if lastKey == key then
         count = count + tonumber(value)
     else
