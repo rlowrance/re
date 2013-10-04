@@ -6,11 +6,9 @@ set -e
 # set control variables
 INPUT_FILE="parcels-HEATING.CODE-known-val.pairs"
 JOB_NAME="countInput"
-HPC_ID="rel292"
 
 # build other variables
 USER_DIR="/user/$USER"
-SRC="$HOME/re"
 SRC=$PWD
 MAPPER="${SRC}/${JOB_NAME}-map.lua"
 REDUCER="${SRC}/${JOB_NAME}-reduce.lua"
