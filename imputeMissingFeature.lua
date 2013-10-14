@@ -1,3 +1,24 @@
+-- global function imputeMissingFeature
+--
+-- create new file containing a single missing feature
+--
+-- ARGS:
+-- clArgs            : table of command line arguments (not used but printed)
+-- readLimit         : number, limit on number of input records to read
+-- targetFeatureName : string, field name in the input field\
+-- outputFileSuffix  : string
+--                     write file OUTPUT/parcels-imputed-<outputFileSuffix>.csv
+-- hp                : table of hyperpameters to test
+--                     hp.mPerYear : sequence
+--                     hp.k        : sequence
+--                     hp,lambda   : sequence
+-- checkGradient     : boolean
+-- RESULTS: none
+
+
+
+
+
 require 'assertEq'
 require 'attributesLocationsTargetsApns'
 require 'bestApns'
@@ -43,7 +64,7 @@ local function getWeights(trainingLocations,
                           queryLocation,
                           hp,
                           names)
-   local vp, verbose = makeVp(0, 'getWeights')
+   local vp, verbose = makeVp(1, 'getWeights')
    local d = verbose > 0
 
    if d then
@@ -312,17 +333,22 @@ local function selectModel(labeled,
    validateAttributes(dirOutput, 'string')
    validateAttributes(checkGradient, 'boolean')
 
+
+   -- don't use cache for now
+   local useCache = false
+
    -- split into train/val/test and parse out the components
    local cachePath = dirOutput .. 'imputeMissingFeature-' .. 'splitParse'
    local version = 1  -- version number for splitParse function
-   local usedCache, train, val, test = 
-      memoizedComputationOnDisk(cachePath,
-                                version,
-                                splitParse,
-                                labeled,
-                                fTrain,
-                                fValidate,
-                                targetFeatureName)
+   local usedCache, train, val, test
+   if useCache then 
+      usedCache, train, val, test =
+         memoizedComputationOnDisk(cachePath, version, splitParse, 
+                                   labeled, fTrain, fValidate, targetFeatureName)
+   else 
+      usedCache = false 
+      train, val, test = splitParse(labeled, fTrain, fValidate, targetFeatureName) 
+   end
    vp(2, 'usedCache', usedCache)
    
    -- setup file cache that contains previous results
@@ -684,20 +710,6 @@ end
 -- GLOBAL FUNCTION imputeMissingFeature
 --------------------------------------------------------------------------------
 
--- create new file containing a single missing feature
---
--- ARGS:
--- clArgs : table of command line arguments (not used but printed)
--- readLimit : number, limit on number of input records to read
--- targetFeatureName : string, field name in the input field\
--- outputFileSuffix  : string
---                     write file OUTPUT/parcels-imputed-<outputFileSuffix>.csv
--- hp                : table of hyperpameters to test
---                     hp.mPerYear : sequence
---                     hp.k        : sequence
---                     hp,lambda   : sequence
--- checkGradient     : boolean
--- RESULTS: none
 function imputeMissingFeature(clArgs, 
                               readLimit, 
                               targetFeatureName,
@@ -711,6 +723,9 @@ function imputeMissingFeature(clArgs,
    vp(1, 'outputFileSuffix', outputFileSuffix)
    vp(1, 'hp', hp)
    vp(1, 'checkGradient', checkGradient)
+
+   -- don't use the cache for now
+   local useCache = false
 
    -- validate arguments
    validateAttributes(clArgs, 'table')
@@ -751,13 +766,21 @@ function imputeMissingFeature(clArgs,
    local pathToCacheFile = 
       dirOutput .. 'imputeMissingFeature-cache-create-labeled-unlabeled.ser'
    local codeVersion = 1
-   local usedCache, labeled, unlabeled =
+   local usedCache, labeled, unlabeled = nil, nil
+   if useCache then
+      usedCache, labeled, unlabeled =
       memoizedComputationOnDisk(pathToCacheFile,
                                 codeVersion,
                                 createLabeledUnlabeled,
                                 pathToParcels,
                                 readLimit,
                                 targetFeatureName)
+   else
+      usedCache = false
+      labeled, unlabeled = createLabeledUnlabeled(pathToParcels, 
+                                                  readLimit, 
+                                                  targetFeatureName)
+   end
 
    vp(1, 'split used cache?', usedCache)
    validateAttributes(labeled, 'NamedMatrix')     
