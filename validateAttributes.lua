@@ -6,11 +6,18 @@ require 'makeVp'
 -- check type and attributes of a value
 -- ARGS:
 -- value         : arbitrary object
--- typeNames     : string or sequence of strings, value must be one of these types
---                 Accept 'Tensor' as abbrevation for 'torch.TYPETensor'
+-- typenames     : a typename or sequence of typenames
+--                 a typename is a torch type name returned by type(value)
+--                 or a torch tensor name 'Tensor' or 'torch.TYPETensor'
+--                 type(value) \in {'number', 'boolean', 'string', ...}
 -- attributeName : optional string. Each must hold
 -- attributeCode : optional object dependent on string
 -- RETURNS nil
+--
+-- EXAMPLES:
+-- validateAttributes(x, 'number', 'positive')
+-- validateAttributes(x, 'number', '<', 20)
+-- validateAttributes(X, 'Tensor')
 function validateAttributes(value, typeNames, ...)
    local vp = makeVp(0, 'validateAttributes')
    vp(1, 'value', value)
