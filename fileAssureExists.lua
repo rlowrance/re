@@ -9,7 +9,7 @@ require 'makeVp'
 require 'validateAttributes'
 
 function fileAssureExists(filePath)
-   local vp = makeVp(2, 'fileAssureExists')
+   local vp = makeVp(0, 'fileAssureExists')
    validateAttributes(filePath, 'string')
 
    if fileExists(filePath) then
