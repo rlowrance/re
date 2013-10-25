@@ -1,4 +1,5 @@
 -- parseCommandLine.lua
+-- SEE ALSO the class CommandLine which may do more of what you want
 
 require 'makeVp'
 
