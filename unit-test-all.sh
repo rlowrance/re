@@ -10,6 +10,7 @@ torch bestApns_test.lua
 torch bytesIn_test.lua
 torch bytesIn_test.lua
 torch CacheFile_test.lua
+torch CommandLine_test.lua
 torch concatHorizontal_test.lua
 torch Dataframe_test.lua
 torch distancesSurface_test.lua
@@ -17,6 +18,10 @@ torch equalObjects_test.lua
 torch equalTensors_test.lua
 torch extract_test.lua
 torch extractTensor_test.lua
+torch fileAssureExists_test.lua
+torch fileAssureNotExists_test.lua
+torch fileDelete_test.lua
+torch fileExists_test.lua
 torch hasNA_test.lua
 torch hasNaN_test.lua
 torch head_test.lua
@@ -45,6 +50,7 @@ torch standardize_test.lua
 torch softmaxes_test.lua
 torch splitTensor_test.lua
 torch SliceReader_test.lua
+torch TableCached_test.lua
 torch Timer_test.lua
 torch unique_test.lua
 torch validateAttributes_test.lua
