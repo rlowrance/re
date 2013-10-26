@@ -40,7 +40,7 @@ if checkTiming then
    end
 end
 
-print('ok')
+print('ok argmax')
 
 
 
