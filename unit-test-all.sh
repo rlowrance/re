@@ -13,6 +13,10 @@ torch CacheFile_test.lua
 torch CommandLine_test.lua
 torch concatHorizontal_test.lua
 torch Dataframe_test.lua
+torch directoryAssureExists_test.lua
+torch directoryAssureNotExists_test.lua
+torch directoryDelete_test.lua
+torch directoryExists_test.lua
 torch distancesSurface_test.lua
 torch equalObjects_test.lua
 torch equalTensors_test.lua
