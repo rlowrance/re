@@ -3,7 +3,7 @@
 -- ARGS
 -- filePath : string, path to file or empty directory
 --
--- RETURNS: nil
+-- RETURNS: nil or raises error if filePath is not valid
 
 require 'makeVp'
 require 'validateAttributes'
