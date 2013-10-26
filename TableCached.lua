@@ -6,7 +6,7 @@ require 'makeVp'
 
 -- API overview
 if false then
-   tc = TableCached('path/to/file')  -- create file if necessary
+   tc = TableCached('path/to/file', 'ascii')  -- create file if necessary
 
    -- storing and fetching keys and values from the cache
    tc:store(123, {'abc', true})  -- key, value
@@ -23,7 +23,9 @@ if false then
    -- reading and writing to associated disk file 
    -- in binary serialization format
    tc:writeToFile()
-   tc:replaceWithFile()   
+   if tc:replaceWithFile() then
+      state = 'file was read; its content replaced the table'
+   end
 
    -- empty the table
    tc:reset()
@@ -32,16 +34,21 @@ end
 -- construction
 local TableCached = torch.class('TableCached')
 
-function TableCached:__init(filePath)
-   local vp = makeVp(0, 'TableCached:__init')
+function TableCached:__init(filePath, format)
+   local vp = makeVp(1, 'TableCached:__init')
    vp(1, 'filePath', filePath)
+
    validateAttributes(filePath, 'string')
+
+   validateAttributes(format, 'string')
+   assert(format == 'ascii' or format == 'binary')
 
    -- make sure that file is accessible
    fileAssureExists(filePath)
 
    -- initialize instance variables
    self.filePath = filePath
+   self.format = format
    self.table = {}
 end
 
@@ -57,7 +64,16 @@ end
 
 -- replaceWithFile
 function TableCached:replaceWithFile()
-   self.table = torch.load(self.filePath, 'ascii')
+   local vp = makeVp(2, 'TableCached:replaceWithFile')
+   vp(1, 'self', self)
+   -- guard against cache file not existing
+   if fileExists(self.filePath) then
+      vp(2, 'cache file exists')
+      self.table = torch.load(self.filePath, self.format)
+      return true
+   else
+      return false
+   end   
 end
 
 -- reset
@@ -72,6 +88,6 @@ end
 
 -- writeToFile
 function TableCached:writeToFile()
-   torch.save(self.filePath, self.table, 'ascii')  -- write in platform independent way
+   torch.save(self.filePath, self.table, self.format)
 end
 
