@@ -11,9 +11,10 @@ local vp = makeVp(verbose, 'tester')
 
 -- construction creating new cache file
 local filePath = '/tmp/TableCached_test.csv'
+local format = 'ascii'
 
 fileAssureNotExists(filePath)
-local cf = TableCached(filePath)
+local cf = TableCached(filePath, format)
 
 -- fetch non-existent key
 local found = cf:fetch(123)
@@ -63,7 +64,7 @@ cf:replaceWithFile()
 containsExpectedValues(cf)
 
 -- construction from existing file
-local tc2 = TableCached(filePath)
+local tc2 = TableCached(filePath, format)
 
 -- make sure expected value are in the table
 containsExpectedValues(tc2)

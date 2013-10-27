@@ -36,15 +36,12 @@ local TableCached = torch.class('TableCached')
 
 function TableCached:__init(filePath, format)
    local vp = makeVp(1, 'TableCached:__init')
-   vp(1, 'filePath', filePath)
+   vp(1, 'filePath', filePath, 'format', format)
 
    validateAttributes(filePath, 'string')
 
    validateAttributes(format, 'string')
    assert(format == 'ascii' or format == 'binary')
-
-   -- make sure that file is accessible
-   fileAssureExists(filePath)
 
    -- initialize instance variables
    self.filePath = filePath
