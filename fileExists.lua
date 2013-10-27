@@ -16,9 +16,10 @@ function fileExists(filePath)
    if f == nil then
       -- there was an error
       -- assume it was because the file did not exist
-      vp(2, 'err', error)
+      vp(2, 'file was not opened; err', err)
       return false
    else
+      vp(2, 'file was opened')
       f:close()
       return true
    end
