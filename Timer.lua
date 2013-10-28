@@ -5,12 +5,13 @@
 if false then
    timer = Timer()
 
-   timer:wallclock()   -- cumulative Wall Clock
-   timer:cpu()         -- user + system CPU
-   timer:user()        -- just user CPU
-   timer:system()      -- just system CPU
+   timer:wallclock()     -- cumulative Wall Clock
+   timer:cpu()           -- user + system CPU
+   timer:cpuWallclock()  -- both at once
+   timer:user()          -- just user CPU
+   timer:system()        -- just system CPU
 
-   timer:reset()       -- restart from 0
+   timer:reset()         -- restart from 0
 end
 
 torch.class('Timer')
@@ -28,7 +29,13 @@ function Timer:wallclock()
 end
 
 function Timer:cpu()
-   return self:user() + self:system()
+   local t = self.timer:time()
+   return t.user + t.sys
+end
+
+function Timer:cpuWallclock()
+   local t= self.timer:time()
+   return t.user + t.sys, t.real
 end
 
 function Timer:user()
