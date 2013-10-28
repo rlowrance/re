@@ -240,9 +240,11 @@ end
 -- predict   : function(thetaStar, newX) --> class number
 -- thetaStar : 1D Tensor of flattened optimal parameters
 local function fitModel(nClasses, xs, ys, ws, lambda, checkGradient)
+   local timer = Timer()
    -- ref: http://torch.cogbits.com/doc/tutorials_supervised/
    local vp, verboseLevel = makeVp(0, 'fitModel')
    local v = verboseLevel > 0
+   local reportTiming = true
    if v then
       vp(1, 
          'nClasses', nClasses,
@@ -266,6 +268,11 @@ local function fitModel(nClasses, xs, ys, ws, lambda, checkGradient)
    assert(math.abs(torch.sum(ws) - 1) < 1e-6,
           'importance weights do not sum to about 1')
 
+   if reportTiming then
+      vp(0, 'setup; cpu secs', timer:cpu())
+      timer:reset()
+   end
+
    -- functions to run generate sample indices
    local nextPermutedIndex = makeNextPermutedIndex(xs:size(1))
 
@@ -281,6 +288,11 @@ local function fitModel(nClasses, xs, ys, ws, lambda, checkGradient)
    -- use Bottou's SGD via sgdBottouDriver
    local function newEtas(eta)
       return {0.7 * eta, 1.3 * eta}
+   end
+   
+   if reportTiming then
+      vp(0, 'make op func; cpu sec', timer:cpu())
+      timer:reset()
    end
 
    local configSgdBottou = 
@@ -307,6 +319,12 @@ local function fitModel(nClasses, xs, ys, ws, lambda, checkGradient)
    vp(2, 'avgLoss', avgLoss)
    vp(2, 'state', state)
    vp(1, 'predict', predict, 'thetaStar', thetaStar)
+   
+   if reportTiming then
+      vp(0, 'sgd bottou driver; cpu sec', timer:cpu())
+      timer:reset()
+   end
+
    return predict, thetaStar
 end
 
@@ -326,8 +344,10 @@ end
 -- - This implementation is optimized for the use case in which only a 
 --   relatively few examples have non-zero importance.
 function localLogRegNn(xs, ys, ws, newX, lambda, checkGradient)
+   local timer = Timer()
    local vp, verbose = makeVp(0, 'localLogRegNn')
    local d = verbose > 0
+   local reportTiming = true
    if d then
       vp(1, '\n******************* localLogRegNn')
       vp(1, 
@@ -345,6 +365,10 @@ function localLogRegNn(xs, ys, ws, newX, lambda, checkGradient)
    -- validate input
    local nObs = xs:size(1)
    local nDimensions = xs:size(2)
+   if reportTiming then
+      vp(0, 'nObs', nObs, 'nDimensions', nDimensions)
+   end
+
    validateAttributes(xs, 'Tensor', '2D', 'size', {nObs,nDimensions})
    validateAttributes(ys, 'Tensor', '2D', 'size', {nObs,1})
    validateAttributes(ws, 'Tensor', '2D', 'size', {nObs,1})   
@@ -354,6 +378,7 @@ function localLogRegNn(xs, ys, ws, newX, lambda, checkGradient)
 
    -- remove any examples that have zero importance
    if torch.sum(torch.eq(ws, 0)) > 0 then
+      local timer = Timer()
       -- optimize for the use case in which only a few examples have
       -- non-zero importance
       local isRetained = torch.ne(ws,0)
@@ -375,6 +400,9 @@ function localLogRegNn(xs, ys, ws, newX, lambda, checkGradient)
       end
       vp(1, 'examples with some importance')
       vp(1, 'xsNew', xsNew, 'ysNew', ysNew, 'wsNew', wsNew)
+      if reportTiming then
+         vp(0, 'remove entries with 0 weight; cpu sec', timer:cpu())
+      end
       return localLogRegNn(xsNew, ysNew, wsNew, newX, lambda, checkGradient)
    end
 
@@ -389,6 +417,11 @@ function localLogRegNn(xs, ys, ws, newX, lambda, checkGradient)
    end
       
 
+   if reportTiming then
+      vp(0, 'setup cpu secs', timer:cpu())
+      timer:reset()
+   end
+
    -- determine number of classes and check coding of classes
    local maxY = torch.max(ys)
    local minY = torch.min(ys)
@@ -401,12 +434,20 @@ function localLogRegNn(xs, ys, ws, newX, lambda, checkGradient)
       vp(2, 'nObs', nObs, 'nDimensions', nDimensions, 'nClasses', nClasses)
    end
 
+   if reportTiming then
+      vp(0, 'determine number of classes; cpu secs', timer:cpu())
+      timer:reset()
+   end
+
    -- fit the model
    vp(2, 'fitting modelLogReg')
-   local timer = Timer()
    local predict, thetaStar = fitModel(nClasses, xs, ys, ws, lambda, checkGradient)
    vp(2, 'model', model)
-   vp(1, 'cpu seconds to fit model', timer:cpu())
+
+   if reportTiming then 
+      vp(0, 'fit model cpu secs', timer:cpu())
+      timer:reset()
+   end
 
    -- predict at the query point
    local query = torch.Tensor(newX:size(2))
@@ -419,6 +460,11 @@ function localLogRegNn(xs, ys, ws, newX, lambda, checkGradient)
    local prediction = argmax(probs)
    vp(1, 'prediction', prediction)
    
+   if reportTiming then
+      vp(0, 'predict at query point cpu secs', timer:cpu())
+      timer:reset()
+   end
+
    if verbose >= 2 then
       -- print details, assuming a few examples
       for i = 1, nObs do  -- print examples
