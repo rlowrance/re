@@ -80,6 +80,8 @@ end
 
 -- store
 function TableCached:store(key, value)
+   local vp = makeVp(0, 'TableCached:store')
+   vp(1, 'key', key, 'value', value)
    self.table[key] = value
 end
 
