@@ -39,10 +39,10 @@ function kernelEpanechnikovQuadraticKnn(distances, k, sortedIndices)
    local epsilon = 1e-10
    local lambda = distances[sortedIndices[k]]
    vp(2, 'lambda', lambda)
-   assert(lambda > 0, 'bad lambda = ' .. tostring(lambda))
    if lambda == 0 then
       lambda = epsilon
    end
+   assert(lambda > 0, 'bad lambda = ' .. tostring(lambda))
 
    local t = distances / lambda
 
