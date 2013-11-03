@@ -242,9 +242,9 @@ end
 local function fitModel(nClasses, xs, ys, ws, lambda, checkGradient)
    local timer = Timer()
    -- ref: http://torch.cogbits.com/doc/tutorials_supervised/
-   local vp, verboseLevel = makeVp(0, 'fitModel')
+   local vp, verboseLevel = makeVp(0, 'localLogRegNn.fitModel')
    local v = verboseLevel > 0
-   local reportTiming = true
+   local reportTiming = global.reportTiming.localLogRegNn.fitModel
    if v then
       vp(1, 
          'nClasses', nClasses,
@@ -347,7 +347,7 @@ function localLogRegNn(xs, ys, ws, newX, lambda, checkGradient)
    local timer = Timer()
    local vp, verbose = makeVp(0, 'localLogRegNn')
    local d = verbose > 0
-   local reportTiming = true
+   local reportTiming = global.reportTiming.localLogRegNn.localLogRegNn
    if d then
       vp(1, '\n******************* localLogRegNn')
       vp(1, 
@@ -423,11 +423,18 @@ function localLogRegNn(xs, ys, ws, newX, lambda, checkGradient)
    end
 
    -- determine number of classes and check coding of classes
+   -- it could be that there is only one class
    local maxY = torch.max(ys)
    local minY = torch.min(ys)
    validateAttributes(minY, 'number', '>=', 1)
-   validateAttributes(maxY, 'number', '>=', 2, '>=', minY)
+   validateAttributes(maxY, 'number', '>=', 1, '>=', minY)
    local nClasses = maxY
+
+   -- skip most of the work if only one class in data
+   if maxY == minY then
+      return maxY
+   end   
+   
    -- The subset we see may have less than the max number of codes
 
    if d then 

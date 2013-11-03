@@ -7,17 +7,16 @@
 --   all of the single famile residential parcels with geocodes
 -- 
 -- OUTPUT FILES
--- OUTPUT/imputed-VAR/estGenError-HPS.txt
---   contains a number in ascii, the estimated generalization error
---   for the variable VAR using hyperparameters HPS
---   HPS is in this format
---     mPerYear-NUMBER-k-NUMBER-lambda-NUMBER
---   NOTE: THE OUTPUT DIRECTORY MUST EXIST BEFORE RUNNING THIS PROGRAM
+-- All output and input-output files are written to a directory
+-- formed by concatenating the program name with the important
+-- parameters supplied on the command line.
 --
--- INPUT-OUTPUT FILE
--- OUTPUT/imputed-VAR/estGenError-HPS[-readlimit-NUMBER]-cache.csv
---   Contains cached values for the predicted value of VAR for each i
---   This cache is used to implement a checkpoint-restart capability.
+-- The output files are these:
+-- output.txt           The error rate.
+-- cache.ser            Intermediate results. Also an input file.
+-- log.txt              The log file.
+-- confusionMatrix.ser  The final confusion matrix, serialized.
+-- confusionMatrix.txt  The final confusion matrix, in txt form.
 --
 -- COMMAND LINE PARAMETERS
 -- --output STRING    Path to output directory in the file system
@@ -33,6 +32,7 @@
 require 'assertEq'
 require 'attributesLocationsTargetsApns'
 require 'CommandLine'
+require 'ConfusionMatrix'
 require 'directoryAssureExists'
 require 'distancesSurface'
 require 'fileAssureExists'
@@ -70,6 +70,8 @@ local function getWeights(trainingLocations,
                           names)
    local vp, verbose = makeVp(0, 'getWeights')
    local debugging = verbose > 0  
+   local reportTiming =
+      global.reportTiming.imputed_VAR_estGenError_HPS.getWeights 
 
    local timerAll = Timer()
 
@@ -143,7 +145,10 @@ local function getWeights(trainingLocations,
       vp(1, 'weights size', weights:size())
       vp(1, 'weights head', head(weights))
       local cpuOverall = timerAll:cpu()
-      vp(2, 
+   end
+
+   if reportTiming then
+      vp(0, 
          'cpu time: overall', cpuOverall,
          'cpu time: determine distances', cpuDistances,
          'cpu time: determine weights', cpuWeights,
@@ -163,8 +168,7 @@ end
 -- checkGradient   : boolean
 -- cachePath       : string, path to the prediction cache
 -- RETURN
--- errorRate       : number, fraction of errors on re-estimated validation
---                   targets
+-- confusion       : ConfusionMatrix
 local function validationError(train,
                                val,
                                hp,
@@ -173,7 +177,8 @@ local function validationError(train,
    local vp, verboseLevel = makeVp(2, 'validationError')
    local debugging = verboseLevel > 0  -- true if debugging
    local investigateTiming = true
-   local reportTiming = true
+   local reportTiming = 
+      global.reportTiming.imputed_VAR_estGenError_HPS.validationError
    vp(1, '*************************')
    if debugging then
       vp(1, 
@@ -190,15 +195,13 @@ local function validationError(train,
    validateAttributes(hp, 'table')
    validateAttributes(checkGradient, 'boolean')
    validateAttributes(cachePath, 'string')
-
+   
    -- setup cache to simulate checkpoint-restart
    -- read any cached values from disk file
    --   key   = i, the index
    --   value = sequence {prediction, actual}
    local tableCached = TableCached(cachePath, 'ascii')
-   if not investigateTiming then 
-      tableCached:replaceWithFile()
-   end
+   tableCached:replaceWithFile()
 
    if false then -- debugging code
       vp(2, 'existing cache entries')
@@ -224,7 +227,7 @@ local function validationError(train,
    -- RETURN prediction, actual, cpuSecs, wallclockSecs
    local function getPredictionActual(i)
       local timer = Timer()
-      local vp = makeVp(0, 'getPredictionActual')
+      local vp, verboseLevel = makeVp(0, 'getPredictionActual')
       vp(1, 'i', i)
       local predictionActual = tableCached:fetch(i)
       vp(2, 'from tableCached: predictionActual', predictionActual)
@@ -272,18 +275,26 @@ local function validationError(train,
          print(string.format('warning: cpu secs (%f) > wallclock sec(%f)', cpu, wallclock))
       end
       vp(1, 'prediction', prediction, 'actual', actual, 'cpu', cpu, 'wallclock', wallclock)
-      if i == 1 then stop() end 
+      --if i == 1 then stop() end 
       return prediction, actual, cpu, wallclock
    end
 
    -- create an estimate for each validation observation
+   local confusionMatrix = ConfusionMatrix()
    for i = 1, nValObservations do
+      local timer = Timer()
       local prediction, actual, cpuSecs, wallclockSecs = getPredictionActual(i)
-      vp(1, string.format('%d of %d prediction %d actual %d cpu %7.4f wallclock %7.4f',
-                          i, nValObservations, prediction, actual, cpuSecs, wallclockSecs))
+      local cpu, wallclock = timer:cpuWallclock()
+      vp(1, string.format('%d of %d prediction %d actual %d cpu %7.4f wallclock %7.4f k %d mPerYear %f lambda %f',
+                          i, nValObservations, prediction, actual, cpuSecs, wallclockSecs, hp.k, hp.mPerYear, hp.lambda))
       --stop()
-      if prediction ~= actual then
-         nErrors = nErrors + 1
+      confusionMatrix:add(actual, prediction)
+
+      -- print periodically
+      local printFrequency = 100
+      if i % printFrequency == 0 then
+         print('current error rate = ' .. tostring(confusionMatrix:errorRate()))
+         confusionMatrix:printTo(io.stdout, 'current confusion matrix')
       end
 
       -- collect garbage periodically
@@ -294,11 +305,14 @@ local function validationError(train,
       end
 
    end
+   
+   tableCached:writeToFile()
 
-   local errorRate = nErrors / nValObservations
-   vp(1, 'errorRate', errorRate)
-   stop()
-   return errorRate
+   if verboseLevel > 0 then
+      confusionMatrix:printTo(io.stdout, 'final confusion matrix')
+   end
+
+   return confusionMatrix
 end
 
 -- split randomly into [train|val|test].{Attributes,Locations,Targets,Apns}
@@ -457,9 +471,17 @@ validateAttributes(args.mPerYear, 'number', 'positive')
 validateAttributes(args.k, 'number' ,'integer', '>', 1)
 validateAttributes(args.readlimit, 'number', '>=', -1)
 
-if readlimit ~= -1 then
-   print('DID NOT READ ENTIRE INPUT FILE; DISCARD OUTPUT')
-end
+-- set global parameters (usually not a good programming practice)
+global = {}
+global.reportTiming = {}
+global.reportTiming.localLogRegNn = {}
+global.reportTiming.localLogRegNn.fitModel = false
+global.reportTiming.localLogRegNn.localLogRegNn = false
+global.reportTiming.sgdBottou = false
+global.reportTiming.sgdBottouDriver = false
+global.reportTiming.imputed_VAR_estGenError_HPS = {}
+global.reportTiming.imputed_VAR_estGenError_HPS.validationError = false
+global.reportTiming.imputed_VAR_estGenError_HPS.getWeights = false
 
 -- set random number seed
 torch.manualSeed(123)
@@ -478,6 +500,8 @@ directoryAssureExists(outputDir)
 local outputPath = outputDir .. '/' ..  'output.txt'
 local cachePath = outputDir .. '/' .. 'cache.ser'
 local logPath = outputDir .. '/' .. 'log.txt'
+local confusionMatrixSerPath = outputDir .. '/' .. 'confusionMatrix.ser'
+local confusionMatrixTxtPath = outputDir .. '/' .. 'confusionMatrix.txt'
 
 -- verify that we can write the output file
 fileAssureExists(outputPath)
@@ -500,10 +524,16 @@ print(' --readlimit : ' .. args.readlimit)
 
 -- log input/output paths
 print('file paths')
-print(' outputPath : ' .. outputPath)
-print(' inputPath  : ' .. inputPath)
-print(' cachePath  : ' .. cachePath)
-print(' logPath    : ' .. logPath)
+print(' outputPath             : ' .. outputPath)
+print(' inputPath              : ' .. inputPath)
+print(' cachePath              : ' .. cachePath)
+print(' logPath                : ' .. logPath)
+print(' confusionMatrixSerPath : ' .. confusionMatrixSerPath)
+print(' confusionMatrixTxtPath : ' .. confusionMatrixTxtPath)
+
+if args.readlimit ~= -1 then
+   print('DISCARD OUTPUT; NOT ALL INPUT WILL BE READ')
+end
 
 -- read parcels, split into labeled and unlabeled
 
@@ -520,6 +550,25 @@ local train, val, test = splitParse(labeled, fTrain, fValidate, args.var) -- cre
 -- determine error on validation set
 local hp = {mPerYear = args.mPerYear, k=args.k, lambda=args.lambda}
 local checkGradient = false
-local valError = validationError(train, val, hp, checkGradient, cachePath)
+local confusionMatrix = validationError(train, val, hp, checkGradient, cachePath)
+confusionMatrix:printTo(io.stdout, 'final confusion matrix')
 
-stop('do more') -- like write the output file
+-- write the validation error to the output file
+do 
+   local output, err = io.open(outputPath, 'w')
+   assert(output, err)
+   output:write(tostring(confusionMatrix:errorRate()) .. '\n')
+   output:close()
+end
+
+-- write the confusion matrix
+do
+   local confusionTxt, err = io.open(confusionMatrixTxtPath, 'w')
+   assert(confusionTxt, err)
+   confusionMatrix:printTo(confusionTxt, 'final confusion matrix')
+   confusionTxt:close()
+
+   torch.save(confusionMatrixSerPath, confusionMatrix, 'ascii')
+end
+
+print('finished')
