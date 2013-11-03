@@ -1,6 +1,7 @@
 # unit-test-all.sh
 # run all unit tests
 
+torch allZero_test.lua
 torch argmax_test.lua
 torch assertEq_test.lua
 torch asColumnMatrix_test.lua
