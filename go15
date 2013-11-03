@@ -1,0 +1,2 @@
+# run with hyperparamters set #12
+luajit -ltorch imputed-VAR-estGenError-HPS.lua --output ../data/v6/output --var HEATING.CODE --mPerYear 376 --k 102 --lambda 0.08430
