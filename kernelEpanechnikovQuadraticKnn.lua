@@ -1,5 +1,6 @@
 -- kernelEpanechnikovQuadraticKnn.lua
 
+require 'allZero'
 require 'head'
 require 'makeVp'
 
@@ -20,7 +21,8 @@ function kernelEpanechnikovQuadraticKnn(distances, k, sortedIndices)
       vp(1,
          'distances size', distances:size(),
          'distances head', head(distances),
-         'k', k)
+         'k', k,
+         'sortedIndices', sortedIndices)
    end
 
    -- validate args
@@ -32,6 +34,11 @@ function kernelEpanechnikovQuadraticKnn(distances, k, sortedIndices)
    if sortedIndices == nil then
       _, sortedIndices = torch.sort(distances)
       if v then vp(1, 'sortedIndices head', head(sortedIndices)) end
+      if verboseLevel > 2 then
+         for kk = 1, k do
+            vp(3, 'kk', kk, '[kk]', sortedIndices[kk], 'distances[sortedIndices[kk]]', distances[sortedIndices[kk]])
+         end
+      end
    end
 
    -- avoid division by zero by keeping lambda away from zero
@@ -45,6 +52,7 @@ function kernelEpanechnikovQuadraticKnn(distances, k, sortedIndices)
    assert(lambda > 0, 'bad lambda = ' .. tostring(lambda))
 
    local t = distances / lambda
+   vp(2, 'head t', head(t))
 
    -- Epanenchnikov Quadratic Kernel is
    -- K(q, x) = D(distance(q,x) / lambda) where
@@ -54,10 +62,32 @@ function kernelEpanechnikovQuadraticKnn(distances, k, sortedIndices)
    local weights = torch.cmul(lessThanOne,
                               (ones - torch.cmul(t, t)) * 0.75)
 
+   if verboseLevel > 2 then
+      -- debug: check that weights are zero when first k distances are equal
+      for kk = 1, k + 10 do
+         vp(3, 'kk', kk, 'weights[kk]', weights[kk])
+      end
+   end
+
    assert(torch.sum(torch.lt(weights, 0)) == 0,
           'at least one negative weight')
 
-   assert(torch.sum(torch.eq(weights, 0)) < weights:size(1),
+   if allZero(weights) then
+      -- if the first k distances are the same, then all the weights will be zero
+      -- when that happens, reset the first k - 1 weights to equal values (1 / (k - 1))
+      vp(3, 'resetting all zero weights')
+      local newWeight = 1 / (k - 1)  -- k >= 2
+      for kk = 1, k - 1 do
+         weights[kk] = newWeight
+      end
+      if verboseLevel > 2 then
+         for kk = 1, k + 10 do
+            vp(3, 'kk', kk, 'weights[kk]', weights[kk])
+         end
+      end
+   end
+
+   assert(not allZero(weights),
           'all weights are zero')
 
    if verboseLevel == 3 then
