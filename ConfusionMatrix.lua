@@ -25,7 +25,7 @@ end
 
 -- add a new pair
 function ConfusionMatrix:add(actual, predicted)
-   local vp = makeVp(2, 'ConfusionMatrix:add')
+   local vp = makeVp(0, 'ConfusionMatrix:add')
    vp(1, 'self', self, 'actual', actual, 'predicted', predicted)
    validateAttributes(actual, 'number', 'integer', '>', 0)
    validateAttributes(predicted, 'number', 'integer', '>', 0)
