@@ -25,18 +25,19 @@ end
 
 -- add a new pair
 function ConfusionMatrix:add(actual, predicted)
-   local vp = makeVp(0, 'ConfusionMatrix:add')
+   local vp = makeVp(2, 'ConfusionMatrix:add')
    vp(1, 'self', self, 'actual', actual, 'predicted', predicted)
    validateAttributes(actual, 'number', 'integer', '>', 0)
    validateAttributes(predicted, 'number', 'integer', '>', 0)
 
    self.largestClassNumber = math.max(actual, predicted, self.largestClassNumber)
+   vp(2, 'self.largestClassNumber', self.largestClassNumber)
 
-   if self.largestClassNumber > self.table:size(1) then 
+   while self.largestClassNumber > self.table:size(1) do 
       self:_expandRows()
    end
 
-   if self.largestClassNumber > self.table:size(2) then
+   while self.largestClassNumber > self.table:size(2) do
       self:_expandColumns()
    end
 
