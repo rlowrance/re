@@ -1,0 +1,2 @@
+# run with hyperparamters set #31
+torch imputed-VAR-estGenError-HPS.lua --output ../data --var HEATING.CODE --mPerYear 164 --k 119 --lambda 0.00014
