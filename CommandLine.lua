@@ -8,7 +8,7 @@ if false then
 
    flag = cl.isPresent('--flag')       -- true or false
    strOrNil = cl.maybeValue('--flag')  -- if not present, return nil
-   arg1 = cl.required('--arg1')     -- errors if not present
+   arg1 = cl.required('--arg1')        -- errors if not present
    arg2 = cl.defaultable('--arg2', 'default value')
 end
 
