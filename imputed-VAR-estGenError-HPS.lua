@@ -28,6 +28,9 @@
 -- --readlimit NUMBER optional; default -1
 --                    If >= 0, number of input records to read
 --                    Use for testing
+-- --set INTEGER      optional; if supplied number of hyperparameter set
+--                    in file imputeRandomHyperparmaters.csv
+--                    The file is used to set k, mPerYear, lambda
 
 require 'assertEq'
 require 'attributesLocationsTargetsApns'
@@ -167,13 +170,15 @@ end
 -- hp              : table of hyperparameters
 -- checkGradient   : boolean
 -- cachePath       : string, path to the prediction cache
+-- setNumber       : optional, set number for hyperparameters
 -- RETURN
 -- confusion       : ConfusionMatrix
 local function validationError(train,
                                val,
                                hp,
                                checkGradient,
-                               cachePath)
+                               cachePath,
+                               setNumber)
    local vp, verboseLevel = makeVp(2, 'validationError')
    local debugging = verboseLevel > 0  -- true if debugging
    local investigateTiming = true
@@ -186,7 +191,8 @@ local function validationError(train,
          'val', val,
          'hp', hp,
          'checkGradient', checkGradient,
-         'cachePath', cachePath)
+         'cachePath', cachePath,
+         'setNumber', setNumber)
    end
 
    -- validate args
@@ -195,6 +201,10 @@ local function validationError(train,
    validateAttributes(hp, 'table')
    validateAttributes(checkGradient, 'boolean')
    validateAttributes(cachePath, 'string')
+   validateAttributes(setNumber, {'nil', 'number'})
+   if setNumber == nil then 
+      setNumber = 0
+   end
    
    -- setup cache to simulate checkpoint-restart
    -- read any cached values from disk file
@@ -285,8 +295,8 @@ local function validationError(train,
       local timer = Timer()
       local prediction, actual, cpuSecs, wallclockSecs = getPredictionActual(i)
       local cpu, wallclock = timer:cpuWallclock()
-      vp(1, string.format('%d of %d prediction %d actual %d cpu %7.4f wallclock %7.4f k %d mPerYear %f lambda %f',
-                          i, nValObservations, prediction, actual, cpuSecs, wallclockSecs, hp.k, hp.mPerYear, hp.lambda))
+      vp(1, string.format('%d of %d prediction %d actual %d cpu %7.4f wallclock %7.4f k %d mPerYear %f lambda %f set %d',
+                          i, nValObservations, prediction, actual, cpuSecs, wallclockSecs, hp.k, hp.mPerYear, hp.lambda, setNumber))
       --stop()
       confusionMatrix:add(actual, prediction)
 
@@ -445,9 +455,33 @@ local function createLabeledUnlabeled(pathToParcels, readLimit, targetFeatureNam
    return labeled, unlabeled
 end
 
+-- return k, lambda, mPerYear values from file
+local function getHyperparameters(setNumber, outputDir)
+   local vp = makeVp(2, 'getHyperparameters')
+   vp(1, 'setNumber', setNumber, 'outputDir', outputDir)
+
+   local filename = 'imputeRandomHyperparameters.csv'
+   local outputPath = outputDir .. '/' .. filename
+   vp(2, 'outputPath', outputPath)
+
+   local nm = NamedMatrix.readCsv{file=outputPath,numberColumns={'set', 'k', 'mPerYear', 'lambda'}}
+   vp(2, 'nm', nm)
+   
+   validateAttributes(setNumber, 'number', '<=', nm.t:size(1))
+   local k = nm:get(setNumber, 'k')
+   local lambda = nm:get(setNumber, 'lambda')
+   local mPerYear = nm:get(setNumber, 'mPerYear')
+
+   vp(1, 'k', k, 'lambda', lambda, 'mPerYear', mPerYear)
+   return k, lambda, mPerYear
+end
+   
+
+
+
 -------------------------------------------------------------
 -- MAIN PROGRAM
--- ---------------------------------------------------------
+-------------------------------------------------------------
 
 local vp = makeVp(2, 'imputed-VAR-estGenError-HPS')
 vp(2, 'clargs', arg) 
@@ -457,11 +491,20 @@ local args = {}
 do 
    local cl = CommandLine(arg)
    args.output = cl:required('--output')
-   args.var = cl:required('--var')
-   args.mPerYear = tonumber(cl:required('--mPerYear'))
-   args.k = tonumber(cl:required('--k'))
-   args.lambda = tonumber(cl:required('--lambda'))
    args.readlimit = tonumber(cl:defaultable('--readlimit', '-1'))
+   args.var = cl:required('--var')
+
+   -- either --set is supplied or --mPerYear, --k, --lambda are supplied
+   args.set = cl:maybeValue('--set')
+   vp(2, 'args', args) 
+   if args.set then
+      args.set = tonumber(args.set)
+      args.k, args.lambda, args.mPerYear = getHyperparameters(args.set, args.output)
+   else
+      args.mPerYear = tonumber(cl:required('--mPerYear'))
+      args.k = tonumber(cl:required('--k'))
+      args.lambda = tonumber(cl:required('--lambda'))
+   end
 end
 vp(2, 'args', args)
 local programName = arg[0]  -- now no longer dependent on special var arg
@@ -550,7 +593,7 @@ local train, val, test = splitParse(labeled, fTrain, fValidate, args.var) -- cre
 -- determine error on validation set
 local hp = {mPerYear = args.mPerYear, k=args.k, lambda=args.lambda}
 local checkGradient = false
-local confusionMatrix = validationError(train, val, hp, checkGradient, cachePath)
+local confusionMatrix = validationError(train, val, hp, checkGradient, cachePath, args.set)
 confusionMatrix:printTo(io.stdout, 'final confusion matrix')
 
 -- write the validation error to the output file
