@@ -1,12 +1,12 @@
 -- TableCached.lua
--- A lua table that can be written to a CSV file and read back in
+-- A lua table that can be written to a pair of CSV files and read back in
 
 require 'fileAssureExists'
 require 'makeVp'
 
 -- API overview
 if false then
-   tc = TableCached('path/to/file', 'ascii')  -- create file if necessary
+   tc = TableCached('path/to/base_file_name', 'ascii')  -- create file if necessary
 
    -- storing and fetching keys and values from the cache
    tc:store(123, {'abc', true})  -- key, value
@@ -34,17 +34,27 @@ end
 -- construction
 local TableCached = torch.class('TableCached')
 
-function TableCached:__init(filePath, format)
+-- create and initialize object
+-- ARGS:
+-- basePath : string, base path to file that will hold the cache on disk
+--            the writeToFile() method writes alternates between writing two files
+--              basePath .. '.' .. format
+--              basePath .. '-alternative' .. '.' .. format
+-- format   : string in {'ascii', 'binary'} format of file on disk
+function TableCached:__init(basePath, format)
    local vp = makeVp(1, 'TableCached:__init')
-   vp(1, 'filePath', filePath, 'format', format)
+   vp(1, 'basePath', basePath, 'format', format)
 
-   validateAttributes(filePath, 'string')
+   validateAttributes(basePath, 'string')
 
    validateAttributes(format, 'string')
    assert(format == 'ascii' or format == 'binary')
 
    -- initialize instance variables
-   self.filePath = filePath
+   self.filePaths = {}
+   self.filePaths[1] = basePath .. '.' .. format
+   self.filePaths[2] = basePath .. '-alternative' .. '.' .. format
+   self.nextFilePathIndex = 1
    self.format = format
    self.table = {}
 end
@@ -64,9 +74,10 @@ function TableCached:replaceWithFile()
    local vp = makeVp(2, 'TableCached:replaceWithFile')
    vp(1, 'self', self)
    -- guard against cache file not existing
-   if fileExists(self.filePath) then
+   local filePath = self.filePaths[1]
+   if fileExists(filePath) then
       vp(2, 'cache file exists')
-      self.table = torch.load(self.filePath, self.format)
+      self.table = torch.load(filePath, self.format)
       return true
    else
       return false
@@ -87,6 +98,13 @@ end
 
 -- writeToFile
 function TableCached:writeToFile()
-   torch.save(self.filePath, self.table, self.format)
+   local filePath = self.filePaths[self.nextFilePathIndex]
+   if self.nextFilePathIndex == 1 then
+      self.nextFilePathIndex = 2
+   else
+      self.nextFilePathIndex = 1
+   end
+
+   torch.save(filePath, self.table, self.format)
 end
 
