@@ -4,7 +4,7 @@
 require 'makeVp'
 require 'Timer'
 
-local vp = makeVp(2, 'tester')
+local vp = makeVp(0, 'tester')
 
 -- new version of API
 timer = Timer(vp)
