@@ -55,6 +55,7 @@ torch standardize_test.lua
 torch softmaxes_test.lua
 torch splitTensor_test.lua
 torch SliceReader_test.lua
+torch stop_test.lua
 torch TableCached_test.lua
 torch Timer_test.lua
 torch unique_test.lua
