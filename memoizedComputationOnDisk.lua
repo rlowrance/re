@@ -2,6 +2,7 @@
 
 require 'makeVp'
 require 'maybeLoad'
+require 'equalObjects'
 require 'Timer'
 require 'validateAttributes'
 
@@ -16,7 +17,7 @@ require 'validateAttributes'
 -- usedCacheValue      : boolean
 -- fn(arg1, ..., argN) : one or more objects, may re-use value from disk file
 function memoizedComputationOnDisk(pathToFile, version, fn, ...)
-   local vp = makeVp(2, 'memoizedComputationOnDisk')
+   local vp = makeVp(0, 'memoizedComputationOnDisk')
    local fnArgs = {...}
    vp(1, 'pathToFile', pathToFile, 'version', version, 'fn', fn, 'fnArgs', fnArgs)
 
