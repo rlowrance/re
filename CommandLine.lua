@@ -48,7 +48,7 @@ end
 
 -- defaultable(key, defaultValue)
 function CommandLine:defaultable(key, defaultValue)
-   local vp = makeVp(2, 'CommandLine:defaultable')
+   local vp = makeVp(0, 'CommandLine:defaultable')
    vp(1, 'key', key, 'defaultValue', defaultValue)
    validateAttributes(key, 'string')
    validateAttributes(defaultValue, {'string', nil})
