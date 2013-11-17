@@ -34,6 +34,7 @@ torch ifelse_test.lua
 torch isnan_test.lua
 torch isSequence_test.lua
 torch kernelEpanechnikovQuadraticKnn_test.lua
+torch keyboard_test.lua
 torch keys_test.lua
 torch makeDistanceSurface_test.lua
 torch makeLogreg_test.lua
