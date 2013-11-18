@@ -3,7 +3,7 @@
 -- ARGS:
 -- message : optional string, printed before program is halted
 -- RETURNS : DOES NOT RETURN
-function stop(message, what)
+function stop(message)
    local vp = makeVp(0, 'stop')
    vp(1, 'message', message)
 
