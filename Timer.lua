@@ -64,23 +64,6 @@ function Timer:write()
    end
 end
 
--- verbose print cpu time only (for now)
-function Timer:verbose(verboseLevel, what)
-   local vp = makeVp(0, 'Timer:verbose')
-   vp(1, 'self', self, 'verboseLevel', verboseLevel, 'what', what)
-   validateAttributes(verboseLevel, 'number')
-   validateAttributes(what, 'string')
-   assert(what == 'cpu' or what == 'wallclock')
-
-   if self.vp == nil then
-      error('did not supply a vp function when Timer was constructed')
-   end
-   
-   for k, v in pairs(self[what .. 'Table']) do
-      self.vp(verboseLevel, what .. ' secs ' .. k, v)
-   end
-end
-
 function Timer:reset()
    self.timer:reset()
 end
