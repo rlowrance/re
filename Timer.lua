@@ -14,11 +14,10 @@ if false then
    timer:reset()         -- restart from 0
    
    -- timing portions of a function
-   timer = Timer(vp)
+   timer = Timer('function name', io.stderr)
    timer:lap('part 1')
    timer:lap('part 2')
-   timer:verbose(2, 'cpu')    -- call vp(2, 'lap name', cpuInLap) for each lap
-   timer:verbose(2, 'wallclock')
+   timer:write()  -- write all CPU and Wallclock lap times
 end
 
 require 'makeVp'
@@ -26,11 +25,13 @@ require 'validateAttributes'
 
 torch.class('Timer')
 
-function Timer:__init(vp)
+function Timer:__init(functionName, fileDescriptor)
    self.timer = torch.Timer()
-   self.vp = vp
-   self.cpuTable = {}
-   self.wallclockTable = {}
+   self.functionName = functionName
+   self.fileDescriptor = fileDescriptor
+   self.lapNames = {}
+   self.cpuTimes = {}
+   self.wallclockTimes = {}
 end
 
 -- save cpu and wallclock time; then reset
@@ -38,17 +39,43 @@ function Timer:lap(lapName)
    --local vp = makeVp(2, 'Timer:lap')
    --vp(1, 'self', self, 'lapName', lapName)
    validateAttributes(lapName, 'string')
-   x = self:cpu()
-   self.cpuTable[lapName] = self:cpu()
-   self.wallclockTable[lapName] = self:wallclock()
-   self:reset()
+   table.insert(self.lapNames, lapName)
+   table.insert(self.cpuTimes, self:cpu())
+   table.insert(self.wallclockTimes, self:wallclock())
+   self:reset()  -- restart the clock
+end
+
+-- verbose write cpu and wallclock time
+function Timer:write()
+   if self.functionName == nil then
+      error('did not supply a function name')
+   end
+    
+   if self.fileDescriptor == nil then
+      error('did not supply a file descriptor')
+   end
+   
+   for i, lapName in ipairs(self.lapNames) do
+      io.write(self.functionName .. ' ' ..
+               lapName .. ' ' ..
+               ' cpu ' .. tostring(self.cpuTimes[i]) ..
+               ' wallclock ' .. tostring(self.wallclockTimes[i]) ..
+               '\n')
+   end
 end
 
 -- verbose print cpu time only (for now)
 function Timer:verbose(verboseLevel, what)
+   local vp = makeVp(0, 'Timer:verbose')
+   vp(1, 'self', self, 'verboseLevel', verboseLevel, 'what', what)
    validateAttributes(verboseLevel, 'number')
    validateAttributes(what, 'string')
    assert(what == 'cpu' or what == 'wallclock')
+
+   if self.vp == nil then
+      error('did not supply a vp function when Timer was constructed')
+   end
+   
    for k, v in pairs(self[what .. 'Table']) do
       self.vp(verboseLevel, what .. ' secs ' .. k, v)
    end

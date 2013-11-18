@@ -7,11 +7,11 @@ require 'Timer'
 local vp = makeVp(0, 'tester')
 
 -- new version of API
-timer = Timer(vp)
+timer = Timer('main program', io.stderr)
 timer:lap('one')
+for i = 1, 10000000 do local x = i * i end
 timer:lap('two')
-timer:verbose(1, 'cpu')
-timer:verbose(1, 'wallclock')
+timer:write()
 
 -- old version of API (still supported)
 timer = Timer()
