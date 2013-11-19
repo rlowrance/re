@@ -23,5 +23,6 @@ function stop(message)
       end
    end
 
+   stop_function()  -- cause a stack trace by calling an undefined function
    os.exit(false)  -- exit; set OS return status to EXIT_FAILURE
 end
