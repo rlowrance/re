@@ -10,7 +10,6 @@ end
 local vp = makeVp(1, 'one-off tests')
 local s = {1,2,3}
 vp(1, 's', s)
-stop()
 
 
 -- one value of each type: 

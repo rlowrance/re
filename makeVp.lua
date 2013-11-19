@@ -18,6 +18,8 @@ if false then
    if verboseLevel >= 3 then action() end
 end
 
+require 'torch'
+
 -- create verbosePrint function
 -- ARGS:
 -- verbose : number, if level is at least verbose, output is printed
@@ -43,7 +45,7 @@ function makeVp(verboseVar, prefix)
 
    -- if s begins with \n, print blank line and return s without the \n
    local function maybeSkipLine(s)
-      if string.sub(s, 1, 1) == '\n' then
+      if type(s) == 'string' and string.sub(s, 1, 1) == '\n' then
          print(' ')
          return string.sub(s, 2)  -- remove the \n character
       else
