@@ -1,18 +1,40 @@
 -- keyboard.lua
+-- interact with keyboard.
+-- The name comes from MATLAB.
+-- The commands comes from the Python debugger.
+
+if false then
+   keyboard(message)
+end
 
 require 'ifelse'
 require 'makeVp'
+require 'torch'
 
-local currentStackLevel = 3  -- stack frame 0 is the stack frame of the caller of keyboard()
-
-local function getinfo()
-   local offset = 2
-   return debug.getinfo(offset + currentStackFrame)
+local function help()
+   print('a[rgs]          print args,local, and varargs of current function')
+   print('d[own]          move current frame down one level (to new frame)')
+   print('h[elp]          print help')
+   print('i[interactive]  enter interactive mode')
+   print('q[uit]          quit, return to program execution')
+   print('u[p]            move current fram up one level (to older frame)')
+   print('w[here]         print stack trace')
 end
 
-local function getlocal(localIndex)
+
+local function getInfo(stackLevel)
    local offset = 2
-   return debug.getlocal(offset + currentStackFrame, localIndex)
+   return debug.getinfo(offset + stackLevel)
+end
+
+local function getinfo(stackLevel)
+   local offset = 2
+   return debug.getinfo(offset + stackLevel)
+end
+
+local function getlocal(stackLevel, index)
+   local offset = 2
+   return debug.getlocal(offset +stackLevel, index)
 end
 
 local function getNumberStackLevels()
@@ -26,7 +48,7 @@ local function getNumberStackLevels()
    vp(1, 'n', n)
    return n
 end
-   
+
 local function getNumberLocals(stackLevel)
    -- NOTE: number of locals includes any varargs
    local vp = makeVp(0, 'getNumberLocals')
@@ -53,133 +75,142 @@ local function getNumberVarargs(stackLevel)
 end
 
 -- print values of args, local variables, and varargs
-local function args()
-   local vp = makeVp(0, 'args')
+local function args(currentStackLevel)
+   local vp, verboseLevel = makeVp(0, 'args')
    vp(1, 'currentStackLevel', currentStackLevel)
+
    local info = debug.getinfo(currentStackLevel)
-   vp(2, 'info', info)
-   local nparams = info['nparams']
-   local isvararg = info['isvararg']
-   local nLocals = getNumberLocals(currentStackLevel)
-   local nVarargs = getNumberVarargs(currentStackLevel)
-   vp(2, 'nparams', nparams, 'nLocals', nLocals, 'isvararg', isvararg, 'nVarargs', nVarargs)
-   
-   -- print locals (including args)
-   local i = 1
-   while true do
-      local name, value = debug.getlocal(currentStackLevel, i)
-      if name == nil then
-         break
+   if verboseLevel > 1 then
+      for k, v in pairs(info) do
+         vp(2, string.format('info[%s]=%s', tostring(k), tostring(v)))
       end
-      print(ifelse(i <= nparams, 'arg    ', 'local  ') ..
-            name ..
-            ' = ' ..
-            tostring(value))
-      i = i + 1
+   end   
+
+   
+   -- print locals and varargs
+   local function printVars(tag, start, step)
+      local vp = makeVp(0, 'printVars')
+      vp(2, 'start', start, 'step', step)
+      local index = start
+      while true do
+         local name, value = debug.getlocal(currentStackLevel + 1, index)
+         vp(2, string.format('index %d name %s value %s', index, tostring(name), tostring(value)))
+         if name == nil then
+            break
+         end
+         index = index + step
+         print(tag .. ' ' .. name .. ' = ' .. tostring(value))
+      end
+   end
+   
+   printVars('local ', 1, 1)
+   printVars('vararg', -1, -1)
+
+   -- print up values
+   local nUps = info.nups
+   for i = 1, nUps do
+      local name, value = debug.getupvalue(info.func, i)
+      print('up     ' .. name .. ' = ' .. tostring(value))
    end
 
-   -- print varargs
-   local i = -1
-   while true do
-      local name, value = debug.getlocal(currentStackLevel, i)
-      if name == nil then
-         break
-      end
-      print('vararg ' .. tostring(-i) .. ' ' ..
-            name ..
-            ' = ' ..
-            tostring(value))
-      i = i + 1
-   end
 end
 
-local function down()
-   local vp = makeVp(0, 'down')
-   vp(1, 'currentStackLevel', currentStackLevel)
-
-   currentStackLevel = math.max(3, currentStackLevel - 1)
+local function interactive(currentLevel)
+   local vp = makeVp(0, 'interactive')
+   vp(1, 'currentLevel', currentLevel)
+   print('enter strings to evaluted, cont to continue')
+   debug.debug()
 end
 
-local function up()
-   local vp = makeVp(0, 'up')
-   vp(1, 'currentStackLevel', currentStackLevel)
-
-   currentStackLevel = math.min(getNumberStackLevels(), currentStackLevel + 1)
-end
-   
-
-local function where()
+local function where(currentLevel)
    local vp = makeVp(0, 'where')
-   vp(1, 'currentStackLevel', currentStackLevel)
+   vp(1, 'currentLevel', currentLevel)
 
    local nStackLevels = getNumberStackLevels()
    vp(2, 'nStackLevels', nStackLevels)
 
-   for stackLevel = nStackLevels, 3, -1 do
+   --for stackLevel = nStackLevels, 3, -1 do
+   local callersStackLevel = 3   
+   for stackLevel = nStackLevels - 1, callersStackLevel, -1 do
       local info = debug.getinfo(stackLevel)
-      vp(3, 'stackLevel', stackLevel, 'info', info) 
+      --vp(3, 'stackLevel', stackLevel, 'info', info) 
       local fileName = info['short_src']
       local functionName = info['name']
-      vp(3, 'fileName', fileName)
-      vp(3, 'function', functionName)
-      print(ifelse(stackLevel == currentStackLevel, '-->', '   ') .. 
-            fileName .. '::' .. 
-            ifelse(functionName, functionName, ' '))  -- functionName is nil for main program
-
+      --vp(3, 'fileName', fileName)
+      --vp(3, 'function', functionName)
+      print(
+      ifelse(
+      stackLevel == currentLevel, '-->', '   ') .. 
+      fileName .. '::' .. 
+      ifelse(functionName, functionName, ' ')
+      )  -- functionName is nil for main program
    end
+   return
 end
 
-
-local function help()
-   print('a[rgs]      print args,local, and varargs of current function')
-   print('c[ommands]  enter lua debugger commands; stop with cont command')
-   print('d[own]      move current frame down one level (to new frame)')
-   print('h[elp]      print help')
-   print('q[uit]      quit, return to program execution')
-   print('u[p]        move current fram up one level (to older frame)')
-   print('w[here]     print stack trace')
-end
-
+-- MAIN FUNCTION
+--
 -- input from keyboard: stop execution and give control to the keyboard
 -- ARGS:
 -- message : optional string; printed before keyboard control given, if present
 -- RETURNS: nil
 function keyboard(message)
-   local vp = makeVp(0, 'keyboard')
-   if message then
+   local vp, verboseLevel = makeVp(2, 'keyboard')
+   if message ~= nil then
       print('keyboard : ' .. tostring(message))
    end
 
-   local prefix = 'entering interactive model (cont command returns to program execution)' 
-   
-   -- build table of known commands and their implementation functions
-   local known = {}
-   local function setKnown(key1, key2, value)
-      known[key1] = value
-      known[key2] = value
+   local function down()
+      local vp = makeVp(0, 'down')
+      vp(1, 'currentStackLevel', currentStackLevel)
+
+      currentStackLevel = math.max(3, currentStackLevel - 1)
    end
 
-   setKnown('a', 'args', args)
-   setKnown('d', 'down', down)
-   setKnown('h', 'help', help)
-   setKnown('u', 'up', up)
-   setKnown('w', 'where', where)
+   local function up()
+      local vp = makeVp(0, 'up')
+      vp(1, 'currentStackLevel', currentStackLevel)
 
+      currentStackLevel = math.min(getNumberStackLevels(), currentStackLevel + 1)
+   end
+   
+
+
+
+
+  -- END OF LOCAL FUNCTION DEFINITIONS
+
+   if verboseLevel > 1 then
+      for level = 1, getNumberStackLevels() do
+         local info = debug.getinfo(level)
+         vp(2, string.format('level %d name', level), info['name'])
+      end
+   end
 
    -- interactive loop
-   local command
-   repeat
+   local lowestUserStackLevel = 3
+   local currentStackLevel = lowestUserStackLevel 
+
+   while true do -- 'q' or 'quit' command breaks out of the loop
       io.write('keyboard> ')
       io.flush()
       command = io.read()
-      vp(2, 'currentStackLevel', currentStackLevel)
-      if command == 'quit' or command == 'q' then
+      vp(2, 'currentStackLevel', currentStackLevel, 'command', command) 
+      if command == 'q' or command == 'quit' then
          break
-      elseif known[command] then
-         known[command]()
+      elseif command == 'u' or command == 'up' then
+         currentStackLevel = math.min(getNumberStackLevels(), currentStackLevel + 1)
+      elseif command == 'd' or command == 'down' then
+         currentStackLevel = math.max(lowestUserStackLevel, currentStackLevel - 1)
+      elseif command == 'w' or command == 'where' then
+         where(currentStackLevel)
+      elseif command == 'a' or command == 'args' then
+         args(currentStackLevel)
+      elseif command == 'i' or command == 'interactive' then
+         interactive(currentStackLevel)
       else
          print('?')
-         printHelp()
+         help()
       end
-   until command == 'quit' or command == 'q'
+   end
 end

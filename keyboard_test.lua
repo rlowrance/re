@@ -4,6 +4,8 @@
 require 'keyboard'
 require 'makeVp'
 
+local upvalue = 'abc'
+
 local function f(a, b, ...)
    local f_local1 = 'f1'
    local f_local2 = 27
@@ -12,15 +14,16 @@ local function f(a, b, ...)
    local function g(x)
       local g_local1 = 23
       local g_local2 = 'g%abc'
+      local x = upvalue
       for i = 1, 1 do  
-         keyboard()
+         keyboard('unit test')
       end
    end
    g(12)
 end
 
 -- execute call to f to run a test
-if false then  
+if true then  
    f(10, 20, 'vararg1', 'vararg2')
 end
 
