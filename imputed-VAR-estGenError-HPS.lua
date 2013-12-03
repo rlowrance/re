@@ -47,10 +47,12 @@ require 'localLogRegNn'
 require 'makeVp'
 require 'NamedMatrix'
 require 'parseCommandLine'
+require 'profiler'
 require 'splitString'
 require 'standardize'
 require 'startLogging'  
 require 'TableCached'
+require 'torch'
 require 'validateAttributes'
 
 -------------------------------------------------------------
@@ -71,19 +73,20 @@ local function getWeights(trainingLocations,
                           queryLocation,
                           hp,
                           names)
-   local vp, verbose = makeVp(0, 'getWeights')
-   local debugging = verbose > 0  
+   local functionName = 'getWeights'
+   local vp, verboseLevel = makeVp(0, functionName)
+   local verbose = verboseLevel > 0  
    local reportTiming =
       global.reportTiming.imputed_VAR_estGenError_HPS.getWeights 
+   local timer = Timer(functionName, io.stderr)
 
-   local timerAll = Timer()
-
-   if debugging then
+   if verbose then
       vp(1, 
          'trainingLocation head', head(trainingLocations),
          'queryLocation', queryLocation,
          'hp', hp,
-         'names', names)
+         'names', names,
+         'reportTiming', reportTiming)
    end
 
    -- validate args
@@ -112,22 +115,20 @@ local function getWeights(trainingLocations,
    -- how to structure the cache is far from clear
 
    -- determine distance from queryLocation to each trainingLocation
-   local timerDistances = Timer()
+   timer:lap('setup')
    local dsNames = {latitude=cLatitude; longitude=cLongitude; year=cYear} -- rework for API
    local distances = distancesSurface(queryLocation,
                                       trainingLocations,
                                       hp.mPerYear,
                                       dsNames)
-   local cpuDistances = timerDistances:cpu()
-   if debugging then
+   if verbose then
       vp(3, 'distances head', head(distances))
    end
 
    -- determine weights using distances
-   local timerWeights = Timer()
+   timer:lap('detemine distances')
    local weights1D = kernelEpanechnikovQuadraticKnn(distances, k)
    local weights1D = weights1D / torch.sum(weights1D)  -- weights sum to 1.0
-   local cpuWeights = timerWeights:cpu()
 
    -- view weights as 2D
    local weights = torch.Tensor(weights1D:storage(),
@@ -144,22 +145,104 @@ local function getWeights(trainingLocations,
       stop()
    end
                                 
-   if debugging then
+   if verbose then
       vp(1, 'weights size', weights:size())
       vp(1, 'weights head', head(weights))
-      local cpuOverall = timerAll:cpu()
    end
 
+   timer:lap('determine weights')
    if reportTiming then
-      vp(0, 
-         'cpu time: overall', cpuOverall,
-         'cpu time: determine distances', cpuDistances,
-         'cpu time: determine weights', cpuWeights,
-         'cpu time: other', cpuOverall - cpuDistances - cpuWeights
-         )
+      timer:write()      
    end
 
    return weights
+end
+
+-- get the prediction for the i-th observation
+-- use cached values where known
+-- otherwise build up the cache and write it periodically
+-- RETURN prediction, actual, cpuSecs, wallclockSecs
+local function getPredictionActual(i, tableCached, train, val, stdTrainAttributes, hp, useCache, checkGradient, mean, std)
+   local functionName = 'getPredictionActual'
+   local vp, verboseLevel = makeVp(0, functionName)
+   local timer
+   if reportTiming then
+      timer = Timer(functionName, io.stderr)
+   end
+   vp(1, 'i', i)
+   local predictionActual = tableCached:fetch(i)
+   vp(2, 'from tableCached: predictionActual', predictionActual)
+   local prediction, actual
+   local useCache = false
+   if not useCache then
+      vp(0, 'cache is turned off')
+   end
+   if useCache and predictionActual ~= nil then
+      local prediction = predictionActual[1]
+      local actual = predictionActual[2]
+      if reportTiming then 
+         local cpu, wallclock  = timer:cpu()
+         vp(2, 'from cache; prediction', prediction, 'actual', actual, 'cpu', cpu)
+      end
+      return prediction, actual, cpu, wallclock 
+   end
+
+   -- compute values from scratch
+   if global.profilerFilename then
+      profiler.start(global.profilerFilename) -- turn on profiling
+   end
+
+   if reportTiming then 
+      timer:lap('setup')
+   end
+
+   local weights = getWeights(
+   train.locations.t,
+   val.locations.t[i],
+   hp,
+   train.locations.names
+   )
+
+   if reportTiming then 
+      timer:lap('getWeights')
+   end
+
+   local newX = val.attributes.t:narrow(1, i, 1) -- row i as 1 x n Tensor
+   prediction = localLogRegNn(
+   stdTrainAttributes,
+   train.targets.t,
+   weights,
+   standardize(newX, mean, std),
+   hp.lambda,
+   checkGradient
+   )
+   
+   if reportTiming then 
+      time:lap('localLogRegNn')
+      timer:write()
+   end
+
+   if global.profilerFilename then
+      profiler.stop()
+   end
+   stop()
+
+   actual = val.targets.t[i][1]
+
+   tableCached:store(i, {prediction, actual})
+   local cacheWriteFrequency = 1 -- for testing
+   if i % cacheWriteFrequency == 0 then
+      vp(1, 'writing predictions to ' .. cachePath)
+      tableCached:writeToFile()
+   end
+
+   local cpu, wallclock = timer:cpuWallclock()
+   if cpu > wallclock and false then
+      print(string.format('warning: cpu secs (%f) > wallclock sec(%f)', cpu, wallclock))
+   end
+   vp(1, 'prediction', prediction, 'actual', actual, 'cpu', cpu, 'wallclock', wallclock)
+   --if i == 1 then stop() end 
+   return prediction, actual, cpu, wallclock
 end
 
 -- validation error on model trained with training data using specified
@@ -231,69 +314,13 @@ local function validationError(train,
    vp(1, 'number of training observations m', m)
    local nErrors = 0
 
-   -- get the prediction for the i-th observation
-   -- use cached values where known
-   -- otherwise build up the cache and write it periodically
-   -- RETURN prediction, actual, cpuSecs, wallclockSecs
-   local function getPredictionActual(i)
-      local timer = Timer()
-      local vp, verboseLevel = makeVp(0, 'getPredictionActual')
-      vp(1, 'i', i)
-      local predictionActual = tableCached:fetch(i)
-      vp(2, 'from tableCached: predictionActual', predictionActual)
-      local prediction, actual
-      if predictionActual ~= nil then
-         local prediction = predictionActual[1]
-         local actual = predictionActual[2]
-         local cpu, wallclock  = timer:cpuWallclock()
-         vp(2, 'from cache; prediction', prediction, 'actual', actual, 'cpu', cpu, 'wallclock', wallclock)
-         return prediction, actual, cpu, wallclock 
-      end
-
-      -- compute values from scratch
-      local timerWeights = Timer()
-      local weights = getWeights(train.locations.t,
-                                 val.locations.t[i],
-                                 hp,
-                                 train.locations.names)
-      local weightCpu = timerWeights:cpu()
-
-      local timerLlr = Timer()
-      local newX = val.attributes.t:narrow(1, i, 1) -- row i as 1 x n Tensor
-      prediction = localLogRegNn(stdTrainAttributes,
-                                 train.targets.t,
-                                 weights,
-                                 standardize(newX, mean, std),
-                                 hp.lambda,
-                                 checkGradient)
-      local llrCpu = timerLlr:cpu()
-      if reportTiming then
-         vp(0, 'i', i, 'weightCpu', weightCpu, 'llrCpu', llrCpu)
-      end
-
-      actual = val.targets.t[i][1]
-
-      tableCached:store(i, {prediction, actual})
-      local cacheWriteFrequency = 1 -- for testing
-      if i % cacheWriteFrequency == 0 then
-         vp(1, 'writing predictions to ' .. cachePath)
-         tableCached:writeToFile()
-      end
-      
-      local cpu, wallclock = timer:cpuWallclock()
-      if cpu > wallclock and false then
-         print(string.format('warning: cpu secs (%f) > wallclock sec(%f)', cpu, wallclock))
-      end
-      vp(1, 'prediction', prediction, 'actual', actual, 'cpu', cpu, 'wallclock', wallclock)
-      --if i == 1 then stop() end 
-      return prediction, actual, cpu, wallclock
-   end
 
    -- create an estimate for each validation observation
    local confusionMatrix = ConfusionMatrix()
    for i = 1, nValObservations do
       local timer = Timer()
-      local prediction, actual, cpuSecs, wallclockSecs = getPredictionActual(i)
+      local prediction, actual, cpuSecs, wallclockSecs = 
+         getPredictionActual(i, tableCached, train, val, stdTrainAttributes, hp, useCache, checkGradient, mean, std)
       local cpu, wallclock = timer:cpuWallclock()
       vp(1, string.format('%d of %d prediction %d actual %d cpu %7.4f wallclock %7.4f k %d mPerYear %f lambda %f set %d',
                           i, nValObservations, prediction, actual, cpuSecs, wallclockSecs, hp.k, hp.mPerYear, hp.lambda, setNumber))
@@ -483,8 +510,28 @@ end
 -- MAIN PROGRAM
 -------------------------------------------------------------
 
+
 local vp = makeVp(2, 'imputed-VAR-estGenError-HPS')
 vp(2, 'clargs', arg) 
+
+-- set global parameters (usually not a good programming practice)
+global = {}
+global.reportTiming = {}
+global.reportTiming.localLogRegNn = {}
+global.reportTiming.localLogRegNn.fitModel = false
+global.reportTiming.localLogRegNn.localLogRegNn = false
+global.reportTiming.localLogRegNn.lossGrad = false
+global.reportTiming.localLogRegNn.opfunc = false
+global.reportTiming.sgdBottou = false
+global.reportTiming.sgdBottouDriver = false
+global.reportTiming.imputed_VAR_estGenError_HPS = {}
+global.reportTiming.imputed_VAR_estGenError_HPS.validationError = true
+global.reportTiming.imputed_VAR_estGenError_HPS.getWeights = true
+global.reportTiming.imputed_VAR_estGenError_HPS.getPredictionActual = true
+
+-- set to nil to turn off profiling
+global.profilerFilename = '/tmp/luaprofiler.txt' -- ref luaprofile.lurforge.net/manual.html
+global.profilerFilename = nil  -- turn off profiler
 
 -- parse command line
 local args = {}
@@ -513,18 +560,6 @@ local programName = arg[0]  -- now no longer dependent on special var arg
 validateAttributes(args.mPerYear, 'number', 'positive')
 validateAttributes(args.k, 'number' ,'integer', '>', 1)
 validateAttributes(args.readlimit, 'number', '>=', -1)
-
--- set global parameters (usually not a good programming practice)
-global = {}
-global.reportTiming = {}
-global.reportTiming.localLogRegNn = {}
-global.reportTiming.localLogRegNn.fitModel = false
-global.reportTiming.localLogRegNn.localLogRegNn = false
-global.reportTiming.sgdBottou = false
-global.reportTiming.sgdBottouDriver = false
-global.reportTiming.imputed_VAR_estGenError_HPS = {}
-global.reportTiming.imputed_VAR_estGenError_HPS.validationError = false
-global.reportTiming.imputed_VAR_estGenError_HPS.getWeights = false
 
 -- set random number seed
 torch.manualSeed(123)
