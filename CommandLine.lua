@@ -14,6 +14,7 @@ end
 
 require 'makeVp'
 require 'parseCommandLine'
+require 'torch'
 require 'validateAttributes'
 
 -- construction
