@@ -50,6 +50,7 @@ torch metersPerLongitudeDegree_test.lua
 torch ModelLinearL2Loss_test.lua
 torch NamedMatrix_test.lua
 torch parseCommandLine_test.lua
+luajit Random_test.lua
 torch sequenceContains_test.lua
 torch sgdBottou_test.lua
 torch standardize_test.lua
