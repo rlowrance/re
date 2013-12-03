@@ -3,12 +3,13 @@
 require 'argmax'
 require 'assertEq'
 require 'checkGradient'
+require 'keyboard'
 require 'makeNextPermutedIndex'
 require 'makeVp'
 require 'memoryUsed'
-require 'modelLogreg'
 require 'nn'
 require 'sgdBottouDriver'
+require 'stop'
 require 'Timer'
 require 'unique'
 require 'validateAttributes'
@@ -114,8 +115,22 @@ local function makeOpfuncPredictThetasize(lambda, nextIndex, xs, ys, ws,
    -- loss       : number, loss from the prediction
    -- gradient   : 1D Tensor, gradient at theta, input, importance
    local function lossGradient(theta, input, target, importance)
-      local vp = makeVp(0, 'lossGradient')
-      vp(1, 'theta', theta, 'input', input, 'target', target, 'importance', importance)
+      local checking = false
+      local reportTiming = global.reportTiming.localLogRegNn.lossGradient
+      local functionName = 'lossGradient'
+
+      local vp
+      if checking then  
+         vp = makeVp(1, functionName)
+         vp(1, 'theta', theta, 'input', input, 'target', target, 'importance', importance)
+         vp(1, 'model', model) -- up value
+      end
+
+      local timer
+      if reportTiming then
+         timer = Timer(functionName, io.stderr)
+         timer:lap('setup')
+      end
 
       local prevModelTheta = modelTheta
       local prevModelGradient = modelGradient
@@ -129,7 +144,11 @@ local function makeOpfuncPredictThetasize(lambda, nextIndex, xs, ys, ws,
       local gradCriterion = criterion:backward(prediction, target) * importance
       model:zeroGradParameters()
       model:backward(input, gradCriterion)  -- set modelGradient
-      
+
+      if reportTiming then
+         timer:lap('forward and backward')
+      end
+
       -- regularize loss
       local weight = model.modules[1].weight
       local lossRegularized = loss + lambda * torch.sum(torch.cmul(weight, weight))
@@ -145,11 +164,22 @@ local function makeOpfuncPredictThetasize(lambda, nextIndex, xs, ys, ws,
          end
       end
 
+      if reportTiming then
+         timer:lap('regularize')
+      end
+
       modelTheta = prevModelTheta
       modelGradient = prevModelGradient
 
-      vp(1, 
-         'lossRegularized', lossRegularized, 'gradientRegularized', gradientRegularized)
+      if checking then
+         vp(1, 'lossRegularized', lossRegularized, 'gradientRegularized', gradientRegularized)
+      end
+
+      if reportTiming then
+         timer:write()
+      end
+      -- keyboard()
+
       return lossRegularized, gradientRegularized
    end
 
@@ -163,20 +193,37 @@ local function makeOpfuncPredictThetasize(lambda, nextIndex, xs, ys, ws,
    -- RETURNS
    -- lossRegularized     : number, the loss regularized
    -- gradientRegularized : 1D tensor, the gradient regularized
+   local opfuncNTimesCalled = 0
    local function opfunc(theta, index)
-      local vp, verboseLevel, prefix, vpTable = makeVp(0, 'opfunc')
-      local v = verboseLevel > 0
-      if v then 
+      local checking = false
+      local functionName = 'opfunc'
+      local reportTiming = global.reportTiming.localLogRegNn.opfunc
+
+      local vp
+      if checking then
+         vp = makeVp(0, functionName)
+      end
+
+      local timer
+      if reportTiming then
+         timer = Timer(functionName, io.stderr)
+      end
+
+      opfuncNTimesCalled = opfuncNTimesCalled + 1
+      if checking then 
          vp(1, 
             'theta', theta,
             'model', model,   -- upvalues are also args
             'criterion', criterion,
             'modelTheta', modelTheta,
-            'modelGradient', modelGradient) 
+            'modelGradient', modelGradient,
+            'opfuncNTimesCalled', opfuncNTimesCalled) 
       end
 
-      validateAttributes(theta, 'Tensor', '1D')
-      validateAttributes(index, {'number', 'nil'})
+      if checking then
+         validateAttributes(theta, 'Tensor', '1D')
+         validateAttributes(index, {'number', 'nil'})
+      end
 
       -- determine next sample index
       local nextSampleIndex = index    -- index specified by caller
@@ -188,7 +235,7 @@ local function makeOpfuncPredictThetasize(lambda, nextIndex, xs, ys, ws,
       local input = xs[nextSampleIndex]
       local target = ys[nextSampleIndex][1]
       local importance = ws[nextSampleIndex][1]
-      if v then 
+      if checking then 
          vp(1, 
             'i', i, 
             'input', input, 
@@ -196,11 +243,19 @@ local function makeOpfuncPredictThetasize(lambda, nextIndex, xs, ys, ws,
             'importance', importance)
       end
 
+      if reportTiming then
+         timer:lap('setup (call # ' .. tonumber(opfuncNTimesCalled) .. ') ')
+      end
+
       local lossRegularized, gradientRegularized = 
          lossGradient(theta, input, target, importance)
                                                                 
+      if timer then timer:lap('lossGradient') end
+
       if checkGradientP then
-         vp(0, 'remove debugging code for checkGradient')
+         if checking then
+            vp(0, 'remove debugging code for checkGradient')
+         end
          local function f(theta)
             return lossGradient(theta, input, target, importance)
          end
@@ -211,12 +266,21 @@ local function makeOpfuncPredictThetasize(lambda, nextIndex, xs, ys, ws,
                                                     epsilon, 
                                                     gradientRegularized,
                                                     checkGradientVerbose)
-         vp(0, 'norm of difference', normDiff, 'epsilon', epsilon)
+         if checking then 
+            vp(0, 'norm of difference', normDiff, 'epsilon', epsilon)
+         end
          assert(normDiff < 10 * epsilon) -- this check is very rough
+         timer:lap('check gradient')
       end -- checkGradient
 
-      vp(1, 
-         'lossRegularized', lossRegularized, 'gradientRegularized', gradientRegularized)
+      if checking then
+         vp(1, 'lossRegularized', lossRegularized, 'gradientRegularized', gradientRegularized)
+      end
+
+      if reportTiming then
+         timer:write()
+      end
+
       return lossRegularized, gradientRegularized
    end
 
@@ -240,9 +304,10 @@ end
 -- predict   : function(thetaStar, newX) --> class number
 -- thetaStar : 1D Tensor of flattened optimal parameters
 local function fitModel(nClasses, xs, ys, ws, lambda, checkGradient)
-   local timer = Timer()
    -- ref: http://torch.cogbits.com/doc/tutorials_supervised/
-   local vp, verboseLevel = makeVp(0, 'localLogRegNn.fitModel')
+   local functionName = 'localLogRegNn.fitModel'
+   local vp, verboseLevel = makeVp(0, functionName)
+   local timer = Timer(functionName, io.stderr)
    local v = verboseLevel > 0
    local reportTiming = global.reportTiming.localLogRegNn.fitModel
    if v then
@@ -268,10 +333,7 @@ local function fitModel(nClasses, xs, ys, ws, lambda, checkGradient)
    assert(math.abs(torch.sum(ws) - 1) < 1e-6,
           'importance weights do not sum to about 1')
 
-   if reportTiming then
-      vp(0, 'setup; cpu secs', timer:cpu())
-      timer:reset()
-   end
+   timer:lap('setup')
 
    -- functions to run generate sample indices
    local nextPermutedIndex = makeNextPermutedIndex(xs:size(1))
@@ -285,16 +347,13 @@ local function fitModel(nClasses, xs, ys, ws, lambda, checkGradient)
                                  nClasses,
                                  checkGradient)
 
+   timer:lap('make op function')
    -- use Bottou's SGD via sgdBottouDriver
+
    local function newEtas(eta)
       return {0.7 * eta, 1.3 * eta}
    end
    
-   if reportTiming then
-      vp(0, 'make op func; cpu sec', timer:cpu())
-      timer:reset()
-   end
-
    local configSgdBottou = 
       {nSamples = nObs,
        nSubsamples = nObs,  -- use all samples when exploring candidate etas
@@ -320,9 +379,9 @@ local function fitModel(nClasses, xs, ys, ws, lambda, checkGradient)
    vp(2, 'state', state)
    vp(1, 'predict', predict, 'thetaStar', thetaStar)
    
-   if reportTiming then
-      vp(0, 'sgd bottou driver; cpu sec', timer:cpu())
-      timer:reset()
+   timer:lap('run sgd Bottou through the driver')
+   if reportTiming then 
+      timer:write()
    end
 
    return predict, thetaStar
@@ -344,11 +403,17 @@ end
 -- - This implementation is optimized for the use case in which only a 
 --   relatively few examples have non-zero importance.
 function localLogRegNn(xs, ys, ws, newX, lambda, checkGradient)
-   local timer = Timer()
-   local vp, verbose = makeVp(0, 'localLogRegNn')
-   local d = verbose > 0
-   local reportTiming = global.reportTiming.localLogRegNn.localLogRegNn
-   if d then
+   local functionName = 'localLogRegNn'
+
+   local vp, verboseLevel = makeVp(1, functionName)
+   local verbose = verboseLevel > 0
+
+   local timer = nil
+   if global.reportTiming.localLogRegNn.localLogRegNn then
+      timer = Timer(functinName, io.stderr)
+   end
+   
+   if verbose then
       vp(1, '\n******************* localLogRegNn')
       vp(1, 
          --'head xs', head(xs),
@@ -373,12 +438,14 @@ function localLogRegNn(xs, ys, ws, newX, lambda, checkGradient)
    validateAttributes(ys, 'Tensor', '2D', 'size', {nObs,1})
    validateAttributes(ws, 'Tensor', '2D', 'size', {nObs,1})   
    validateAttributes(newX, 'Tensor', '2D', 'size', {1,nDimensions})
+   assert(not isnan(newX[1][1]))
    validateAttributes(lambda, 'number', '>=', 0)
    validateAttributes(checkGradient, 'boolean')
 
+   if timer then timer:lap('setup') end
+
    -- remove any examples that have zero importance
    if torch.sum(torch.eq(ws, 0)) > 0 then
-      local timer = Timer()
       -- optimize for the use case in which only a few examples have
       -- non-zero importance
       local isRetained = torch.ne(ws,0)
@@ -400,10 +467,17 @@ function localLogRegNn(xs, ys, ws, newX, lambda, checkGradient)
       end
       vp(1, 'examples with some importance')
       vp(1, 'xsNew', xsNew, 'ysNew', ysNew, 'wsNew', wsNew)
-      if reportTiming then
+      if timer then
          vp(0, 'remove entries with 0 weight; cpu sec', timer:cpu())
       end
-      return localLogRegNn(xsNew, ysNew, wsNew, newX, lambda, checkGradient)
+      if timer then timer:lap('remove obs with zero weight') end
+      local prediction = localLogRegNn(xsNew, ysNew, wsNew, newX, lambda, checkGradient)
+      if timer then timer:lap('solve reduced problem') end
+      if timer then
+         timer:verbose(0, 'cpu')
+      end
+      stop('after first transaction')
+      return prediction
    end
 
    if false then
@@ -416,11 +490,6 @@ function localLogRegNn(xs, ys, ws, newX, lambda, checkGradient)
       ws[9][1] = 1 - 8 * verySmall
    end
       
-
-   if reportTiming then
-      vp(0, 'setup cpu secs', timer:cpu())
-      timer:reset()
-   end
 
    -- determine number of classes and check coding of classes
    -- it could be that there is only one class
@@ -437,24 +506,17 @@ function localLogRegNn(xs, ys, ws, newX, lambda, checkGradient)
    
    -- The subset we see may have less than the max number of codes
 
-   if d then 
+   if verbose then 
       vp(2, 'nObs', nObs, 'nDimensions', nDimensions, 'nClasses', nClasses)
    end
 
-   if reportTiming then
-      vp(0, 'determine number of classes; cpu secs', timer:cpu())
-      timer:reset()
-   end
+   if timer then timer:lap('determine number of classes') end
 
    -- fit the model
    vp(2, 'fitting modelLogReg')
    local predict, thetaStar = fitModel(nClasses, xs, ys, ws, lambda, checkGradient)
    vp(2, 'model', model)
-
-   if reportTiming then 
-      vp(0, 'fit model cpu secs', timer:cpu())
-      timer:reset()
-   end
+   if timer then timer:lap('fit model') end
 
    -- predict at the query point
    local query = torch.Tensor(newX:size(2))
@@ -466,13 +528,10 @@ function localLogRegNn(xs, ys, ws, newX, lambda, checkGradient)
    vp(2, 'probs', probs)
    local prediction = argmax(probs)
    vp(1, 'prediction', prediction)
+   if timer then timer:lap('estimate at query point') end
    
-   if reportTiming then
-      vp(0, 'predict at query point cpu secs', timer:cpu())
-      timer:reset()
-   end
 
-   if verbose >= 2 then
+   if verboseLevel >= 2 then
       -- print details, assuming a few examples
       for i = 1, nObs do  -- print examples
          local s = string.format('%2d: x ', i)
@@ -495,6 +554,9 @@ function localLogRegNn(xs, ys, ws, newX, lambda, checkGradient)
          
    assert(1 <= prediction)
    assert(prediction <= nClasses)
+   if timer then
+      timer:write()
+   end
    return prediction
 end
 
