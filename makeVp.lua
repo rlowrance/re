@@ -17,7 +17,7 @@ if false then
    
    if verboseLevel >= 3 then action() end
 end
-
+--require 'keyboard'
 require 'torch'
 
 -- create verbosePrint function
@@ -68,6 +68,8 @@ function makeVp(verboseVar, prefix)
    end
    
    local function vp2(name, value)
+      --print('vp2()') print('name') print(name) print('value') print(value) print('done')
+      --keyboard()
       --if name == '\npredictionAttributes' or name == '\nlambda' then
       --   print('entered vp2') print(name) print(value)
       --end
