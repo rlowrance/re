@@ -44,9 +44,10 @@ end
 -- x      : new x vector
 -- f(x)   : table with one entry, the function value, before the update
 function optim.sgdBottou(opfunc, x, config, state)
-   local timer = Timer()
-   local reportTiming = global.reportTiming.sgdBottou
+   local reportTiming = global.reportTiming.sgdBottou and false
    local vp, verboseLevel = makeVp(0, 'optim.sgdBottou')
+   local timer = Timer(vp)
+
    vp(1, 'config', config)
    validateAttributes(opfunc, 'function')
    validateAttributes(x, 'Tensor', '1D')

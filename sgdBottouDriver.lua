@@ -27,9 +27,10 @@ require 'validateAttributes'
 function sgdBottouDriver(opfunc, config, nSamples, initialX, 
                          tolX, tolF, maxEpochs, 
                          verbose)
-   local timer = Timer()
    local reportTiming = global.reportTiming.sgdBottouDriver
    local vp = makeVp(0, 'sgdBottouDriver')
+   local timer = Timer(vp)
+
 
    -- validate args
    validateAttributes(opfunc, 'function')
@@ -67,10 +68,7 @@ function sgdBottouDriver(opfunc, config, nSamples, initialX,
       return x, avgLoss
    end
 
-   if reportTiming then
-      vp(0, 'setup; cpu sec', timer:cpu())
-      timer:reset()
-   end
+   timer:lap('setup')
 
    -- iterate until convergence
    local x = initialX
@@ -79,7 +77,6 @@ function sgdBottouDriver(opfunc, config, nSamples, initialX,
    local lastX = nil
    local lastAvgLoss = nil
    repeat 
-      local epochTimer = Timer()
       local newX, avgLoss = epoch(x)
       nEpochs = nEpochs + 1
       x = newX
@@ -122,15 +119,12 @@ function sgdBottouDriver(opfunc, config, nSamples, initialX,
       lastX = x
       lastAvgLoss = avgLoss
 
-      if reportTiming then
-         vp(0, string.format('epoch %d cpu sec %f', nEpochs, epochTimer:cpu()))
-      end
+      timer:lap('(epoch # ' .. tostring(nEpochs) .. ' eta=' .. tostring(state.eta) .. ')')
 
    until converged
 
    if reportTiming then
-      vp(0, 'all epochs; cpu sec', timer:cpu())
-      timer:reset()
+      timer:verbose(0, 'cpu')
    end
       
    return x, lastAvgLoss, state
