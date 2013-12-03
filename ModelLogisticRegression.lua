@@ -1,117 +1,110 @@
 -- ModelLogisticRegression.lua
--- logistic regression with multiple classes (multinomial logistic regression)
+-- weighted logistic regression
 
--- This code was abandoned before completion
-print('WARNING: THIS MODULE HAS NOT BEEN UNIT TESTED')
-print('THIS MODULE IS DEPRECATED. USE modelLogReg.lua INSTEAD'
+if false then
+   -- API overview
+   lambda = 0.001
+   nClasses = 14
+   m = ModelLogisticRegression(lambda, nClasses)
+
+   m:fit(X,y,s) -- s is a 1D matrix of salience values
+   m:predict(X) -- return 1D matrix of class numbers
+end
 
 require 'makeVp'
 require 'nn'
+require 'Random'
+require 'torch'
 
--- API overview
-if false then
-   -- methods
-   model = ModelLogisticRegression(nDimensions, nClasses, verbose)
-   params = model:parameters()  -- TODO: also return gradWeights
-   -- predict using current weights
-   -- the most likely class is the index of the largest log probability
-   logProbTensor = model:forward(input)
-   -- derivate at current weights for last predicted input
-   deriv = model:backward(input, gradOutput)
-   model:zeroGradParameters()
-   model:updateParameters(learningRate)
-   model:print(optionalMsg)
-   -- members
-   o = model.output     -- last value returned by forward()
-   g = model.gradInput  -- last value returned by backward()
+torch.class('ModelLogisticRegression')
+
+-- construct model
+-- ARGS
+-- lambda   : number, importance of L2 regularizer
+-- nClasses : number
+-- RETURNS
+-- self     : instance of LogisticRegression
+function ModelLogisticRegression:__init(lambda, nClasses)
+   assert(lambda >= 0)
+   assert(nClasses >=0)
+   self.lambda = lambda
+   self.nClasses = nClasses
 end
 
-local ModelLogisticRegression, parent = 
-   torch.class('ModelLogisticRegression', 'nn.Module')
-local verbose = 2
-local vp = makeVp(verbose)
-vp(3, 'ModelLogisticRegression', ModelLogisticRegression)
-vp(3, 'parent', parent)  -- long printout
+-- fit parameters using stochastic gradient descent, L2 regularizer
+-- ARGS
+-- X : 2D matrix of size [nSamples, nFeatures]
+-- y : 1D matrix of size [nSamples]
+-- s : 1D matrix of size [nSamples]; saliences (= importance)
+function ModelLogisticRegression:fit(X, y, s)
+   local vp = makeVp(2, 'LogisticRegression:fit')
+   assert(X)
+   assert(y)
+   assert(s)
 
-function ModelLogisticRegression:print(msg)
-   local vp = makeVp(0)
-   if msg ~= nil then
-      vp(0, msg)
-   end
-   vp(0, 'ModelLogisticRegression', self)
-   for k, v in pairs(self) do
-      vp(0, ' .' .. k, v)
-   end
-   --vp(0, '.model[1]', self.model[1])
-   --vp(0, '.model[2]', self.model[2])
-   local weights, gradWeights = self:parameters()
-   vp(0, 'weights', weights)
-   for i, weight in ipairs(weights) do
-      vp(0, 'weights[' .. i ..']', weights[i])
-   end
-   vp(0, 'gradWeights', gradWeights)
-   for i, gradWeights in ipairs(weights) do
-      vp(0, 'gradWeights[' .. i .. ']', gradWeights)
-   end
-end
+   local nSamples = X:size(1)
+   local nFeatures = X:size(2)
 
-function ModelLogisticRegression:__init(nDimensions, nClasses, verbose)
-   -- follow the example nn.Linear
-   local verbose = verbose or 0
-   local vp, _, me = makeVp(verbose, 'ModelLogisticRegression:__init')
-   vp(1, 'nDimensions', nDimensions)
-   vp(1, 'nClasses', nClasses)
+   if self.W == nil then
+      self.W = torch.rand(self.nClasses, nFeatures)
+      for i = 1, nFeatures do -- weights for last class fixed at 0
+         self.W[self.nClasses][i] = 0
+      end
+   end
+   vp(2, 'self.W', self.W)
 
-   parent.__init(self)
+   local scores = torch.exp(torch.mm(self.W, X:t()))
+   vp(2, 'scores', scores)
+
+   local uProb = torch.sum(scores, 2)
+   vp(2, 'uProb', uProb)
+   local sumProb = torch.sum(uProb)
+   local prob = torch.div(uProb, sumProb)
+   vp(2, 'prob', prob)
+   stop()
 
    local model = nn.Sequential()
-   model:add(nn.Linear(nDimensions, nClasses))
+   model:add(nn.Linear(nFeatures, self.nClasses))
    model:add(nn.LogSoftMax())
 
-   self.model = model
-   vp(1, 'self.model', self.model)
+   local criterion = nn.ClassNLLCriterion()
+
+   local modelParameters, modelGradient = model:getParameters()
+
+   -- determine if X can be a mini batch
+   local prediction = model:forward(X)
+   vp(2, 'prediction', prediction)
+   vp(2, 'criterion:forward(prediction, y)', criterion:forward(prediction, y))
    
-
-   if verbose >= 1 then self:print(me) end
-   return self.model
-end
-
-function ModelLogisticRegression:parameters()
-   return self.model:parameters()
-end
-
--- provide implementation of method :forward(input)
-function ModelLogisticRegression:updateOutput(input)
-   local vp = makeVp(1, 'ModelLogisticRegression:updateOutput')
-   vp(1, 'input', input)
-   vp(1, 'weight', self.weights)
-drummer813900   local result = self.model:updateOutput(input)
-   vp(1, 'result', result)
-   vp(1, 'output', self.output)
+   -- by hand without nn
+   local parameters = model:getParameters()
+   vp(2, 'parameters', parameters)
+   local scores = torch.mul(parameters, X:t())
+   vp(2, 'scores')
    stop()
-   return result
+
+   local loss = criterion:forward(prediction, y) * s  -- importance weighted
+   local gradCriterion = criterion:backward(prediction, y) * s
+   model:zeroGradParameters()
+   model:backward(inpput, gradCriterion) -- set modelParameters and modelGradient
+   vp(2, 'modelParameters', modelParameters, 'modelGradient', modelGradient)
+   stop()
+  
+   -- determine timing for forward-backward passes
 end
 
--- provide 1st part of implemention of method :backward(input, gradOutput)
-function ModelLogisticRegression:updateGradInput(input, gradOutput)
-   local vp = makeVp(1, 'ModelLogisticRegression:updateGradInput')
-   vp(1, 'input', input)
-   vp(1, 'gradOutput', gradOutput)
-   self.model:updateGradInput(input, gradOutput)
-   vp(1, 'gradInput', gradInput)
-end
+-- test code
+torch.manualSeed(123)
 
--- provide 2nd part of implementation of method :backward(input, gradOutput)
-function ModelLogisticRegression:accGradParameters(input, gradOutput, scale)
-   local vp = makeVp(1, 'ModelLogisticRegression:accGradParameters')
-   vp(1, 'input', input)
-   vp(1, 'gradOutput', gradOutput)
-   vp(1, 'scale', scale)
-   self.model:accGradParameters(input, gradOutput, scale)
-   vp(1, 'gradInput', gradInput)
-end
+local nSamples = 10
+local nFeatures = 8
+local nClasses = 3
 
-ModelLogisticRegression.sharedAccUpdateGradParameters = 
-   ModelLogisticRegression.accGradParameters
+local X = torch.rand(nSamples, nFeatures)
+local y = Random():integer(nSamples, 1, nClasses)
+local s = Random():uniform(nSamples, 0, 1)
+   
+local lr = ModelLogisticRegression(0.001, nClasses)
+lr:fit(X, y, s)
+stop('write more')
 
-vp(1, 'ModelLogisticRegression', ModelLogisticRegression)
