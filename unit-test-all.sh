@@ -27,6 +27,7 @@ torch fileAssureExists_test.lua
 torch fileAssureNotExists_test.lua
 torch fileDelete_test.lua
 torch fileExists_test.lua
+luajit finiteDifferenceGradient_test.lua
 torch hasNA_test.lua
 torch hasNaN_test.lua
 torch head_test.lua
