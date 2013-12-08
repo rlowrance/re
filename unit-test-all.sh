@@ -37,6 +37,7 @@ torch isSequence_test.lua
 torch kernelEpanechnikovQuadraticKnn_test.lua
 torch keyboard_test.lua
 torch keys_test.lua
+luajit kroneckerProduct.lua 
 torch makeDistanceSurface_test.lua
 torch makeLogreg_test.lua
 torch makeNextNonZeroImportanceIndex_test.lua
@@ -51,6 +52,9 @@ torch metersPerLongitudeDegree_test.lua
 torch ModelLinearL2Loss_test.lua
 torch NamedMatrix_test.lua
 torch parseCommandLine_test.lua
+luajit printAllValues_test.lua
+luajit printTable.lua
+luajit printValue_test.lua
 luajit Random_test.lua
 torch sequenceContains_test.lua
 torch sgdBottou_test.lua
