@@ -14,7 +14,7 @@ require 'makeVp'
 torch.class('StackFrame')
 
 function StackFrame:__init(whichFrame)
-   local vp, verboseLevel = makeVp(1, 'StackFrame:__init')
+   local vp, verboseLevel = makeVp(0, 'StackFrame:__init')
 
    self.stackLevel = nil
    if type(whichFrame) == 'number' then
