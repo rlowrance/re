@@ -52,9 +52,9 @@ torch metersPerLongitudeDegree_test.lua
 torch ModelLinearL2Loss_test.lua
 torch NamedMatrix_test.lua
 torch parseCommandLine_test.lua
-luajit printAllValues_test.lua
-luajit printTable.lua
-luajit printValue_test.lua
+luajit printAllVariables_test.lua
+luajit printTableVariable_test.lua
+luajit printVariable_test.lua
 luajit Random_test.lua
 torch sequenceContains_test.lua
 torch sgdBottou_test.lua
