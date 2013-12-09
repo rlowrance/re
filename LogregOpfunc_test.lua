@@ -5,6 +5,9 @@ require 'assertEq'
 require 'finiteDifferenceGradient'
 require 'makeVp'
 require 'LogregOpfunc'
+require 'printValue'
+require 'printAllValues'
+require 'printTable'
 require 'Timer'
 
 torch.manualSeed(123)
@@ -18,212 +21,153 @@ nClasses = 3,
 X = torch.Tensor{{1,2}, {3,4}},
 y = torch.Tensor{1, 3},
 s = torch.Tensor{.1, .5},
-lambda = .01
+lambda = .01,
+theta=torch.Tensor{-1, 2, -3, 2, -4, 5}
 }
 
+local function makeOfFromTestExample()
+   return LogregOpfunc(testExample.X, 
+                       testExample.y, 
+                       testExample.s, 
+                       testExample.nClasses, 
+                       testExample.lambda)
+end
+      
 -- test private methods
-local function _structureTheta_test()
-   local vp = makeVp(0, '_structureTheta_test')
-   local theta = torch.Tensor{1,2,3,4}
-   vp(2, 'theta', theta)
 
-   -- test 0
-   local of = LogregOpfunc(testExample.X, testExample.y, testExample.s, 
-                           testExample.nClasses, testExample.lambda)
-   local theta = of:initialTheta()
+local function _structureTheta_test()
+   local of = makeOfFromTestExample()
+   local theta = testExample.theta
    local biases, weights = of:_structureTheta(theta)
    
    assert(biases:nDimension() == 1)
    assert(biases:size(1) == testExample.nClasses - 1)
-   assertEq(biases, torch.Tensor{theta[1], theta[4]}, 0)
+   assert(biases[1] == theta[1])
+   assert(biases[2] == theta[4])
 
    assert(weights:nDimension() == 2)
    assert(weights:size(1) == testExample.nFeatures)
    assert(weights:size(2) == testExample.nClasses - 1)
-   assertEq(weights, 
-            torch.Tensor{{theta[2], theta[3]},
-                         {theta[5], theta[6]}},
-            0)
-
-   -- test 1
-   local biases, weights = _structureTheta(theta, 2, 3)
-   vp(2, 'biases', biases, 'weights', weights)
-   assert(biases:nDimension() == 1 and biases:size(1) == 1)
-   assert(weights:nDimension() == 2 and weights:size(1) == 1 and weights:size(2) == 3)
-   assert(biases[1] == 1)
-   assert(weights[1][1] == 2)
-   assert(weights[1][2] == 3)
-   assert(weights[1][3] == 4)
-
-   -- test 2
-   local biases, weights = _structureTheta(theta, 3, 1)
-   assert(biases:nDimension() == 1 and biases:size(1) == 2)
-   assert(weights:nDimension() == 2 and weights:size(1) == 2 and weights:size(2) == 1)
-   assert(biases[1] == 1)
-   assert(weights[1][1] == 2)
-   assert(biases[2] == 3)
-   assert(weights[2][1] == 4)
+   assert(weights[1][1] == theta[2])
+   assert(weights[1][2] == theta[3])
+   assert(weights[2][1] == theta[5])
+   assert(weights[2][2] == theta[6])
 end
 
 _structureTheta_test()
+
+
+local function _scores_test()
+   local of = makeOfFromTestExample()
+   local biases, weights = of:_structureTheta(testExample.theta)
+   local scores = of:_scores(biases, weights)
+
+   assert(scores:nDimension() == 2)
+   assert(scores:size(1) == 2)
+   assert(scores:size(2) == 3)
+
+   assert(scores[1][1] == biases[1] + torch.dot(testExample.X[1], weights[1]))
+   assert(scores[1][2] == biases[2] + torch.dot(testExample.X[1], weights[2]))
+   assert(scores[1][3] == 0)
+
+   assert(scores[2][1] == biases[1] + torch.dot(testExample.X[2], weights[1]))
+   assert(scores[2][2] == biases[2] + torch.dot(testExample.X[2], weights[2]))
+   assert(scores[2][3] == 0)
+end
+
+_scores_test()
+
+
+local function _probabilities_test()
+   local of = makeOfFromTestExample()
+   local biases, weights = of:_structureTheta(testExample.theta)
+   local scores = of:_scores(biases, weights)
+   local probabilities = of:_probabilities(scores)
+   
+   assert(probabilities:nDimension() == 2)
+   assert(probabilities:size(1) == testExample.nSamples)
+   assert(probabilities:size(2) == testExample.nClasses)
+
+   -- expected values computed in octave script LogregOpfunc_test.m
+   assertEq(probabilities[1], torch.Tensor{2.2596e-6, 9.9966e-1, 3.3535e-4}, .0001)
+   assertEq(probabilities[2], torch.Tensor{4.1397e-8, 9.9995e-1, 4.5398e-5}, .0001)
+end
+
+_probabilities_test()
+
+
+local function _logLikelihood_test()
+   local of = makeOfFromTestExample()
+   local biases, weights = of:_structureTheta(testExample.theta)
+   local scores = of:_scores(biases, weights)
+   local probabilities = of:_probabilities(scores)
+   local logLikelihood = of:_logLikelihood(probabilities)
+   printAllValues()
+
+   local prob11 = 2.2596e-6  -- probability that y[1] == 1
+   local prob23 = 4.5398e-5  -- probability that y[2] == 3
+   local expectedLikelihood = prob11 ^ testExample.s[1] * prob23 ^ testExample.s[2]
+   local expectedLogLikelihood = math.log(expectedLikelihood)
+   printAllValues()
+
+   assertEq(logLikelihood, expectedLogLikelihood, .0001)
+   testExample.expectedLogLikelihood = expectedLogLikelihood
+end
+
+_logLikelihood_test()
+
+
+local function _regularizer_test()
+   local of = makeOfFromTestExample()
+   local biases, weights = of:_structureTheta(testExample.theta)
+   local regularizer = of:_regularizer(weights)
+   printAllValues()
+   printValue('testExample.theta')
+   local expectedRegularizer = testExample.theta[2]^2 + testExample.theta[3]^2 +
+                               testExample.theta[5]^2 + testExample.theta[6]^2
+   assertEq(regularizer, expectedRegularizer, .00001)
+   testExample.expectedRegularizer = expectedRegularizer
+end
+
+_regularizer_test()
+
+-- test public methods
+
+local function loss_test()
+   local of = makeOfFromTestExample()
+   local loss = of:loss(testExample.theta)
+   local expectedLoss = -testExample.expectedLogLikelihood + 
+                        testExample.lambda * testExample.expectedRegularizer
+
+   assertEq(loss, expectedLoss, .0001)
+end
+
+loss_test()
+
+local function gradient_test()   
+   -- for now, test without a regularizer
+   testExample.lambda = 0
+   local of = makeOfFromTestExample()
+
+   local function f(theta)
+      return of:loss(theta)
+   end
+  
+   local loss, info = of:loss(testExample.theta)
+   local gradient = of:gradient(testExample.theta, info)
+
+   local eps = 1e-5
+   local fdGradient = finiteDifferenceGradient(opfunc, testExample.theta, eps)
+   for i = 1, testExample.theta:size(1) do
+      vp(2, string.format('grad[%d] %f fdGrad[%d] %f', i, gradient[i], i, fdGradient[i]))
+   end
+   assertEq(gradient, fdGradient, .0001)
+end
+
+gradient_test()
+
 stop()
 
-
--- unit tests
-local nSamples = 5
-local nFeatures = 8
-local nClasses = 3
-local lambda = 0.001
-
-local X = torch.rand(nSamples, nFeatures)
-
-local y = torch.Tensor(nSamples)
-local class = 0
-for i = 1, nSamples do
-   class = class + 1
-   if class == nClasses then class = 1 end
-   y[i] = class
-end
-
-local s = torch.Tensor(nSamples)
-s:uniform(0, 1)
-
-local of = LogregOpfunc(X, y, s, nClasses, lambda)
-vp(2, 'of', of)
-
-local parameters = of:initialParameters()
-vp(2, 'parameters', parameters)
-assert(parameters:nElement() == (nClasses - 1) * (nFeatures + 1))
-
--- change the parametes
-for i = 1, parameters:size(1) do
-   parameters[i] = i / 10
-end
-
--- check that functions return something
-if false then
-    local loss, info = of:loss(parameters)
-    vp(2, 'loss', loss, 'info', info)
-    assert(type(loss) == 'number')
-    assert(info.probs:size(1) == nSamples)
-    assert(info.probs:size(2) == nClasses)
-
-    local gradient = of:gradient(parameters, info)
-    vp(2, 'gradient', gradient)
-end
-
--- check loss function
-local function checkLoss(theta, lambda, expectedLoss)
-    local vp = makeVp(2, 'checkLoss')
-    vp(1, 'theta', theta, 'lambda', lambda, 'expectedLoss', expectedLoss)
-    local X = torch.Tensor{{1}, {2}}
-    local y = torch.Tensor{1, 2}
-    local s = torch.Tensor{.5, .1}
-    local nClasses = 3
-
-    local op = LogregOpfunc(X, y, s, nClasses, lambda)
-    local loss, info = op:loss(theta)
-    vp(2, 'loss', loss, 'info', info)
-    stop()
-
-    assertEq(expectedLoss, loss, 0.0001)
-end
-
-local thetaZero = torch.Tensor{0, 0, 0, 0}
-local thetaZeroExpectedLoss = 0.38751
-local lambda = 0.1
-checkLoss(thetaZero, 0, thetaZeroExpectedLoss)
-checkLoss(thetaZero, lambda, thetaZeroExpectedLoss)
-
-local thetaOne = torch.Tensor{1, 1, 1, 1}
-local lambda = 0.1
-local thetaOneLogLikelihood = -.45109
-local thetaOneRegularizer = 0.2
-checkLoss(thetaOne, lambda, - thetaOneLogLikelihood + thetaOneRegularizer)
-checkLoss(thetaOne, 0, - thetaOneLogLikelihood)
-stop('delete following code to check Loss')
-
--- if all parameters are equal, probs of first nClasses - 1 are also equal
-local equalParams = of:initialParameters():fill(1)
-local loss, info = of:loss(equalParams)
-vp(2, 'loss', loss, 'info.probs', info.probs)
-for i = 1, X:size(1) do -- first nClasses -1 probs are equal in each obs
-   for c = 2, nClasses - 1 do
-      assertEq(info.probs[i][1], info.probs[i][c], 1e-10)
-   end
-end   
-
--- if all parameters are zero, probabilities are all equal
-local zeroParams = of:initialParameters():zero()
-local loss, info = of:loss(zeroParams)
-vp(2, 'loss', loss, 'info.probs', info.probs)
-for i = 1, X:size(1) do -- all probs are equal in each obs
-   for c = 1, nClasses do
-      assertEq(info.probs[i][1], info.probs[i][c], 1e-10)
-   end
-end   
-
--- if lambda goes to zero, loss changes by lambda * squared weights
-do 
-   local lambda = .1
-   local of = LogregOpfunc(X, y, s, nClasses, lambda)
-   local params = of:initialParameters()
-   vp(2, 'params', params, 'of', of)
-   local lossWithRegularizer = of:loss(params)
-
-   local of = LogregOpfunc(X, y, s, nClasses, 0)
-   local lossWithoutRegularizer, info = of:loss(params)
-   vp(2, 'lossWithRegularizer', lossWithRegularizer, 
-         'lossWithoutRegularizer', lossWithoutRegularizer)
-   local weightsSquared = torch.cmul(info.weights, info.weights)
-   local sumWeightsSquared = weightsSquared:sum()
-   vp(2, 'sumWeightsSquared', sumWeightsSquared)
-   local deltaLoss = lossWithRegularizer - lossWithoutRegularizer
-   assertEq(deltaLoss, lambda * sumWeightsSquared, .0001)
-end
-
-
--- check gradient 
--- turn off regularizer first
-local function checkGradient(lambda, params, expectedLoss)   
-   local vp = makeVp(2, 'tester::checkGradient')
-   -- for now, have a very simple test case
-   local X = torch.Tensor{{1}}
-   local y = torch.Tensor{1}
-   local s = torch.Tensor{1}
-   local nClasses = 2
-   local of = LogregOpfunc(X, y, s, nClasses, lambda)
-   vp(2, 'initial params', params)
-  
-   local function opfunc(x) 
-      return of:loss(x)
-   end
-  
-   local loss, info = of:loss(params)
-   vp(2, 'loss', loss, 'info', info)
-   if expectedLoss ~= nil then
-      assertEq(loss, expectedLoss, 1e03)
-   end
-   
-   local grad = of:gradient(params, info)
-   local eps = 1e-5
-   local fdGrad = finiteDifferenceGradient(opfunc, params, eps)
-   for i = 1, params:size(1) do
-      vp(2, string.format('grad[%d] %f fdGrad[%d] %f', i, grad[i], i, fdGrad[i]))
-   end
-   assertEq(grad, fdGrad, .0001)
-end
-
--- check using zero parameters
-local paramsZero = torch.Tensor{0, 0}
-checkGradient(0,  paramsZero, 0.69315) -- turn off regularizer
-checkGradient(.1, paramsZero, 0.69315) -- with regularizer
-
-local params2 = torch.Tensor{.1, .2}
-checkGradient(0, params2, 0.55436)  -- without regularizer
-checkGradient(.1, params2, 0.55436)  -- without regularizer
-
-stop('write a test')
 
 -- timing test
 local timer = Timer()
