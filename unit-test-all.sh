@@ -53,6 +53,7 @@ torch ModelLinearL2Loss_test.lua
 torch NamedMatrix_test.lua
 torch parseCommandLine_test.lua
 luajit printAllVariables_test.lua
+luajit printTableValue_test.lua
 luajit printTableVariable_test.lua
 luajit printVariable_test.lua
 luajit Random_test.lua
