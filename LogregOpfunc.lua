@@ -5,10 +5,9 @@
 if false then
    -- API overview
    of = LogregOpfunc(X, y, s, nClasses, lambda)
-   flatParameters = of:initialParameters()
-   num, info = of:loss(flatParameters)
-   tensor = of:gradient(flatParameters, info)
-   num, tensor = of:lossGradient(flatParameters)
+   flatParameters = of:initialTheta()
+   num, lossInfo = of:loss(flatParameters)
+   tensor = of:gradient(lossInfo)
 end
 
 require 'augment'
@@ -17,15 +16,17 @@ require 'keyboard'
 require 'kroneckerProduct'
 require 'nn'
 require 'printAllVariables'
+require 'printTableValue'
 require 'printTableVariable'
 require 'printVariable'
 require 'torch'
 
 torch.class('LogregOpfunc')
 
+-- CONSTRUCTOR
+
 function LogregOpfunc:__init(X, y, s, nClasses, lambda)
-   local verboseLevel = 1
-   local vp = makeVp(verboseLevel, 'LogregOpfunc:__init')
+   local vp, verboseLevel = makeVp(0, 'LogregOpfunc:__init')
    vp(1, 'X', X, 'y', y, 's', s, 'nClasses', nClasses, 'lambda', lambda)
    self.X = X
    self.y = y
@@ -36,7 +37,18 @@ function LogregOpfunc:__init(X, y, s, nClasses, lambda)
    
    self.nSamples = X:size(1)
    self.nFeatures = X:size(2)
-   self.nUserParameters = (nClasses - 1) * (self.nFeatures + 1)
+   --printVariable('X') printTableVariable('self')
+   assert(self.nSamples) -- detect some problems with argument X
+   assert(self.nFeatures)
+   self.nUserParameters = (self.nClasses - 1) * (self.nFeatures + 1)
+
+   -- optimization: augment all the X's at the beginning of the computation
+   -- NOTE: The use case were are optimizing around is when nSamples <= 120
+   --       so not much extra space is needed for Xaugemented
+   self.Xaugmented = torch.Tensor(self.nSamples, self.nFeatures + 1)
+   for i = 1, self.nSamples do
+      self.Xaugmented[i] = augment(self.X[i])
+   end
 
    if verboseLevel > 0 then
       for k, v in pairs(self) do
@@ -45,6 +57,9 @@ function LogregOpfunc:__init(X, y, s, nClasses, lambda)
    end
 end
 
+-------------------------------------------------------------------------------
+-- PUBLIC METHODS
+-------------------------------------------------------------------------------
 
 -- return flat parameters called theta in the API
 -- RETURNS
@@ -56,46 +71,293 @@ function LogregOpfunc:initialTheta()
    return theta
 end
 
+-- return gradient at same parameters as previous call to loss function
+-- ARGS
+-- lossInfo : table from the loss method
+-- RETURNS
+-- gradient : 1D Tensor size (nClasses - 1) * (nFeatures + 1)
+function LogregOpfunc:gradient(lossInfo)
+   return self:_gradientLogLikelihood(lossInfo) + 
+          self:_gradientRegularizer(lossInfo) * self.lambda
+end
+
 -- return loss and probs at parameters
 -- ARGS
 -- theta          : 1D Tensor size (nClasses - 1) * (nFeatures + 1)
--- implementation ; option number, default 1
 -- RETURNS
 -- loss           : number, regularized negative log likelihood of theta (NLL)
--- info           : table needed for call to method gradient
+-- lossInfo       : table needed for call to method gradient
 --                  the table avoids recomputing values in both the loss and
 --                  gradient methods
-function LogregOpfunc:loss(theta, implementation)
-   local vp = makeVp(0, 'LogregOpfunc:loss')
-   vp(1, 'theta', theta, 'implementation', implementation)
-   implementation = implementation or 1
-   if implementation == 1 then
-      return self:_loss1(theta)
-   else
-      error('bad implemenation value: ' .. tostring(implementation))
-   end
+function LogregOpfunc:loss(theta)
+   assert(theta:nDimension() == 1 and theta:size(1) == self.nUserParameters)
+
+   local thetaInfo = self:_structureTheta(theta)
+   local scores = self:_scores(thetaInfo)
+   local probabilities = self:_probabilities(scores)
+   local logLikelihood = self:_logLikelihood(probabilities)
+   local regularizer = self:_regularizer(thetaInfo)
+
+   local loss = - logLikelihood + self.lambda * regularizer
+   
+   local lossInfo = {}
+   lossInfo.probabilities = probabilities
+   lossInfo.theta = theta
+   lossInfo.thetaInfo = thetaInfo
+
+   return loss, lossInfo
 end
 
--- return gradient at parameters 
--- ARGS
--- theta    : 1D Tensor size (nClasses - 1) * (nFeatures + 1)
--- info     : table from the loss methods
--- RETURNS
--- gradient : 1D Tensor size (nClasses - 1) * (nFeatures + 1)
-function LogregOpfunc:gradient(theta, info, implementation)
-   implementation = implementation or 1
-   if implementation == 1 then
-      return self:_gradient1(theta, info)
-   else
-      error('bad implemenation value: ' .. tostring(implementation))
-   end
-end
-
-
+-------------------------------------------------------------------------------
 -- PRIVATE METHODS
+-------------------------------------------------------------------------------
 
--- loss1: simple but has risk of numeric overflow
--- l(theta) = \sum_i \sum_j y_j^i s^i log mu_j^i
+
+-- _GRADIENTLOGLIKELIHOOD
+
+function LogregOpfunc:_gradientLogLikelihood(lossInfo, implementation)
+   implementation = implementation or 1
+   if implementation == 1 then
+      return self:_gradientLogLikelihood_implementation_1(lossInfo)
+   elseif implementation == 2 then
+      return self:_gradientLogLikelihood_implementation_2(lossInfo)
+   else
+      error('bad implementation value: ' .. tostring(implementation))
+   end
+end
+
+-- version 1: straight from Murphy b 253
+function LogregOpfunc:_gradientLogLikelihood_implementation_1(lossInfo)
+
+   local function gradient_i(i)
+      local mu = lossInfo.probabilities[i]
+      local y = torch.Tensor(self.nClasses):zero()
+      y[self.y[i]] = 1
+      local errors = (mu - y) * self.s[i]
+
+      -- view all but last element of errors
+      local errorsShort = torch.Tensor(errors:storage(), 1, self.nClasses - 1, 1)
+
+      -- NOTE: must insert the 1 before X[i]
+      local result = kroneckerProduct(errorsShort, augment(self.X[i]))
+      assert(result:size(1) == self.nUserParameters)
+
+      return result
+   end
+
+   local gradient = lossInfo.theta:clone():zero()
+   for i = 1, self.nSamples do
+      gradient = gradient + gradient_i(i)
+   end
+
+   return gradient
+end
+
+function LogregOpfunc:_gradientLogLikelihood_implementation_2(lossInfo)
+   local vp = makeVp(0, '_gradientLogLikelihood_implementation_2')
+
+   local function gradient_i(i)
+      local mu = lossInfo.probabilities[i]
+      local y = torch.Tensor(self.nClasses):zero()
+      y[self.y[i]] = 1
+      local errors = (mu - y) * self.s[i]
+
+      -- view all but last element of errors
+      local errorsShort = torch.Tensor(errors:storage(), 1, self.nClasses - 1, 1)
+
+      -- NOTE: must insert the 1 before X[i]
+      local result = kroneckerProduct(errorsShort, augment(self.X[i]))
+      assert(result:size(1) == self.nUserParameters)
+
+      return result, errors, errorsShort
+   end
+
+   local Gradient = torch.Tensor(self.nSamples, (self.nClasses - 1) * (self.nFeatures + 1))
+
+
+   -- determine Gradient a slow way
+   for i = 1, self.nSamples do
+      Gradient[i] = gradient_i(i)
+   end
+   
+   -- determine Gradient2 in a fast way
+   local Gradient2 = torch.Tensor(self.nSamples, (self.nClasses - 1) * (self.nFeatures + 1))
+   
+   local Mu = torch.Tensor(self.nSamples, nClasses)
+   for i = 1, self.nSamples do
+      Mu[1] = lossInfo.probabilities[i]
+   end
+
+   local Y = torch.Tensor(self.nSamples, nClasses):zero()
+   for i = 1, self.nSamples do
+      Y[self.y[i]] = 1
+   end
+
+   local Errors = Mu - Y
+   for i = 1, self.nSamples do
+      Errors = Errors * self.s[i]
+   end
+   
+   local gradient = torch.sum(Gradient, 1)  -- sum over the rows
+   assert(gradient:size(1) == 1)
+   local gradient1D = gradient:select(1,1)  -- drop first dimensions
+   vp(2, 'Gradient:size', Gradient:size(), 
+         'gradient:size', gradient:size(), 
+         'gardient1D:size', gradient1D:size())
+   return gradient1D
+end
+
+
+
+-- _GRADIENTREGULARIZER
+function LogregOpfunc:_gradientRegularizer(lossInfo, implementation)
+   implementation = implementation or 1
+   if implementation == 1 then
+      return self:_gradientRegularizer_implementation_1(lossInfo)
+   else
+      error('bad implementation value: ' .. tostring(implementation))
+   end
+end
+
+function LogregOpfunc:_gradientRegularizer_implementation_1(lossInfo)
+   local weights = lossInfo.thetaInfo.weights
+   local regularizerGradient = lossInfo.theta:clone():zero()
+   local regularizerIndex = 0
+   for c = 1, self.nClasses - 1 do
+      regularizerIndex = regularizerIndex + 1
+      for d = 1, self.nFeatures do
+         regularizerIndex = regularizerIndex + 1
+         regularizerGradient[regularizerIndex] = 2 * weights[c][d]
+      end
+   end
+   return regularizerGradient
+end
+
+
+-- determine gradient at i-th observation
+-- ref: Murphy, p. 253
+function LogregOpfunc:_gradient_i(i, lossInfo, implementation)
+   implementation = implementation or 1
+   if implementation == 1 then
+      return self:_gradient_i_implementation_1(i, lossInfo)
+   elseif implementation == 2 then
+      return self:_gradient_i_implementation_2(i, lossInfo)
+   elseif implementation == 3 then
+      return self:_gradient_i_implementation_3(i, lossInfo)
+   else
+      error('bad implemenation value: ' .. tostring(implementation))
+   end
+end
+
+function LogregOpfunc:_gradient_i_implementation_1(i, lossInfo)
+   local mu = lossInfo.probs[i]
+   local y = torch.Tensor(self.nClasses):zero()
+   y[self.y[i]] = 1
+   local errors = (mu - y) * self.s[i]
+
+   -- view all but last element of errors
+   local errorsShort = torch.Tensor(errors:storage(), 1, self.nClasses - 1, 1)
+
+   -- NOTE: must insert the 1 before X[i]
+   local gradient_i = kroneckerProduct(errorsShort, augment(self.X[i]))
+   assert(gradient_i:size(1) == self.nUserParameters)
+
+   return gradient_i
+end
+   
+-- optimized by
+-- . unrolling the kroneckerProduct loop
+-- . not shortening the errors vector
+-- . not creating the augmented feature vectore [1, X[i]]
+-- RESULT: this implementation takes 2.7 times as long as implementation 1
+function LogregOpfunc:_gradient_i_implementation_2(i, lossInfo)
+   local mu = lossInfo.probs[i]
+   local y = torch.Tensor(self.nClasses):zero()
+   y[self.y[i]] = 1
+   local errors = (mu - y) * self.s[i]
+   
+   -- compute kroneckerProduct of errors(1:nClasses -1) and [1, self.X[i])
+   local gradient_i = torch.Tensor(self.nUserParameters):zero()
+   local index = 0
+   for c = 1, self.nClasses - 1 do
+      index = index + 1
+      gradient_i[index] = errors[c]
+      for d = 1, self.nFeatures do
+         index = index + 1
+         gradient_i[index] = errors[c] * self.X[i][d]
+      end
+   end
+
+   return gradient_i
+end
+
+-- optimized by augmenting only once during initialization
+-- RESULT: this implementation takes ? times as long as implementation 1
+function LogregOpfunc:_gradient_i_implementation_3(i, lossInfo)
+   local vp = makeVp(2, 'implementation 3')
+
+   local mu = lossInfo.probs[i]
+   local y = torch.Tensor(self.nClasses):zero()
+   y[self.y[i]] = 1
+   local errors = (mu - y) * self.s[i]
+   local errrorsShort = torch.Tensor(errors:storage(), 1, self.nClasses - 1, 1)
+
+   local gradient_i = kroneckerProduct(errorsShort, self.Xaugmented[i])
+
+   return gradient_i
+end
+
+
+-- optimized by vectorizing the errors * 1, X[i] computation in implementation 2
+-- RESULT: this implementation takes ? times as long as implementation 1
+function LogregOpfunc:_gradient_i_implementation_4(i, lossInfo)
+   local vp = makeVp(2, 'implementation 3')
+
+   -- augument the X's all at once
+   if self.Xaugmented == nil then
+      for i = 1, self.nSamples do
+         self.Xaugmentd[i] = augment(self.X[i])
+      end
+   end
+   local mu = lossInfo.probs[i]
+   local y = torch.Tensor(self.nClasses):zero()
+   y[self.y[i]] = 1
+   local errors = (mu - y) * self.s[i]
+   
+   -- compute kroneckerProduct of errors(1:nClasses -1) and [1, self.X[i])
+   local gradient_i = torch.Tensor(self.nUserParameters):zero()
+   for c = 1, self.nClasses - 1 do
+      local index = self.nFeatures * (c - 1) + 1
+      gradient_i[index] = errors[c]
+
+      -- create views so that cmul will work
+      local errorVector1 = torch.Tensor{errors[c]}
+      errorVector = torch.Tensor(errorVector1:storage(), 1, self.nFeatures, 0)
+      vp(2, 'errorVector1', errorVector1, 'errorVector', errorVector)
+      gradientVector = torch.Tensor(gradient_i:storage(), index + 1, self.nFeatures, 1)
+      vp(2, 'gradientVector pre cmul', gradientVector)
+      torch.cmul(gradientVector, errorVector, self.X[i])
+      vp(2, 'gradientVector post cmul', gradientVector, 'self.X[i]', self.X[i])
+      stop()
+   end
+
+   return gradient_i
+end
+
+
+-- _LOGLIKELIHOOD
+
+-- log(likelihood) = sum_i sum_j y_j^i s^i log mu_j^i
+-- This implementation has the risk of numeric overflow, because it directly multiplies
+-- all the probabilities.
+-- ARGS
+-- probs         : 2D Tensor of size nFeatures x nClasses
+-- RETURNS
+-- logLikelihood : number, log of probabiity of the data
+--
+-- NOTE 1: This implementation has the risk of numeric overflow, because it
+-- directly multiplies all the log probabilities and sums them up.
+-- However, for the use cases intended, this should not be a problem.
 -- OVERFLOW CALCULATIONS: for the problems of interest
 --   nSamples <= 120
 --   nClasses <= 25
@@ -103,68 +365,26 @@ end
 -- log (avg prob) ~= -8
 -- l(theta) <= nSamples * nClasses * log(avg prob) = -24000
 -- HENCE, risk of overflow is very low for use cases planned
-function LogregOpfunc:_loss1(theta)
-   local vp = makeVp(0, 'LogregOpfunc:_loss1')
-   vp(1, 'theta', theta)
-   assert(theta:nDimension() == 1 and theta:size(1) == self.nUserParameters)
-
-   local biases, weights = self:_structureTheta(theta)
-   local scores = self:_scores(biases, weights)
-   local probabilities = self:_probabilities(scores)
-   local logLikelihood = self:_logLikelihood(probabilities)
-   local regularizer = self:_regularizer(weights)
-   local loss = - logLikelihood + self.lambda * regularizer
-
+function LogregOpfunc:_logLikelihood(probs)
+   local logProbs = torch.log(probs)
    
-   local info = {}
-   info.weights = weights
-   info.biases = biases
-   info.probs = probabilities
-
-   vp(1, 'loss', loss, 'info.probs', info.probs)
-   return loss, info
-end
-
--- parse biases and weights from the flat parameters theta
--- ARGS
--- theta     : 1D Tensor size (nClasses - 1) x (nFeatures + 1)
--- RETURNS
--- biases    : 1D Tensor size (nClasses - 1)
--- weights   : 1D Tensor size (nClasses - 1) x nFeatures
-function LogregOpfunc:_structureTheta(theta)
-   local biases = 
-      torch.Tensor(theta:storage(), 1, 
-                   self.nClasses - 1, self.nFeatures + 1)
-   local weights = 
-      torch.Tensor(theta:storage(), 2, 
-                   self.nClasses - 1, self.nFeatures + 1, 
-                   self.nFeatures, 1)
-   return biases, weights
-end
-
-
--- compute scores matrix where (scores)_j^i = w_j^T x^i
--- NOTE: perhaps be converted to a single matrix multiplication
--- ARGS
--- biases  : 1D Tensor size (nClasses - 1)
--- weights : 2D Tensor size (nClasses - 1) x nFeatures
--- RETURNS
--- scores  : 2D Tensor size nSamples x nClasses
-function LogregOpfunc:_scores(biases, weights)
-   local scores = torch.Tensor(self.nSamples, self.nClasses)
-   
+   local logLikelihood = 0
    for i = 1, self.nSamples do
-      for c = 1, self.nClasses - 1 do
-         scores[i][c] = biases[c] + torch.dot(weights[c], self.X[i])
-      end
-      scores[i][self.nClasses] = 0
+      logLikelihood = logLikelihood + self.s[i] * logProbs[i][self.y[i]]
    end
 
-   return scores
+   return logLikelihood
 end
 
+-- _LOSS1
 
+-- loss1: return loss at given flat parameters
+-- ARGS:
+-- theta : 1D Tensor size (nClasses - 1) * (nFeatures + 1), flat parameters
+-- RETURNS
+-- loss  : number, NLL + weighted regularizer
 
+-- _PROBABILITIES
 
 -- convert scores to probabilities
 -- by taking exp and normalizing over each row
@@ -181,79 +401,101 @@ function LogregOpfunc:_probabilities(scores)
    return probs
 end
 
-
--- log(likelihood) = sum_i sum_j y_j^i s^i log mu_j^i
--- ARGS
--- probs         : 2D Tensor of size nFeatures x nClasses
--- RETURNS
--- logLikelihood : number, log of probabiity of the data
-function LogregOpfunc:_logLikelihood(probs)
-   local vp = makeVp(2, '_logLikelihood')
-   vp(1, 'probs', probs)
-   local logProbs = torch.log(probs)
-   
-   local logLikelihood = 0
-   for i = 1, self.nSamples do
-      logLikelihood = logLikelihood + self.s[i] * logProbs[i][self.y[i]]
-   end
-
-   return logLikelihood
-end
-
+-- _REGULARIZER
 
 -- regularizer
-function LogregOpfunc:_regularizer(weights)
+function LogregOpfunc:_regularizer(thetaInfo)
+   local weights = thetaInfo.weights
    local squaredWeights = torch.cmul(weights, weights)
    local regularizer = torch.sum(squaredWeights)
    return regularizer
 end
 
+-- _SCORES
 
-
--- return gradient at parameters and probs
--- version 1: straight from book, not vectorized
--- meant to be easy to read
-function LogregOpfunc:_gradient1(theta, info)
-   local gradient = theta:clone():zero()
-   for i = 1, self.nSamples do
-      gradient = gradient + self:_gradient_i(i, info)
+-- compute scores matrix where (scores)_j^i = w_j^T x^i
+-- ARGS
+-- biases  : 1D Tensor size (nClasses - 1)
+-- weights : 2D Tensor size (nClasses - 1) x nFeatures
+-- RETURNS
+-- scores  : 2D Tensor size nSamples x nClasses
+-- NOTE
+-- In timing tests. implementation 2 take about 0.012 of the CPU time
+-- relative to implementation 1 (it's about 100 times faster)
+function LogregOpfunc:_scores(thetaInfo, implementation)
+   implementation = implementation or 2
+   if implementation == 1 then
+      return self:_scores_implementation_1(thetaInfo)
+   elseif implementation == 2 then
+      return self:_scores_implementation_2(thetaInfo)
+   else
+      error('bad implemenation value: ' .. tostring(implementation))
    end
-
-   gradient = gradient + self:_regularizerGradient(theta)
-   return gradient
 end
 
--- determine gradient at i-th observation
--- ref: Murphy, p. 253
-function LogregOpfunc:_gradient_i(i, info)
-   local mu = info.probs[i]
-   local y = torch.Tensor(self.nClasses):zero()
-   y[self.y[i]] = 1
-   local muLessY = mu - y
+-- compute scores by explicitly looping over samles and classes
+-- ARGS
+-- biases  : 1D Tensor size (nClasses - 1)
+-- weights : 2D Tensor size (nClasses - 1) x nFeatures
+-- RETURNS
+-- scores  : 2D Tensor size nSamples x nClasses
+function LogregOpfunc:_scores_implementation_1(thetaInfo)
+   local biases = thetaInfo.biases
+   local weights = thetaInfo.weights
 
-   -- drop last element of muLessY
-   local muLessYShort = torch.Tensor(muLessY:storage(), 1, self.nClasses - 1, 1)
-
-   printAllVariables() printTableVariable('self')
-   local gradient_i = kroneckerProduct(muLessYShort, self.X[i])
-   printVariable('gradient_i')
-   assert(gradient_i:size(1) == self.nUserParameters)
-
-   error('check _gradient_i values')
-
-   return gradient_i
-end
+   local scores = torch.Tensor(self.nSamples, self.nClasses)
    
-function LogregOpfunc:_regularizerGradient(theta)
-   local biases, weights = self:_structureTheta(theta)
-   local regularizerGradient = theta:clone():zero()
-   for c = 1, self.nClasses - 1 do
-      for d = 1, self.nFeatures do
-         regularizerGradient[(c - 1) * self.nFeatures + d] = 2 * self.lambda * weights[c][d]
+   for i = 1, self.nSamples do
+      for c = 1, self.nClasses - 1 do
+         scores[i][c] = biases[c] + torch.dot(weights[c], self.X[i])
       end
+      scores[i][self.nClasses] = 0
    end
-   return regularizerGradient
+
+   return scores
 end
 
+-- compute scores in one matrix multiplication
+--   Scores = XAugmented x W^T
+-- ARGS
+-- thetaInfo : table containing W size nClasses x (1 + nFeatures)
+-- RETURNS
+-- scores    : 2D Tensor size nSamples x nClasses
+function LogregOpfunc:_scores_implementation_2(thetaInfo)
+   return torch.mm(self.Xaugmented, thetaInfo.W:t())
+end
+
+-- _STRUCTURETHETA
+   
+-- parse biases and weights from the flat parameters theta
+-- ARGS
+-- theta     : 1D Tensor size (nClasses - 1) x (nFeatures + 1)
+-- RETURNS
+-- thetaInfo : table with these elements
+--             biases    : 1D Tensor size (nClasses - 1)
+--             weights   : 2D Tensor size (nClasses - 1) x nFeatures
+--             W         ; 2D Tensor size nClasses x (nFeatures + 1)
+function LogregOpfunc:_structureTheta(theta)
+   local nClasses = self.nClasses
+   local nFeatures = self.nFeatures
+
+   local biases = 
+      torch.Tensor(theta:storage(), 1, 
+                   nClasses - 1, nFeatures + 1)
+
+   local weights = 
+      torch.Tensor(theta:storage(), 2, 
+                   nClasses - 1, nFeatures + 1, 
+                   nFeatures, 1)
+
+   local W = torch.Tensor(nClasses, nFeatures + 1):zero()
+   for j = 1, self.nClasses - 1 do
+      local thetaBiasWeight = 
+         torch.Tensor(theta:storage(), 1 + (j - 1) * (nFeatures + 1), nFeatures + 1, 1)
+      W[j] = thetaBiasWeight
+   end
+
+   return {biases = biases, weights = weights, W = W}
+end
 
   
