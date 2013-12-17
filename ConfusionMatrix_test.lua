@@ -1,11 +1,16 @@
 -- ConfusionMatrix_test.lua
 -- unit test
 
-require 'assertEqual'
+require 'assertEq'
 require 'ConfusionMatrix'
 require 'makeVp'
 
 local vp, verboseLevel = makeVp(0, 'tester')
+
+local cm = ConfusionMatrix()
+
+-- reproduce bug
+cm:add(2,5)
 
 local cm = ConfusionMatrix()
 
@@ -24,6 +29,6 @@ if verboseLevel > 0 then
 end
 
 local errRate = cm:errorRate()
-assertEqual(30 / 45, errRate, .01)
+assertEq(30 / 45, errRate, .01)
 
 print('ok ConfusionMatrix')

@@ -31,12 +31,13 @@ function ConfusionMatrix:add(actual, predicted)
    validateAttributes(predicted, 'number', 'integer', '>', 0)
 
    self.largestClassNumber = math.max(actual, predicted, self.largestClassNumber)
+   vp(2, 'self.largestClassNumber', self.largestClassNumber)
 
-   if self.largestClassNumber > self.table:size(1) then 
+   while self.largestClassNumber > self.table:size(1) do 
       self:_expandRows()
    end
 
-   if self.largestClassNumber > self.table:size(2) then
+   while self.largestClassNumber > self.table:size(2) do
       self:_expandColumns()
    end
 
