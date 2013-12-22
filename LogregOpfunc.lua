@@ -49,12 +49,30 @@ function LogregOpfunc:__init(X, y, s, nClasses, lambda)
    for i = 1, self.nSamples do
       self.Xaugmented[i] = augment(self.X[i])
    end
+   
+   -- optimization: precompute Y such that
+   -- Y[i][j] == 1 if and only if Y[i] == j
+   self.Y = torch.Tensor(self.nSamples, self.nClasses):zero()
+   vp(2, 'self.Y:size()', self.Y:size())
+   for i = 1, self.nSamples do
+      local yi = self.y[i]
+      assert(yi >= 0, 
+             string.format('y[%d] not at least 1', i, yi))
+      assert(yi <= self.nClasses, 
+             string.format('y[%d] = %f, exceeds nClasses = %f', i, yi, self.nClasses))
+      assert(yi == math.floor(y[i]),
+             string.format('y[%d] = %f is not an integer', i, yi))
+      vp(2, 'i', i, 'self.y[i]', yi)
+      self.Y[i][self.y[i]] = 1
+   end
 
    if verboseLevel > 0 then
       for k, v in pairs(self) do
          vp(1, 'self.' .. k, tostring(v))
       end
    end
+
+
 end
 
 -------------------------------------------------------------------------------
@@ -77,6 +95,7 @@ end
 -- RETURNS
 -- gradient : 1D Tensor size (nClasses - 1) * (nFeatures + 1)
 function LogregOpfunc:gradient(lossInfo)
+   assert(type(lossInfo) == 'table')
    return self:_gradientLogLikelihood(lossInfo) + 
           self:_gradientRegularizer(lossInfo) * self.lambda
 end
@@ -116,11 +135,15 @@ end
 -- _GRADIENTLOGLIKELIHOOD
 
 function LogregOpfunc:_gradientLogLikelihood(lossInfo, implementation)
-   implementation = implementation or 1
+   implementation = implementation or 4
    if implementation == 1 then
       return self:_gradientLogLikelihood_implementation_1(lossInfo)
    elseif implementation == 2 then
       return self:_gradientLogLikelihood_implementation_2(lossInfo)
+   elseif implementation == 3 then
+      return self:_gradientLogLikelihood_implementation_3(lossInfo)
+   elseif implementation == 4 then
+      return self:_gradientLogLikelihood_implementation_4(lossInfo)
    else
       error('bad implementation value: ' .. tostring(implementation))
    end
@@ -153,8 +176,9 @@ function LogregOpfunc:_gradientLogLikelihood_implementation_1(lossInfo)
    return gradient
 end
 
+-- use pre-computed self.Xaugmented
 function LogregOpfunc:_gradientLogLikelihood_implementation_2(lossInfo)
-   local vp = makeVp(0, '_gradientLogLikelihood_implementation_2')
+   --local vp = makeVp(0, '_gradientLogLikelihood_implementation_2')
 
    local function gradient_i(i)
       local mu = lossInfo.probabilities[i]
@@ -166,45 +190,60 @@ function LogregOpfunc:_gradientLogLikelihood_implementation_2(lossInfo)
       local errorsShort = torch.Tensor(errors:storage(), 1, self.nClasses - 1, 1)
 
       -- NOTE: must insert the 1 before X[i]
-      local result = kroneckerProduct(errorsShort, augment(self.X[i]))
+      local result = kroneckerProduct(errorsShort, self.Xaugmented[i])
       assert(result:size(1) == self.nUserParameters)
 
       return result, errors, errorsShort
    end
 
-   local Gradient = torch.Tensor(self.nSamples, (self.nClasses - 1) * (self.nFeatures + 1))
-
-
-   -- determine Gradient a slow way
+   local gradient = lossInfo.theta:clone():zero()
    for i = 1, self.nSamples do
-      Gradient[i] = gradient_i(i)
-   end
-   
-   -- determine Gradient2 in a fast way
-   local Gradient2 = torch.Tensor(self.nSamples, (self.nClasses - 1) * (self.nFeatures + 1))
-   
-   local Mu = torch.Tensor(self.nSamples, nClasses)
-   for i = 1, self.nSamples do
-      Mu[1] = lossInfo.probabilities[i]
+      gradient = gradient + gradient_i(i)
    end
 
-   local Y = torch.Tensor(self.nSamples, nClasses):zero()
-   for i = 1, self.nSamples do
-      Y[self.y[i]] = 1
+   return gradient
+end
+
+-- use pre-computed self.Y
+function LogregOpfunc:_gradientLogLikelihood_implementation_3(lossInfo)
+
+   local function gradient_i(i)
+      local mu = lossInfo.probabilities[i]
+      local errors = (mu - self.Y[i]) * self.s[i]
+
+      -- view all but last element of errors
+      local errorsShort = torch.Tensor(errors:storage(), 1, self.nClasses - 1, 1)
+
+      -- NOTE: must insert the 1 before X[i]
+      local result = kroneckerProduct(errorsShort, self.Xaugmented[i])
+      assert(result:size(1) == self.nUserParameters)
+
+      return result, errors, errorsShort
    end
 
-   local Errors = Mu - Y
+   local gradient = lossInfo.theta:clone():zero()
    for i = 1, self.nSamples do
-      Errors = Errors * self.s[i]
+      gradient = gradient + gradient_i(i)
    end
-   
-   local gradient = torch.sum(Gradient, 1)  -- sum over the rows
-   assert(gradient:size(1) == 1)
-   local gradient1D = gradient:select(1,1)  -- drop first dimensions
-   vp(2, 'Gradient:size', Gradient:size(), 
-         'gradient:size', gradient:size(), 
-         'gardient1D:size', gradient1D:size())
-   return gradient1D
+
+   return gradient
+end
+
+-- compute errors all at once
+function LogregOpfunc:_gradientLogLikelihood_implementation_4(lossInfo)
+   local Errors = lossInfo.probabilities - self.Y
+
+   local Gradients = torch.Tensor(self.nSamples, self.nUserParameters)
+
+   for i = 1, self.nSamples do
+      local salienceWeightedErrors = Errors[i] * self.s[i]
+      local errorsShort = torch.Tensor(salienceWeightedErrors:storage(), 1,  self.nClasses - 1, 1)
+      Gradients[i] = kroneckerProduct(errorsShort, self.Xaugmented[i])
+   end
+
+   local sumGradients = torch.sum(Gradients, 1)
+   local result = torch.Tensor(sumGradients:storage(), 1, self.nUserParameters, 1)
+   return result
 end
 
 
