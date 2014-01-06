@@ -10,6 +10,7 @@ if false then
    tensor = of:gradient(lossInfo)
 end
 
+require 'printAllVariables'
 require 'torch'
 
 -- CONSTRUCTOR
@@ -17,12 +18,34 @@ require 'torch'
 local LogregOpfunc = torch.class('LogregOpfunc')
 
 function LogregOpfunc:__init(X, y, s, nClasses, lambda)
+   -- validate arguments
+   assert(X, 'X not supplied')
+   assert(X:nDimension() == 2, 'X is not a 2D Tensor')
+   self.nSamples = X:size(1)
+   self.nFeatures = X:size(2)
+
+   assert(y, 'y not supplied')
+   assert(y:nDimension() == 1, 'y is not a 1D Tensor')
+   assert(y:size(1) == self.nSamples, 'y size is invalid')
+
+   assert(s, 's not supplied')
+   assert(s:nDimension() == 1, 's is not a 1D Tensor')
+   assert(s:size(1) == self.nSamples, 's size is invalid')
+
+   assert(nClasses, 'nClasses not supplied')
+   assert(type(nClasses) == 'number', 'nClasses is not a number')
+
+   assert(lambda, 'lmabda not supplied')
+   assert(type(lambda) == 'number', 'lambda is not a number')
+   assert(lambda >= 0, 'lambda not non-negative')
+
+
+   -- save args
    self.X = X
    self.y = y
    self.s = s
    self.nClasses = nClasses
    self.lambda = lambda
-   assert(lambda) -- make sure all parameters were supplied
 end
 
 -- PUBLIC METHODS
