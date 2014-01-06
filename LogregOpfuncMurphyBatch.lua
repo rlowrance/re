@@ -33,12 +33,6 @@ function LogregOpfuncMurphyBatch:__init(X, y, s, nClasses, lambda)
 
    parent.__init(self, X, y, s, nClasses, lambda)
    
-   self.nSamples = X:size(1)
-   self.nFeatures = X:size(2)
-   --printVariable('X') printTableVariable('self')
-   assert(self.nSamples) -- detect some problems with argument X
-   assert(self.nFeatures)
-
    self.nUserParameters = (self.nClasses - 1) * (self.nFeatures + 1)
 
    -- optimization: augment all the X's at the beginning of the computation
