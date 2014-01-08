@@ -1,47 +1,42 @@
 -- argmax.lua
 
-
--- index of largest element
--- ARGS:
--- v : 1D torch.Tensor
--- RETURNS:
--- i : integer in [1, v:size(1)] such that v[i] >= v[k] for all k
-function argmax1(v)
-   assert(v:dim() == 1)
-
+local function argmax_1D(v)
    local length = v:size(1)
    assert(length > 0)
 
+   -- examine on average half the entries
    local maxValue = torch.max(v)
-   
-   -- should need to examine just 1/2 the entries on average
-   for i = 1, length do
-      if maxValue == v[i] then
+   for i = 1, v:size(1) do
+      if v[i] == maxValue then
          return i
       end
    end
-   error('maxValue not in v')
 end
 
-function argmax2(v)
-   assert(v:dim() == 1)
-
-   local length = v:size(1)
-   assert(length > 0)
-
-   -- examine every entry
-   local maxValue = -math.huge
-   local maxIndex = nil
-   for i = 1, length do
-      local value = v[i]
-      if value > maxValue then
-         maxValue = value
-         maxIndex = i
-      end
+local function argmax_2D(matrix)
+   local nRows = matrix:size(1)
+   local result = torch.Tensor(nRows)
+   for i = 1, nRows do
+      result[i] = argmax_1D(matrix[i])
    end
-   return maxIndex
+   return result
 end
 
--- in timing tests, implementation 2 is often faster for all vector lengths
-argmax = argmax2
+-- index of largest element
+-- ARGS:
+-- tensor : 1D or 2D Tensor
+-- RETURNS:
+-- result : scalar (if v is 1D) or 1D Tensor (if v is 2D)
+--          if scalar i : integer in [1, v:size(1)] such that v[i] >= v[k] for all k
+--          if 1D Tensor, then the scalar i for each row
+function argmax(tensor)
+   local nDimension = tensor:nDimension()
+   if nDimension == 1 then
+      return argmax_1D(tensor)
+   elseif nDimension == 2 then
+      return argmax_2D(tensor)
+   else
+      error('tensor has %d dimensions, not 1 or 2', nDimension)
+   end
+end
 

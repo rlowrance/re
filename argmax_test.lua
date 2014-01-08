@@ -2,8 +2,11 @@
 -- unit test for argmax
 
 require 'argmax'
+require 'assertEq'
 require 'ifelse'
 require 'makeVp'
+require 'printAllVariables'
+require 'printTableVariable'
 require 'Timer'
 
 local vp = makeVp(0, 'tester')
@@ -11,35 +14,41 @@ local vp = makeVp(0, 'tester')
 -- Don't set the random seed, since we make multiple runs to check the timing
 --torch.manualSeed(123)
 
-local v = torch.Tensor{1,-100,1.000001,0}
-assert(argmax1(v) == 3)
-assert(argmax2(v) == 3)
-assert(argmax(v) == 3)
+local function test1D(nElements)
+   local v = torch.rand(nElements)
+   local maxIndex = argmax(v)
+   --printAllVariables() 
+   assert(type(maxIndex) == 'number')
 
-
-local function run(version, f, nIterations, nDimensions)
-   local v = torch.rand(nDimensions)
-
-   vp(2, 'run version', version, 'run nDimensions', nDimensions)
-   local timer = Timer()
-   for i = 1, nIterations do
-      local maxIndex = argmax1(v)
-   end
-   vp(1, string.format('version %d nIterations %d nDimensions %d cpu secs %f',
-                     version, nIterations, nDimensions, timer:cpu()))
+   local max = torch.max(v)
+   assert(max == v[maxIndex])
 end
 
-local checkTiming = false
-if checkTiming then
-   for _, nDimensions in ipairs({1e1, 1e2, 1e3, 1e6}) do
-      local nIterations = math.floor(1e7 / nDimensions)
-      for _, version in ipairs({1,2}) do
-         local f = ifelse(version == 1, argmax1, argmax2)
-         run(version, f, nIterations, nDimensions)
-      end
+test1D(3)
+test1D(100)
+
+local function test2D(nRows, nColumns)
+   local vp = makeVp(0, 'test2D')
+   local v = torch.rand(nRows, nColumns)
+   local maxIndices = argmax(v)
+   assert(maxIndices:nDimension() == 1)
+   assert(maxIndices:size(1) == nRows)
+
+   local maxValues = torch.max(v, 2) -- maxValues is size nRows x 1
+   vp(2, 'v', v, 'maxIndices', maxIndices, 'maxValues', maxValues)
+   for i = 1, nRows do
+      --print(maxValues[i]) print(maxIndices[i]) print(v[i])
+      vp(2, 'maxValues[i]', maxValues[i])
+      vp(2, 'maxIndices[i]', maxIndices[i])
+      vp(2, 'v[i][maxIndices[i]', v[i][maxIndices[i]])
+      local maxValue = maxValues[i][1]
+      assertEq(maxValue, v[i][maxIndices[i]], .00001)
    end
 end
 
+test2D(5, 3)
+test2D(120, 8)
+-- MAYBE: check timing
 print('ok argmax')
 
 
