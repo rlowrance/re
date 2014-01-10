@@ -8,12 +8,16 @@ if false then
    flatParameters = of:initialTheta()
    num, lossInfo = of:loss(flatParameters)
    tensor = of:gradient(lossInfo)
+   
+   probabilities = of:predict(newX, theta)  -- return probabiliites that each Class is seen
 end
 
 require 'printAllVariables'
 require 'torch'
 
+-------------------------------------------------------------------------------
 -- CONSTRUCTOR
+-------------------------------------------------------------------------------
 
 local LogregOpfunc = torch.class('LogregOpfunc')
 
@@ -48,7 +52,9 @@ function LogregOpfunc:__init(X, y, s, nClasses, lambda)
    self.lambda = lambda
 end
 
+-------------------------------------------------------------------------------
 -- PUBLIC METHODS
+-------------------------------------------------------------------------------
 
 -- RETURN
 -- flatParameters : Tensor 1D
@@ -73,3 +79,13 @@ function LogregOpfunc:loss(flatParameters)
    return self:runLoss(flatParameters)
 end
 
+-- ARGS:
+-- newX  : 1D or 2D Tensor
+-- theta : 1D Tensor
+-- RETURNS
+-- probabilies: 1D or 2D Tensor
+--              if newX is 1D, then of size nFeatures
+--              if newX is 2D, then of size newX:size(1) x nFeatures
+function LogregOpfunc:predict(newX, theta)
+   return self:runPredict(newX, theta)
+end

@@ -19,7 +19,9 @@ require 'torch'
 require 'unique'
 require 'validateAttributes'
 
+-------------------------------------------------------------------------------
 -- CONSTRUCTOR
+-------------------------------------------------------------------------------
 
 local LogregOpfuncNnBatch, parent = torch.class('LogregOpfuncNnBatch', 'LogregOpfunc')
 
@@ -52,7 +54,9 @@ function LogregOpfuncNnBatch:__init(X, y, s, nClasses, lambda)
    --printTableVariable('self')
 end
 
+-------------------------------------------------------------------------------
 -- PUBLIC METHODS
+-------------------------------------------------------------------------------
 
 -- return flat parameters that are a suitable starting point for optimization
 -- RETURNS
@@ -80,20 +84,47 @@ function LogregOpfuncNnBatch:runLoss(theta)
    assert(theta ~= nil, 'theta not supplied')
    assert(theta:nDimension() == 1, 'theta is not a 1D Tensor')
 
-   local loss, gradient = self:_lossGradient(theta)
+   local loss, gradient = self:_lossGradientPredictions(theta)
    assert(loss)
    assert(gradient)
 
    return loss, {gradient = gradient}
 end
 
+-- return predictions at newX matrix using specified theta
+-- ARGS
+-- newX           : 2D Tensor of new samples
+-- theta          : 1D Tensor
+-- RETURNS
+-- probabilities  : 2D Tensor of probabilities
+function LogregOpfuncNnBatch:predict(newX, theta)
+   assert(newX:nDimension() == 2, 'newX is not a 2D Tensor')
+   assert(newX:size(2) == self.X:size(2), 'newX has wrong number of features')
+
+   -- avoid construction of a new LogregOpfuncNnBatch by replacing and restoring field X
+   local currentX = self.X
+   self.X = newX
+   local _, _, logProbabilities = self:_lossGradientPredictions(theta)
+   local probabilities = torch.exp(logProbabilities)
+   self.X = currentX  -- restore field X
+   return probabilities
+end
+   
+
+
 -------------------------------------------------------------------------------
 -- PRIVATE METHODS
 -------------------------------------------------------------------------------
 
--- compute regularized loss and gradient for all samples
+-- compute regularized loss and gradient and predictions for all samples
 -- ref: torch/cogbits.com/doc/tutorials_supervised/
-function LogregOpfuncNnBatch:_lossGradient(theta)
+-- ARGS
+-- theta          : 1D Tensor of parameters
+-- RETURNS
+-- loss           : number
+-- gradient       ; 1D Tensor with same shape as theta
+-- logProbabilies : 1D Tensor of size self.nClasses
+function LogregOpfuncNnBatch:_lossGradientPredictions(theta)
    local vp, verboseLevel = makeVp(0, 'LogregOpfuncNnBatch:_lossGradient')
    local v = verboseLevel > 0
    if v then
@@ -177,7 +208,7 @@ function LogregOpfuncNnBatch:_lossGradient(theta)
       assertEq(gradientRegularizedVersion1, gradientRegularizedVersion2, .0001)
    end
 
-   return lossRegularized, gradientRegularized
+   return lossRegularized, gradientRegularized, predictions
 end
 
 

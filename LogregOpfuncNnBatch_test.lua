@@ -1,9 +1,7 @@
--- LogregOpfuncNnBatch_test.lua
+-- LogregOpfuncNnBatch.lua
 -- unit test
 
-require 'assertEq'
 require 'finiteDifferenceGradient'
-require 'makeVp'
 require 'LogregOpfuncNnBatch'
 require 'printVariable'
 require 'printAllVariables'
@@ -181,21 +179,43 @@ end
 
 -- Test the form of the returned values.
 -- The value of the returned values is tested in the tests of methods (below).
-local function _lossGradient_test(example)
-   local vp = makeVp(0, '_lossGradient_test')
+local function _lossGradientPredictions_test(example)
+   local vp = makeVp(0, '_lossGradientPredictions_test')
    
    local of = LogregOpfuncNnBatch(example.X, example.y, example.s, example.nClasses, example.lambda)
 
    local initialTheta = of:initialTheta()
-   local loss, gradient = of:_lossGradient(initialTheta)
+   local loss, gradient, logPredictions = of:_lossGradientPredictions(initialTheta)
+   vp(2, 'logPredictions', logPredictions)
    assert(type(loss) == 'number')
    assert(loss >= 0)
+   
    assert(gradient:nDimension() == 1)
    assert(gradient:size(1) == initialTheta:size(1))
+
+   assert(logPredictions:nDimension() == 2)
+   assert(logPredictions:size(1) == example.nSamples)
+   assert(logPredictions:size(2) == example.nClasses)
+
+   -- assert that sum(exp(logPredictions) == 1) and that each exp(logPrediction) is a probability
+   local predictions = torch.exp(logPredictions)
+   vp(2, 'predictions', predictions)
+   vp(2, 'example', example)
+   for sampleIndex = 1, example.nSamples do
+      for classIndex = 1, example.nClasses do
+         local prediction = predictions[sampleIndex][classIndex]
+         vp(2, 'prediction', prediction)
+         assert(prediction >= 0)
+         assert(prediction <= 1)
+      end
+      local sum = torch.sum(predictions[sampleIndex])
+      vp(2, 'sum', sum, 'preditions[sampleIndex]', predictions[sampleIndex])
+      assertEq(sum, 1.0, 0.001)  -- NOTE: the tolerance is needed; it cannot be too big
+   end
 end
 
-_lossGradient_test(makeRandomExample())
-_lossGradient_test(makeKnownExample())
+_lossGradientPredictions_test(makeRandomExample())
+_lossGradientPredictions_test(makeKnownExample())
    
 -------------------------------------------------------------------------------
 -- TEST PUBLIC METHODS
@@ -266,7 +286,7 @@ local function gradient_test_returns_same(lambda)
       local gradientFromPublicMethod = of:gradient(lossInfo)
       vp(2, 'lossInfo', lossInfo, 'gradientFromPublicMethod', gradientFromPublicMethod)
 
-      local loss2, gradientFromPrivateMethod = of:_lossGradient(randomTheta)
+      local loss2, gradientFromPrivateMethod = of:_lossGradientPredictions(randomTheta)
       vp(2, 'gradientFromPrivateMethod', gradientFromPrivateMethod)
 
       assertEq(gradientFromPublicMethod, gradientFromPrivateMethod, .0001)
@@ -321,4 +341,58 @@ if true then
    gradient_test(.001)  -- now test with the regularizer
 end
 
-print('ok LogregOpfuncNnOne')
+-------------------------------------------------------------------------------
+
+local function assertProbabilityVector(v)
+   assert(v:nDimension() == 1)
+   local sumV = 0
+   for i = 1, v:size(1) do 
+      local p = v[i]
+      assert(p >= 0)
+      assert(p <= 1)
+      sumV = sumV + p
+   end
+   assertEq(sumV, 1, .0001)
+end
+
+local function assertAllEqual(v)
+   local first = v[1]
+   for i = 2, v:size(1) do
+      assertEq(first, v[i], .0001)
+   end
+end
+
+local function predict_test()
+   local vp = makeVp(0, 'testPredict')
+   local lambda = 0
+   local example = makeRandomExample(lambda)
+   local of = LogregOpfuncNnBatch(example.X, example.y, example.s, example.nClasses, example.lambda)
+   local theta = of:initialTheta()
+
+   local newX = torch.rand(10, example.nFeatures)
+   local probabilities = of:predict(newX, theta)
+   vp(2, 'probabilities', probabilities)
+   assert(probabilities:nDimension() == 2)
+   assert(probabilities:size(1) == example.nSamples)
+   assert(probabilities:size(2) == example.nClasses)
+   for s = 1, example.nSamples do
+      assertProbabilityVector(probabilities[s])
+   end
+
+   -- test with known probabilities
+   local newX = torch.rand(10, example.nFeatures)
+   local theta = theta:zero() -- all zeroes ==> probabilities are equal
+   local probabilities = of:predict(newX, theta)
+   vp(2, 'probabilities', probabilities)
+   assert(probabilities:nDimension() == 2)
+   assert(probabilities:size(1) == example.nSamples)
+   assert(probabilities:size(2) == example.nClasses)
+   for s = 1, example.nSamples do
+      assertProbabilityVector(probabilities[s])
+      assertAllEqual(probabilities[s])
+   end
+end
+
+predict_test()
+
+print('ok LogregOpfuncNnBatch')
