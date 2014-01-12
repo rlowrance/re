@@ -101,18 +101,8 @@ function LogregOpfuncNnBatch:predict(newX, theta)
    assert(newX:nDimension() == 2, 'newX is not a 2D Tensor')
    assert(newX:size(2) == self.X:size(2), 'newX has wrong number of features')
 
-   -- construct new LogregOpfuncNnBatch for use in predictions
-   if true then
-      local nSamples = newX:size(1)
-      local newY = torch.Tensor(nSamples):fill(1)
-      local newS = torch.Tensor(nSamples):fill(1)
-      local opfunc = LogregOpfuncNnBatch(newX, newY, newS, self.nClasses, self.lambda)
-      local probabilities = opfunc:predict(newX, theta)
-      return probabilities
-   end
-
    -- avoid construction of a new LogregOpfuncNnBatch by replacing and restoring field X
-   if false then
+   if true then
       local currentX = self.X
       self.X = newX
       local _, _, logProbabilities = self:_lossGradientPredictions(theta)
