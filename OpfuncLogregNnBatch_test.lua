@@ -1,8 +1,8 @@
--- LogregOpfuncNnBatch.lua
+-- OpfuncLogregNnBatch.lua
 -- unit test
 
 require 'finiteDifferenceGradient'
-require 'LogregOpfuncNnBatch'
+require 'OpfuncLogregNnBatch'
 require 'printVariable'
 require 'printAllVariables'
 require 'printTableVariable'
@@ -34,7 +34,7 @@ local function makeRandomExample(lambda)
    local s = Random:uniform(nSamples, .0001, 1)
 
    local theta = torch.rand((nFeatures + 1) * nClasses)
-   local initialTheta = LogregOpfuncNnBatch(X, y, s, nClasses, lambda):initialTheta()
+   local initialTheta = OpfuncLogregNnBatch(X, y, s, nClasses, lambda):initialTheta()
    vp(2, 'theta', theta, 'initialTheta', initialTheta)
    assert(initialTheta:nDimension() == 1)
    assert(theta:size(1) == initialTheta:size(1))
@@ -61,7 +61,7 @@ end
 -- ARGS
 -- lambdaValue : optional number, value of lambda in the example
 -- RETURN
--- of      : instance of LogregOpfunc for the example
+-- of      : instance of OpfuncLogreg for the example
 -- example : table containing X, y, s, and other values
 local function makeKnownExample(lambdaValue)
    local vp = makeVp(0, 'makeKnownExample')
@@ -179,26 +179,26 @@ end
 
 -- Test the form of the returned values.
 -- The value of the returned values is tested in the tests of methods (below).
-local function _lossGradientPredictions_test(example)
-   local vp = makeVp(0, '_lossGradientPredictions_test')
+local function _gradientLossLogprobabilities_test(example)
+   local vp = makeVp(0, '_gradientLossLogprobabilities_test')
    
-   local of = LogregOpfuncNnBatch(example.X, example.y, example.s, example.nClasses, example.lambda)
+   local of = OpfuncLogregNnBatch(example.X, example.y, example.s, example.nClasses, example.lambda)
 
    local initialTheta = of:initialTheta()
-   local loss, gradient, logPredictions = of:_lossGradientPredictions(initialTheta)
-   vp(2, 'logPredictions', logPredictions)
-   assert(type(loss) == 'number')
-   assert(loss >= 0)
-   
+   local gradient, loss, logProbabilities = of:_gradientLossLogprobabilities(initialTheta)
+   vp(2, 'loss', loss, 'logPredictions', logProbabilities)
    assert(gradient:nDimension() == 1)
    assert(gradient:size(1) == initialTheta:size(1))
 
-   assert(logPredictions:nDimension() == 2)
-   assert(logPredictions:size(1) == example.nSamples)
-   assert(logPredictions:size(2) == example.nClasses)
+   assert(type(loss) == 'number')
+   assert(loss >= 0)
+   
+   assert(logProbabilities:nDimension() == 2)
+   assert(logProbabilities:size(1) == example.nSamples)
+   assert(logProbabilities:size(2) == example.nClasses)
 
    -- assert that sum(exp(logPredictions) == 1) and that each exp(logPrediction) is a probability
-   local predictions = torch.exp(logPredictions)
+   local predictions = torch.exp(logProbabilities)
    vp(2, 'predictions', predictions)
    vp(2, 'example', example)
    for sampleIndex = 1, example.nSamples do
@@ -214,8 +214,8 @@ local function _lossGradientPredictions_test(example)
    end
 end
 
-_lossGradientPredictions_test(makeRandomExample())
-_lossGradientPredictions_test(makeKnownExample())
+_gradientLossLogprobabilities_test(makeRandomExample())
+_gradientLossLogprobabilities_test(makeKnownExample())
    
 -------------------------------------------------------------------------------
 -- TEST PUBLIC METHODS
@@ -224,7 +224,7 @@ _lossGradientPredictions_test(makeKnownExample())
 -- test method initialTheta
 local function initialTheta_test(example)
    local vp = makeVp(0, 'initialTheta_test')
-   local of = LogregOpfuncNnBatch(example.X, example.y, example.s, example.nClasses, example.lambda)
+   local of = OpfuncLogregNnBatch(example.X, example.y, example.s, example.nClasses, example.lambda)
    local initialTheta = of:initialTheta()
    vp(2, 'initialTheta', initialTheta)
 
@@ -244,11 +244,11 @@ local function loss_test(lambda, makeExampleFunction)
    vp(1, 'lambda', lambda, 'makeExampleFunction', makeExampleFunction)
 
    local example = makeExampleFunction(lambda)
-   local of = LogregOpfuncNnBatch(example.X, example.y, example.s, example.nClasses, lambda)
+   local of = OpfuncLogregNnBatch(example.X, example.y, example.s, example.nClasses, lambda)
 
    -- test on the batch (which is all of the samples)
    local theta = example.theta 
-   local loss, lossInfo = of:loss(theta)
+   local loss = of:loss(theta)
 
    -- test the loss, which may or may not have an expected value
    assert(type(loss) == 'number')
@@ -257,8 +257,6 @@ local function loss_test(lambda, makeExampleFunction)
       vp(2, 'loss', loss, 'expected loss', example.expectedLossOnBatch)
       assertEq(loss,  example.expectedLossOnBatch, .0001)
    end
-
-   assert(lossInfo)  -- must be something, but content is a secret
 end
 
 -- test on example with known loss
@@ -275,18 +273,17 @@ loss_test(.01, makeRandomExample)
 local function gradient_test_returns_same(lambda)
    local vp = makeVp(0, 'gradient_test_returns_same')
    local example = makeKnownExample(lambda)
-   local of = LogregOpfuncNnBatch(example.X, example.y, example.s, example.nClasses, example.lambda)
+   local of = OpfuncLogregNnBatch(example.X, example.y, example.s, example.nClasses, example.lambda)
    local theta = of:initialTheta()  -- use random theta
 
    local nTests = 10
    for test = 1, nTests do
       local randomTheta = torch.rand(theta:size(1))
 
-      local loss, lossInfo = of:loss(randomTheta)
-      local gradientFromPublicMethod = of:gradient(lossInfo)
-      vp(2, 'lossInfo', lossInfo, 'gradientFromPublicMethod', gradientFromPublicMethod)
+      local gradientFromPublicMethod = of:gradient(randomTheta)
+      vp(2, 'gradientFromPublicMethod', gradientFromPublicMethod)
 
-      local loss2, gradientFromPrivateMethod = of:_lossGradientPredictions(randomTheta)
+      local gradientFromPrivateMethod = of:_gradientLossLogprobabilities(randomTheta)
       vp(2, 'gradientFromPrivateMethod', gradientFromPrivateMethod)
 
       assertEq(gradientFromPublicMethod, gradientFromPrivateMethod, .0001)
@@ -302,17 +299,16 @@ local function gradient_test_gradient_value(lambda)
       local vp = makeVp(0, 'gradient_test_gradient_value::test')
       vp(1, 'makeExampleFunction', makeExampleFunction, 'lambda', lambda)
       local example = makeExampleFunction(lambda)
-      local of = LogregOpfuncNnBatch(example.X, example.y, example.s, example.nClasses, example.lambda)
+      local of = OpfuncLogregNnBatch(example.X, example.y, example.s, example.nClasses, example.lambda)
       local sampleIndex = 1
 
       local function f(theta)
          vp(3,'theta in f', theta)
-         local loss, lossInfo = of:loss(theta)
+         local loss = of:loss(theta)
          return loss
       end
 
-      local loss, lossInfo = of:loss(example.theta)
-      local gradient = of:gradient(lossInfo)
+      local gradient = of:gradient(example.theta)
 
       local eps = 1e-5
       local eps = .0001  -- just for testing
@@ -366,11 +362,11 @@ local function predict_test()
    local vp = makeVp(0, 'testPredict')
    local lambda = 0
    local example = makeRandomExample(lambda)
-   local of = LogregOpfuncNnBatch(example.X, example.y, example.s, example.nClasses, example.lambda)
+   local of = OpfuncLogregNnBatch(example.X, example.y, example.s, example.nClasses, example.lambda)
    local theta = of:initialTheta()
 
    local newX = torch.rand(10, example.nFeatures)
-   local probabilities = of:predict(newX, theta)
+   local probabilities = of:predictions(newX, theta)
    vp(2, 'probabilities', probabilities)
    assert(probabilities:nDimension() == 2)
    assert(probabilities:size(1) == example.nSamples)
@@ -382,7 +378,7 @@ local function predict_test()
    -- test with known probabilities
    local newX = torch.rand(10, example.nFeatures)
    local theta = theta:zero() -- all zeroes ==> probabilities are equal
-   local probabilities = of:predict(newX, theta)
+   local probabilities = of:predictions(newX, theta)
    vp(2, 'probabilities', probabilities)
    assert(probabilities:nDimension() == 2)
    assert(probabilities:size(1) == example.nSamples)
@@ -395,4 +391,4 @@ end
 
 predict_test()
 
-print('ok LogregOpfuncNnBatch')
+print('ok OpfuncLogregNnBatch')
