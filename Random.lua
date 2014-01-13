@@ -2,8 +2,8 @@
 -- generate Tensors with random numbers
 
 if false then
-   r = Random():Integer(nSamples, lowest, highest) -- uniform in [lowest, highest]
-   r = Random():Uniform(nSamples, lowest, highest) -- reals
+   r = Random():integer(nSamples, lowest, highest) -- uniform integers in [lowest, highest]
+   r = Random():uniform(nSamples, lowest, highest) -- uniform reals in [lowest, highest]
 end
 
 require 'round'
