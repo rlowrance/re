@@ -9,10 +9,11 @@ if false then
    number= of:loss(flatParameters)
    tensor1D = of:gradient(flatParameters)
    number, tensor1D = of:lossGradient(flatParameters)
-   tensor = of:predictions(newX, theta)  -- shape of Tensor depends on subsclass
+   object = of:predictions(newX, theta)  -- type of object depends on subclass
 end
 
 require 'printAllVariables'
+require 'printTableVariable'
 require 'torch'
 
 -------------------------------------------------------------------------------
