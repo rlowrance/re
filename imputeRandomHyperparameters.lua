@@ -19,6 +19,8 @@
 
 require 'makeVp'
 
+stop('rework this program to draw geometrically-spaced samples in all ranges')
+
 local function round(x)
    return math.floor(x + 0.5)
 end
