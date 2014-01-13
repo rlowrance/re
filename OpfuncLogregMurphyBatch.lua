@@ -1,21 +1,23 @@
--- LogregOpfuncMurphyBatch.lua
--- implementation of abstract class LogregOpfunc
+-- OpfuncLogregMurphyBatch.lua
+-- implementation of abstract class OpfuncLogreg
 -- using Murphy's method for all samples on each iteration (called batch method)
 
 if false then
    -- API overview
-   of = LogregOpfuncMurphyBatch(X, y, s, nClasses, lambda)
+   of = OpfuncLogregMurphyBatch(X, y, s, nClasses, lambda)
 
-   flatParameters = of:runInitialTheta()
-   num, lossInfo = of:runLoss(flatParameters)
-   tensor = of:runGradient(lossInfo)
+   flatParameters = of:initialTheta()
+   tensor = of:gradient(flatParameters)
+   number = of:loss(flatParameters)
+   number, tensor1D = of:lossGradient(flatParameters)
+   tensor2D = of:predictions(newX, flatParameters)  -- newX is 2D (NOT IMPLEMENTED)
 end
 
 require 'augment'
 require 'ifelse'
 require 'keyboard'
 require 'kroneckerProduct'
-require 'LogregOpfunc'
+require 'OpfuncLogreg'
 require 'printAllVariables'
 require 'printTableValue'
 require 'printTableVariable'
@@ -23,12 +25,14 @@ require 'printVariable'
 require 'torch'
 
 
+-------------------------------------------------------------------------------
 -- CONSTRUCTOR
+-------------------------------------------------------------------------------
 
-local LogregOpfuncMurphyBatch, parent = torch.class('LogregOpfuncMurphyBatch', 'LogregOpfunc')
+local OpfuncLogregMurphyBatch, parent = torch.class('OpfuncLogregMurphyBatch', 'OpfuncLogreg')
 
-function LogregOpfuncMurphyBatch:__init(X, y, s, nClasses, lambda)
-   local vp, verboseLevel = makeVp(0, 'LogregOpfuncMurphyBatch:__init')
+function OpfuncLogregMurphyBatch:__init(X, y, s, nClasses, lambda)
+   local vp, verboseLevel = makeVp(0, 'OpfuncLogregMurphyBatch:__init')
    vp(1, 'X', X, 'y', y, 's', s, 'nClasses', nClasses, 'lambda', lambda)
 
    parent.__init(self, X, y, s, nClasses, lambda)
@@ -75,7 +79,7 @@ end
 -- return parameters that are a suitable starting point for searching for optimal parameters
 -- RETURNS
 -- theta : 1D Tensor size (nClasses -1) * (nFeatures + 1)
-function LogregOpfuncMurphyBatch:runInitialTheta()
+function OpfuncLogregMurphyBatch:runrunInitialTheta()
    local theta = torch.Tensor(self.nUserParameters)
    local stdv = 1 / math.sqrt(self.nFeatures) -- mimic Torch's nn.Linear
    theta:uniform(-stdv, stdv)
@@ -84,14 +88,42 @@ end
 
 -- return gradient at same parameters as previous call to loss function
 -- ARGS
--- lossInfo : table from the loss method
+-- theta    : flat parameters
 -- RETURNS
 -- gradient : 1D Tensor size (nClasses - 1) * (nFeatures + 1)
-function LogregOpfuncMurphyBatch:runGradient(lossInfo)
-   assert(type(lossInfo) == 'table')
-   return self:_gradient_logLikelihood(lossInfo) + 
-          self:_gradient_regularizer(lossInfo) * self.lambda
+function OpfuncLogregMurphyBatch:runrunGradient(theta)
+   local loss, gradient = self:runrunLossGradient(theta)
+   return gradient
 end
+
+function OpfuncLogregMurphyBatch:runrunLoss(theta)
+   -- there is a little bit of extra computation because lossInfo is computed but not used
+   -- this approach avoids duplicating code or refactoring the _lossLossinfoProbabilities method
+   local loss, lossInfo, probabilities = self:_lossLossinfoProbabilities(theta)
+   return loss
+end
+
+
+function OpfuncLogregMurphyBatch:runrunLossGradient(theta)
+   assert(theta:nDimension() == 1 and theta:size(1) == self.nUserParameters)
+
+   local loss, lossInfo, probabilities = self:_lossLossinfoProbabilities(theta)
+   local gradient = self:_gradientFromLossInfo(lossInfo)
+
+   return loss, gradient
+end
+
+-- don't bother to implement because timing tests show that this implementation
+-- of OpfuncLogreg is slower than NnBatch and hence will not be used
+function OpfuncLogregMurphyBatch:runrunPredictions(newX, theta)
+   error('not implemented')
+   local loss, gradient, probabilities = self:runrunLossGradientPredictions(theta)
+   return probabilities
+end
+
+-------------------------------------------------------------------------------
+-- PRIVATE METHODS
+-------------------------------------------------------------------------------
 
 -- return loss and probs at parameters
 -- ARGS
@@ -101,7 +133,8 @@ end
 -- lossInfo       : table needed for call to method gradient
 --                  the table avoids recomputing values in both the loss and
 --                  gradient methods
-function LogregOpfuncMurphyBatch:runLoss(theta)
+-- probabilities  : Tensor
+function OpfuncLogregMurphyBatch:_lossLossinfoProbabilities(theta)
    assert(theta:nDimension() == 1 and theta:size(1) == self.nUserParameters)
 
    local thetaInfo = self:_loss_structureTheta(theta)
@@ -117,19 +150,21 @@ function LogregOpfuncMurphyBatch:runLoss(theta)
    lossInfo.theta = theta
    lossInfo.thetaInfo = thetaInfo
 
-   return loss, lossInfo
+   return loss, lossInfo, probabilities
 end
 
--------------------------------------------------------------------------------
--- PRIVATE METHODS
--------------------------------------------------------------------------------
+function OpfuncLogregMurphyBatch:_gradientFromLossInfo(lossInfo)
+   assert(type(lossInfo) == 'table')
+   return self:_gradient_logLikelihood(lossInfo) + 
+          self:_gradient_regularizer(lossInfo) * self.lambda
+end
 
 
 -------------------------------------------------------------------------------
 -- _gradient_logLikelihood
 -------------------------------------------------------------------------------
 
-function LogregOpfuncMurphyBatch:_gradient_logLikelihood(lossInfo, implementation)
+function OpfuncLogregMurphyBatch:_gradient_logLikelihood(lossInfo, implementation)
    implementation = implementation or 4
    if implementation == 1 then
       return self:_gradient_logLikelihood_implementation_1(lossInfo)
@@ -145,7 +180,7 @@ function LogregOpfuncMurphyBatch:_gradient_logLikelihood(lossInfo, implementatio
 end
 
 -- version 1: straight from Murphy b 253
-function LogregOpfuncMurphyBatch:_gradient_logLikelihood_implementation_1(lossInfo)
+function OpfuncLogregMurphyBatch:_gradient_logLikelihood_implementation_1(lossInfo)
 
    local function gradient_i(i)
       local mu = lossInfo.probabilities[i]
@@ -172,7 +207,7 @@ function LogregOpfuncMurphyBatch:_gradient_logLikelihood_implementation_1(lossIn
 end
 
 -- use pre-computed self.Xaugmented
-function LogregOpfuncMurphyBatch:_gradient_logLikelihood_implementation_2(lossInfo)
+function OpfuncLogregMurphyBatch:_gradient_logLikelihood_implementation_2(lossInfo)
    --local vp = makeVp(0, '_gradient_logLikelihood_implementation_2')
 
    local function gradient_i(i)
@@ -200,7 +235,7 @@ function LogregOpfuncMurphyBatch:_gradient_logLikelihood_implementation_2(lossIn
 end
 
 -- use pre-computed self.Y
-function LogregOpfuncMurphyBatch:_gradient_logLikelihood_implementation_3(lossInfo)
+function OpfuncLogregMurphyBatch:_gradient_logLikelihood_implementation_3(lossInfo)
 
    local function gradient_i(i)
       local mu = lossInfo.probabilities[i]
@@ -225,7 +260,7 @@ function LogregOpfuncMurphyBatch:_gradient_logLikelihood_implementation_3(lossIn
 end
 
 -- compute errors all at once
-function LogregOpfuncMurphyBatch:_gradient_logLikelihood_implementation_4(lossInfo)
+function OpfuncLogregMurphyBatch:_gradient_logLikelihood_implementation_4(lossInfo)
    local Errors = lossInfo.probabilities - self.Y
 
    local Gradients = torch.Tensor(self.nSamples, self.nUserParameters)
@@ -247,7 +282,7 @@ end
 -- _gradientRegularizer
 -------------------------------------------------------------------------------
 
-function LogregOpfuncMurphyBatch:_gradient_regularizer(lossInfo, implementation)
+function OpfuncLogregMurphyBatch:_gradient_regularizer(lossInfo, implementation)
    implementation = implementation or 1
    if implementation == 1 then
       return self:_gradient_regularizer_implementation_1(lossInfo)
@@ -256,7 +291,7 @@ function LogregOpfuncMurphyBatch:_gradient_regularizer(lossInfo, implementation)
    end
 end
 
-function LogregOpfuncMurphyBatch:_gradient_regularizer_implementation_1(lossInfo)
+function OpfuncLogregMurphyBatch:_gradient_regularizer_implementation_1(lossInfo)
    local weights = lossInfo.thetaInfo.weights
    local regularizerGradient = lossInfo.theta:clone():zero()
    local regularizerIndex = 0
@@ -293,7 +328,7 @@ end
 -- log (avg prob) ~= -8
 -- l(theta) <= nSamples * nClasses * log(avg prob) = -24000
 -- HENCE, risk of overflow is very low for use cases planned
-function LogregOpfuncMurphyBatch:_loss_logLikelihood(probs)
+function OpfuncLogregMurphyBatch:_loss_logLikelihood(probs)
    local logProbs = torch.log(probs)
    
    local logLikelihood = 0
@@ -323,7 +358,7 @@ end
 -- RETURNS
 -- probs  : 2D Tensor size nFeatures x nClasses
 --          prob[i][j] == probability sample i is in class j
-function LogregOpfuncMurphyBatch:_loss_probabilities(scores)
+function OpfuncLogregMurphyBatch:_loss_probabilities(scores)
    local unnormalizedProbabilities = scores:exp() 
    local rowsums = torch.sum(unnormalizedProbabilities, 2)
    local rowsumMatrix = torch.Tensor(rowsums:storage(), 1, self.nSamples, 1, self.nClasses, 0)
@@ -336,7 +371,7 @@ end
 -------------------------------------------------------------------------------
 
 -- regularizer
-function LogregOpfuncMurphyBatch:_loss_regularizer(thetaInfo)
+function OpfuncLogregMurphyBatch:_loss_regularizer(thetaInfo)
    local weights = thetaInfo.weights
    local squaredWeights = torch.cmul(weights, weights)
    local regularizer = torch.sum(squaredWeights)
@@ -356,7 +391,7 @@ end
 -- NOTE
 -- In timing tests. implementation 2 take about 0.012 of the CPU time
 -- relative to implementation 1 (it's about 100 times faster)
-function LogregOpfuncMurphyBatch:_loss_scores(thetaInfo, implementation)
+function OpfuncLogregMurphyBatch:_loss_scores(thetaInfo, implementation)
    implementation = implementation or 2
    if implementation == 1 then
       return self:_loss_scores_implementation_1(thetaInfo)
@@ -368,7 +403,7 @@ function LogregOpfuncMurphyBatch:_loss_scores(thetaInfo, implementation)
 end
 
 -- compute scores by explicitly looping over samples and classes
-function LogregOpfuncMurphyBatch:_loss_scores_implementation_1(thetaInfo)
+function OpfuncLogregMurphyBatch:_loss_scores_implementation_1(thetaInfo)
    local biases = thetaInfo.biases
    local weights = thetaInfo.weights
 
@@ -385,7 +420,7 @@ function LogregOpfuncMurphyBatch:_loss_scores_implementation_1(thetaInfo)
 end
 
 -- compute scores in one matrix multiplication
-function LogregOpfuncMurphyBatch:_loss_scores_implementation_2(thetaInfo)
+function OpfuncLogregMurphyBatch:_loss_scores_implementation_2(thetaInfo)
    return torch.mm(self.Xaugmented, thetaInfo.W:t())
 end
 
@@ -401,7 +436,7 @@ end
 --             biases    : 1D Tensor size (nClasses - 1)
 --             weights   : 2D Tensor size (nClasses - 1) x nFeatures
 --             W         ; 2D Tensor size nClasses x (nFeatures + 1)
-function LogregOpfuncMurphyBatch:_loss_structureTheta(theta)
+function OpfuncLogregMurphyBatch:_loss_structureTheta(theta)
    local nClasses = self.nClasses
    local nFeatures = self.nFeatures
 
