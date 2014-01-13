@@ -1,17 +1,19 @@
--- LogregOpfunc.lua
+-- OpfuncLogreg.lua
 -- abstract class for opfunc for salience-weighted logistic regression
 
 if false then
-   -- API overview
-   of = LogregOpfuncSUBCLASS(X, y, s, nClasses, lambda)
+   -- API overview (version 2 API)
+   of = OpfuncLogregSUBCLASS(X, y, s, nClasses, lambda)
 
    flatParameters = of:initialTheta()
-   num, lossInfo = of:loss(flatParameters)
-   tensor = of:gradient(lossInfo)
+   number= of:loss(flatParameters)
+   tensor1D = of:gradient(flatParameters)
+   loss, tensor1D = of:lossGradient(flatParameters)
+   tensor = of:predictions(newX, theta)
    
-   probabilities = of:predict(newX, theta)  -- return probabiliites that each Class is seen
 end
 
+require 'Opfunc'
 require 'printAllVariables'
 require 'torch'
 
@@ -19,9 +21,10 @@ require 'torch'
 -- CONSTRUCTOR
 -------------------------------------------------------------------------------
 
-local LogregOpfunc = torch.class('LogregOpfunc')
+local OpfuncLogreg, parent = torch.class('OpfuncLogreg', 'Opfunc')
 
-function LogregOpfunc:__init(X, y, s, nClasses, lambda)
+function OpfuncLogreg:__init(X, y, s, nClasses, lambda)
+   parent.__init()
    -- validate arguments
    assert(X, 'X not supplied')
    assert(X:nDimension() == 2, 'X is not a 2D Tensor')
@@ -56,36 +59,47 @@ end
 -- PUBLIC METHODS
 -------------------------------------------------------------------------------
 
+-- return a tensor (flat parameters) with reasonable initial values
 -- RETURN
 -- flatParameters : Tensor 1D
-function LogregOpfunc:initialTheta()
-   return self:runInitialTheta()
+function Opfunc:runinitialTheta()
+   return self:runrunInitialTheta()
 end
 
+-- return gradient at the flat parameters
 -- ARGS:
--- lossInfo : table returned by method loss()
+-- flatParameters : table returned by method loss()
 -- RETURNS:
--- gradient : Tensor 1D (includes gradient of regularizer)
-function LogregOpfunc:gradient(lossInfo)
-   return self:runGradient(lossInfo)
+-- gradient       : Tensor 1D (includes gradient of regularizer)
+function Opfunc:rungradient(flatParameters)
+   return self:runrunGradient(flatParameters)
 end
 
+-- return the loss at the flat parameters
 -- ARGS:
 -- flatParameters : Tensor 1D
--- RETURNS
--- loss     : number, regularized loss
--- lossInfo : table, argument for method gradient()
-function LogregOpfunc:loss(flatParameters)
-   return self:runLoss(flatParameters)
+-- RETURNS:
+-- gradient       : Tensor 1D (includes gradient of regularizer)
+function Opfunc:runloss(flatParameters)
+   return self:runrunLoss(flatParameters)
 end
 
+-- return the loss and gradient at the flat parameters
 -- ARGS:
--- newX  : 1D or 2D Tensor
--- theta : 1D Tensor
+-- flatParameters : Tensor 1D
+-- RETURNS:
+-- loss           : number
+-- gradient       : Tensor 1D (includes gradient of regularizer)
+function Opfunc:runlossGradient(flatParameters)
+   return self:runrunLossGradient(flatParameters)
+end
+
+-- return predictions at new features X using flat parameters
+-- ARGS:
+-- newX           : 2D Tensor, one row per observation
+-- flatParameters : 1D Tensor
 -- RETURNS
--- probabilies: 1D or 2D Tensor
---              if newX is 1D, then of size nFeatures
---              if newX is 2D, then of size newX:size(1) x nFeatures
-function LogregOpfunc:predict(newX, theta)
-   return self:runPredict(newX, theta)
+-- probabilies    : 2D Tensor, shape depends on subclass
+function Opfunc:runpredictions(newX, flatParameters)
+   return self:runrunPredictions(newX, flatParameters)
 end
