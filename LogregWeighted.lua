@@ -4,7 +4,7 @@
 if false then
    -- API overview
    model = LogregWeightedSUBCLASS(X, y, s, nClasses, lambda)
-   optimalTheta, fitInfo = model:fit(fittingOptions)
+   fitInfo = model:fit(fittingOptions)  -- returns table that depends on the concrete class
    
    -- prediction using the optimal theta or any theta
    probs, class = model:predict(newX1D, theta)    -- returns number of the predicted class
@@ -55,9 +55,7 @@ end
 
 -- ARGS:
 -- fittingOptions : unexamined, depends on concrete subclass
--- RETURNS:
--- optimalTheta : 1D Tensor of optimal parameters relative to fittingOptions
--- fitInfo      : table, content depends on concrete subclass  
+-- RETURNS: nil
 function LogregWeighted:fit(fittingOptions)
    return self:runFit(fittingOptions)
 end
