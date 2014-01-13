@@ -9,7 +9,7 @@ if false then
    number= of:loss(flatParameters)
    tensor1D = of:gradient(flatParameters)
    loss, tensor1D = of:lossGradient(flatParameters)
-   tensor = of:predictions(newX, theta)
+   tensor2D = of:predictions(newX, theta)  -- newX is 2D Tensor
    
 end
 
@@ -24,7 +24,7 @@ require 'torch'
 local OpfuncLogreg, parent = torch.class('OpfuncLogreg', 'Opfunc')
 
 function OpfuncLogreg:__init(X, y, s, nClasses, lambda)
-   parent.__init()
+   parent.__init(self)
    -- validate arguments
    assert(X, 'X not supplied')
    assert(X:nDimension() == 2, 'X is not a 2D Tensor')
@@ -62,7 +62,7 @@ end
 -- return a tensor (flat parameters) with reasonable initial values
 -- RETURN
 -- flatParameters : Tensor 1D
-function Opfunc:runinitialTheta()
+function Opfunc:runInitialTheta()
    return self:runrunInitialTheta()
 end
 
@@ -71,7 +71,7 @@ end
 -- flatParameters : table returned by method loss()
 -- RETURNS:
 -- gradient       : Tensor 1D (includes gradient of regularizer)
-function Opfunc:rungradient(flatParameters)
+function Opfunc:runGradient(flatParameters)
    return self:runrunGradient(flatParameters)
 end
 
@@ -80,7 +80,7 @@ end
 -- flatParameters : Tensor 1D
 -- RETURNS:
 -- gradient       : Tensor 1D (includes gradient of regularizer)
-function Opfunc:runloss(flatParameters)
+function Opfunc:runLoss(flatParameters)
    return self:runrunLoss(flatParameters)
 end
 
@@ -90,7 +90,7 @@ end
 -- RETURNS:
 -- loss           : number
 -- gradient       : Tensor 1D (includes gradient of regularizer)
-function Opfunc:runlossGradient(flatParameters)
+function Opfunc:runLossGradient(flatParameters)
    return self:runrunLossGradient(flatParameters)
 end
 
@@ -100,6 +100,6 @@ end
 -- flatParameters : 1D Tensor
 -- RETURNS
 -- probabilies    : 2D Tensor, shape depends on subclass
-function Opfunc:runpredictions(newX, flatParameters)
+function Opfunc:runPredictions(newX, flatParameters)
    return self:runrunPredictions(newX, flatParameters)
 end
