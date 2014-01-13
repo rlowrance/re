@@ -5,6 +5,8 @@ require 'LogregWeightedNnBatch'
 require 'makeVp'
 require 'printAllVariables'
 require 'printTableVariable'
+require 'printVariable'
+require 'Random'
 
 -------------------------------------------------------------------------------
 -- make test objects (fixtures in unit test frameworks)
@@ -13,20 +15,22 @@ require 'printTableVariable'
 -- create random data about the same size as the problem of most interest
 -- RETURNS
 -- X, y, s, nCLasses : synthetic data
--- actualTheta       : actual parameters used to generate y from X and s
+-- actualTheta       : actual parameters used to generate y from X
 local function makeTrainingData(useSaliences)
    local nSamples = 60
    local nFeatures = 8
    local nClasses = 14
    local lambda = 0       -- arbitrary value needed for APIs
    if true then
-      nSamples = 10
-      print('revert to 60 samples')
+      nSamples = 5
+      nFeatures = 2
+      nClasses = 3
+      print('revert to 60 samples, 8 features, and 14 classes')
    end
 
    -- randomly generate data
    local X = torch.rand(nSamples, nFeatures)
-   local y = torch.rand(nSamples)  -- the y values will be fixed up once we know theta
+   local y = Random():integer(nSamples, 1, nClasses)  -- class numbers are fixed up below
    local s 
    if useSaliences then
       s = torch.abs(torch.rand(nSamples)) -- saliences must be non-negative
@@ -44,9 +48,10 @@ local function makeTrainingData(useSaliences)
    --printTableVariable('model')
 
    local probs, y = model:predict(X, actualTheta) -- predict using training data
+   --printVariable('probs') printVariable('y')
    assert(probs:nDimension() == 2)
-   assert(prob:size(1) == nSamples)
-   assert(prob:size(2) == nClasses)
+   assert(probs:size(1) == nSamples)
+   assert(probs:size(2) == nClasses)
    assert(y:nDimension() == 1)
    assert(y:size(1) == nSamples)
 
@@ -118,17 +123,26 @@ local function testFit()
    local lambda = 0.0001
    local model = makeModel(useSaliences, lambda)
 
+   local function nextStepSizes(currentStepSize)
+      return{currentStepSize, 0.5 * currentStepSize, 1.5 * currentStepSize}
+   end
+
    local fittingOptions = {
       method = 'bottouEpoch',
+      initialStepSize = 1,
       nEpochsBeforeAdjustingStepSize = 1,
+      nextStepSizes = nextStepSizes,
+      nSteps = 2,    
       maxEpochs = 10,
       toleranceLoss = .1,
       toleranceTheta = .1}
-   local optimalTheta, fitInfo = model:fit(fittingOptions)
-   assert(optimalTheta:nDimension() == 1)
-   assert(type(fitInfo) == 'table')
+   local fitInfo = model:fit(fittingOptions)
    printTableVariable('fitInfo')
-   error('test optimalTheta and fitInfo')
+   assert(type(fitInfo) == 'table')
+   vp(2, 'convergedReason', fitInfo.convergedReason)
+   vp(2, 'nEpochsUntilConvergence', fitInfo.nEpochsUntilConvergence)
+   vp(2, 'optimalTheta', fitInfo.optimalTheta)
+   error('write tests')
 end
 
 testFit()

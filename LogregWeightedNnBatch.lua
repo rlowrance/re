@@ -12,6 +12,8 @@ require 'keyWithMinimumValue'
 require 'LogregOpfuncNnBatch'
 require 'LogregWeighted'
 require 'makeVp'
+require 'printAllVariables'
+require 'printTableVariable'
 
 -------------------------------------------------------------------------------
 -- CONSTRUCTOR
@@ -22,6 +24,7 @@ local LogregWeightedNnBatch, parent = torch.class('LogregWeightedNnBatch', 'Logr
 function LogregWeightedNnBatch:__init(X, y, s, nClasses, lambda)
    parent.__init(self, X, y, s, nClasses, lambda)
    self.opfunc = LogregOpfuncNnBatch(X, y, s, nClasses, lambda)
+   --printTableVariable('self')
 end
 
 -------------------------------------------------------------------------------
@@ -52,6 +55,7 @@ end
 -- probs         ; 2D Tensor
 -- predictions   : 1D Tensor
 function LogregWeightedNnBatch:runPredict(newX, theta)
+   printAllVariables()
    local probs = self.opfunc:predict(newX, theta)
 
    local nSamples = newX:size(1)
@@ -67,28 +71,44 @@ end
 -- PRIVATE METHODS
 -------------------------------------------------------------------------------
 
+function LogregWeightedNnBatch:_lossAfterNSteps(stepSize, startingTheta, nSteps)
+   local nextTheta = startingTheta
+   local loss = nil
+   for stepNumber = 1, nSteps do
+      -- ISSUE: the computes the first loss (at startingTheta) over and over
+      nextTheta, loss = self:_step(stepSize, nextTheta)
+   end
+
+   return nextTheta, loss
+end
 
 -- adjust the step size by testing several choices and return the best
 -- "best" means the stepsize that reduces the current loss the most
 -- ARGS
 -- fittingOptions  : table
--- stepSize        : number > 0
+-- currentStepSize        : number > 0
 -- theta           : 1D Tensor
 -- RETURNS
 -- bestStepSize    : number
 -- nextTheta       : 1D Tensor
 -- nextLoss        : number
-function LogregWeightedNnBatch:_adjustStepSizeAndStep(fittingOptions, stepSize, theta)
+function LogregWeightedNnBatch:_adjustStepSizeAndStep(fittingOptions, currentStepSize, theta)
+   local vp = makeVp(2, '_adjustStepSizeAndStep')
+   vp(1, 'currentStepSize', currentStepSize)
    local possibleNextStepSizes = fittingOptions.nextStepSizes(currentStepSize)
+   vp(2, 'possibleNextStepSizes', possibleNextStepSizes)
    local losses = {}
-   local thetas = {}
+   local nextThetas = {}
+   local nSteps = fittingOptions.nSteps
    for i, stepSize in ipairs(possibleNextStepSizes) do
-      local loss, theta = self:_loss(stepSize, theta) 
+      local nextTheta, loss = self:_lossAfterNSteps(stepSize, theta, nSteps)
       losses[stepSize] = loss
-      thetas[stepSize] = theta
+      nextThetas[stepSize] = nextTheta
+      vp(2, 'stepSize', stepSize, 'loss', loss)
    end
-   local bestStepSize = keyWithMinimumValue(loss)
-   return bestStepSize, thetas[bestStepSize], losses[bestStepSize]
+   local bestStepSize = keyWithMinimumValue(losses)
+   vp(1, 'bestStepSize', bestStepSize)
+   return bestStepSize, nextThetas[bestStepSize], losses[bestStepSize]
 end
 
 -- determine if we have converged
@@ -125,41 +145,51 @@ end
 --                  .maxEpochs : number
 --                  .toleranceLoss : number
 --                  .toleranceTheta : number
--- RETURNS nil
--- SIDE EFFECTS: set these fields in self
--- .convergedReason         : string
--- .nEpochsUntilConvergence : number
--- .optimalTheta            : 1D Tensor
+-- RETURNS:
+-- fitInfo : table with these fields
+--           .convergedReason         : string
+--           .nEpochsUntilConvergence : number
+--           .optimalTheta            : 1D Tensor
+-- SIDE EFFECTS: set self.fitInfo
 function LogregWeightedNnBatch:_fitBottouEpoch(fittingOptions)
+   local vp = makeVp(2, '_fitBottouEpoch')
    assert(fittingOptions.initialStepSize ~= nil, 'missing fittingOptions.initialStepSize')
    assert(fittingOptions.initialStepSize > 0, 'fittingOptions.initialStepSize not positive')
 
-   -- initial loop
-   local previousTheta = opfunc:initialTheta()
+   -- initialize loop
+   local previousTheta = self.opfunc:initialTheta()
    local stepSize = fittingOptions.initialStepSize
    local previousLoss = nil
    local nEpochs = 0
 
    repeat -- until convergence
-      if self._timeToAdjustStepSize(nEpochs, fittingOptions) then
+      vp(2, 'nEpochs', nEpochs, 'stepSize', stepSize)
+      if self:_timeToAdjustStepSize(nEpochs, fittingOptions) then
          -- adjust stepsize and take a step with the adjusted size
-         stepSize, nextTheta, nextLoss = self:_adjustStepSizeAndPages(fittingOptions, stepSize, previousTheta)
+         vp(2, 'adjusting step size and stepping')
+         stepSize, nextTheta, nextLoss = self:_adjustStepSizeAndStep(fittingOptions, stepSize, previousTheta)
+         print('TODO: update nEpochs, accounting for the search')
       else
          -- take a step with the current stepsize
+         vp(2, 'stepping with current step size')
          nextTheta, nextLoss = self:_step(stepSize, previousTheta)
       end
       
-      nEpochs = nEpochs + 1
+      nEpochs = nEpochs + 1  -- move this update to the _step() method
 
       local hasConverged, convergedReason = self:_converged(fittingOptions, 
                                                             nEpochs, 
                                                             nextTheta, previousTheta, 
                                                             nextLoss, previousLoss)
       if hasConverged then
-         self.convergedReason = convergedReason
-         self.nEpochsUntilConvergence = nEpochs
-         self.optimalTheta = nextTheta
-         return
+         local fitInfo = {
+            convergedReason = convergedReason,
+            nEpochsUntilConvergence = nEpochs,
+            optimalTheta = nextTheta
+         }
+         self.fitInfo = fitInfo
+         vp(1, 'fitInfo', fitInfo)
+         return fitInfo
       end
       
       prevLoss = nextLoss
@@ -172,8 +202,22 @@ end
 -- nextTheta : 1D Tensor, theta after the step
 -- loss      : number, loss at the theta before the step
 function LogregWeightedNnBatch:_step(stepSize, theta)
+   local vp = makeVp(0, '_step')
+   vp(1, 'stepSize', stepSize)
    local loss, lossInfo = self.opfunc:loss(theta)
    local gradient = self.opfunc:gradient(lossInfo)
-   local nextTheta = previousTheta + gradient * stepSize
+   vp(2, 'theta', theta)
+   local temp = gradient * stepSize
+   local nextTheta = theta + gradient * stepSize
    return nextTheta, loss
+end
+
+-- determine if the step size should be adjusted
+-- ARGS
+-- nEpochs : number of epochs already completed, in [0, infinity)
+-- fittingOptions : table containing field nEpochsBeforeAdjustingStepSize
+-- RETURNS
+-- adjustP : boolean, true if nEpochs >= nEpochsBeforeAdjustingStepSize
+function LogregWeightedNnBatch:_timeToAdjustStepSize(nEpochs, fittingOptions)
+   return (nEpochs % fittingOptions.nEpochsBeforeAdjustingStepSize) == 0
 end
