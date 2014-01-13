@@ -54,6 +54,16 @@ function Opfunc:loss(flatParameters)
    return self:runLoss(flatParameters)
 end
 
+-- return the loss and gradient at the flat parameters
+-- ARGS:
+-- flatParameters : Tensor 1D
+-- RETURNS:
+-- loss           : number
+-- gradient       : Tensor 1D (includes gradient of regularizer)
+function Opfunc:lossGradient(flatParameters)
+   return self:runLossGradient(flatParameters)
+end
+
 -- return predictions at new features X using flat parameters
 -- ARGS:
 -- newX           : 2D Tensor, one row per observation
