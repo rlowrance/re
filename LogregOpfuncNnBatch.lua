@@ -127,7 +127,7 @@ end
 -- gradient       ; 1D Tensor with same shape as theta
 -- logProbabilies : 1D Tensor of size self.nClasses
 function LogregOpfuncNnBatch:_lossGradientPredictions(theta)
-   local vp, verboseLevel = makeVp(0, 'LogregOpfuncNnBatch:_lossGradient')
+   local vp, verboseLevel = makeVp(0, 'LogregOpfuncNnBatch:_lossGradientPredictions')
    local v = verboseLevel > 0
    if v then
       vp(1, 'theta', theta, 'self', self)
@@ -141,16 +141,18 @@ function LogregOpfuncNnBatch:_lossGradientPredictions(theta)
 
    -- compute loss for all samples, which for one sample was
    -- local loss = self.criterion(self.model:forward(input), target) * importance
-   local predictions = self.model:forward(self.X)
+   local logProbabilities = self.model:forward(self.X)
    local s2d = torch.Tensor(self.s:storage(), 1, self.nSamples, 1, self.nClasses, 0)
-   local weightedPredictions = torch.cmul(predictions, s2d)
-   local loss = self.criterion(weightedPredictions, self.y)
+   local weightedLogPredictions = torch.cmul(logProbabilities, s2d)
+   vp(2, 'logProbabilities', logProbabilities, 'self.s', self.s)
+   vp(2, 'weightedLogPredictions', weightedLogPredictions, 'self.y', self.y)
+   local loss = self.criterion(weightedLogPredictions, self.y)
    if v and false then
       vp(2, 'X', self.X)
       vp(2, 'scores', self.linear.output)
-      vp(2, 'log predictions', predictions)
+      vp(2, 'logProbabilities', logProbabilities)
       vp(2, 's', self.s, 's2d', s2d)
-      vp(2, 'weightedPredictions', weightedPredictions)
+      vp(2, 'weightedLogPredictions', weightedLogPredictions)
       vp(2, 'loss', loss)
    end
 
@@ -210,7 +212,7 @@ function LogregOpfuncNnBatch:_lossGradientPredictions(theta)
       assertEq(gradientRegularizedVersion1, gradientRegularizedVersion2, .0001)
    end
 
-   return lossRegularized, gradientRegularized, predictions
+   return lossRegularized, gradientRegularized, logProbabilities
 end
 
 
