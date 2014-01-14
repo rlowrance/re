@@ -1,10 +1,10 @@
--- LogregOpfuncMurphyBatch_test.lua
+-- OpfuncLogregMurphyBatch_test.lua
 -- unit test
 
 require 'assertEq'
 require 'finiteDifferenceGradient'
 require 'makeVp'
-require 'LogregOpfuncMurphyBatch'
+require 'OpfuncLogregMurphyBatch'
 require 'printVariable'
 require 'printAllVariables'
 require 'printTableVariable'
@@ -37,7 +37,7 @@ local function makeOfFromTimingExample()
    timingExample.X = torch.rand(timingExample.nSamples, timingExample.nFeatures)
    timingExample.y = Random:integer(timingExample.nSamples, 1, timingExample.nClasses)
    timingExample.s = Random:uniform(timingExample.nSamples, 0.001, 1)
-   local of = LogregOpfuncMurphyBatch(timingExample.X, 
+   local of = OpfuncLogregMurphyBatch(timingExample.X, 
                                      timingExample.y, 
                                      timingExample.s, 
                                      timingExample.nClasses, 
@@ -58,16 +58,10 @@ local function timingOverall(nIterations)
    local vp = makeVp(1, 'timingOverall')
    local of = makeOfFromTimingExample()
    
-   local function lossGradient(theta)
-      local loss, lossInfo = of:loss(theta)
-      local gradient = of:gradient(lossInfo)
-      return loss, gradient
-   end
-
    local theta = of:initialTheta()
    local timer = Timer()
    for i = 1, nIterations do
-      local loss, gradient = lossGradient(theta)
+      local loss, gradient = of:lossGradient(theta)
    end
    vp(1, string.format('timingOverall %d iterations avg cpu/iteration %f',
                        nIterations, timer:cpu() / nIterations))
@@ -81,7 +75,6 @@ if true then
 else
    print('you skipped timingOverall')
 end
-
 
 -- _scores
 local function timingScoresImplementations(nIterations)
@@ -143,7 +136,7 @@ local function timingGradientLogLikelihoodImplementations(nIterations)
 
    local of, timingExample = makeOfFromTimingExample()
    local theta = of:initialTheta()
-   local loss, lossInfo = of:loss(theta)
+   local loss, lossInfo = of:_lossLossinfoProbabilities(theta)
    local nSamples = timingExample.nSamples
 
    -- make sure each implemenation returns the same result
@@ -217,7 +210,7 @@ local function timingPrivateMethods(nIterations)
 
    -- variables needed
    local theta = of:initialTheta()
-   local loss, lossInfo = of:loss(theta)  -- info is needed later
+   local loss, lossInfo = of:_lossLossinfoProbabilities(theta)  -- lossInfo is need later
    local nSamples = timingExample.nSamples
    local lambda = timingExample.lambda
 
@@ -261,4 +254,4 @@ end
 
 timingPrivateMethods(nIterations)
    
-print('ok LogregOpfunc')
+print('ok OpfuncLogregMurphyBatch_timing')

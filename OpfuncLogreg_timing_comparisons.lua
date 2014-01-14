@@ -1,11 +1,12 @@
--- LogregOpfunc_timing_comparisons.lua
--- compare timing for concrete classes implementing abstract class LogregOpfunc
+-- OpfuncLogreg_timing_comparisons.lua
+-- compare timing for concrete classes implementing abstract class OpfuncLogreg
+-- only test the method :lossGradient(), because it is typically in the inner loop of models
 
 require 'assertEq'
 require 'makeVp'
-require 'LogregOpfuncMurphyBatch'
-require 'LogregOpfuncNnBatch'
-require 'LogregOpfuncNnOne'
+require 'OpfuncLogregMurphyBatch'
+require 'OpfuncLogregNnBatch'
+require 'OpfuncLogregNnOne'
 require 'printVariable'
 require 'printAllVariables'
 require 'printTableVariable'
@@ -49,21 +50,21 @@ local function timingComparisons(nIterations)
    local vp = makeVp(1, 'timingComparisons')
    local timingExample = makeTimingExample()
 
-   local ofMurphyBatch = LogregOpfuncMurphyBatch(timingExample.X, 
+   local ofMurphyBatch = OpfuncLogregMurphyBatch(timingExample.X, 
                                                  timingExample.y, 
                                                  timingExample.s, 
                                                  timingExample.nClasses, 
                                                  timingExample.lambda)
    local thetaMurphyBatch = ofMurphyBatch:initialTheta() 
 
-   local ofNnBatch = LogregOpfuncNnBatch(timingExample.X,
+   local ofNnBatch = OpfuncLogregNnBatch(timingExample.X,
                                          timingExample.y,
                                          timingExample.s,
                                          timingExample.nClasses,
                                          timingExample.lambda)
    local thetaNnBatch = ofNnBatch:initialTheta()
                                                 
-   local ofNnOne = LogregOpfuncNnOne(timingExample.X, 
+   local ofNnOne = OpfuncLogregNnOne(timingExample.X, 
                                      timingExample.y, 
                                      timingExample.s, 
                                      timingExample.nClasses, 
@@ -82,25 +83,22 @@ local function timingComparisons(nIterations)
 
    for iteration = 1, nIterations do
       -- MurphyBatch: each gradient uses the entire epoch (the batch)
-      local loss, lossInfo = ofMurphyBatch:loss(thetaMurphyBatch)
-      local gradient = ofMurphyBatch:gradient(lossInfo)
+      local loss, gradient = ofMurphyBatch:lossGradient(thetaMurphyBatch)
       accumulateTime('MurphyBatch')
 
       -- NnBatch: each gradient uses the entire epoch (the batch)
-      local loss, lossInfo = ofNnBatch:loss(thetaNnBatch)
-      local gradient = ofNnBatch:gradient(lossInfo)
+      local loss, gradient = ofNnBatch:lossGradient(thetaNnBatch)
       accumulateTime('NnBatch')
 
       -- NnOne: each gradient uses a randomly-chosen sample, so iterate over the epoch
       for sampleIndex = 1, timingExample.nSamples do
-         local loss, lossInfo = ofNnOne:loss(thetaNnOne)
-         local gradient = ofNnOne:gradient(lossInfo)
+         local loss, gradient = ofNnOne:lossGradient(thetaNnOne)
       end
       accumulateTime('NnOne')
    end
 
 
-   vp(1, string.format('Timing results for LogregOpfunc concrete implementations using %d iterations',
+   vp(1, string.format('Timing results for OpfuncLogreg concrete implementations using %d iterations',
                        nIterations))
    for implementationName, cpuTime in pairs(cpuTimes) do
       vp(1, string.format('implementation %15s avg CPU/iteration %f',
@@ -113,4 +111,4 @@ local nIterations = 1000
 print(string.format('starting timing comparisons for %d iterations', nIterations))
 timingComparisons(nIterations)
    
-print('finished LogregOpfunc concrete implementations timing comparisons')
+print('finished OpfuncLogreg concrete implementations timing comparisons')

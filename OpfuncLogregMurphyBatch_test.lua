@@ -1,10 +1,10 @@
--- LogregOpfuncMurphyBatch_test.lua
+-- OpfuncLogregMurphyBatch_test.lua
 -- unit test
 
 require 'assertEq'
 require 'finiteDifferenceGradient'
 require 'makeVp'
-require 'LogregOpfuncMurphyBatch'
+require 'OpfuncLogregMurphyBatch'
 require 'printVariable'
 require 'printAllVariables'
 require 'printTableVariable'
@@ -43,7 +43,7 @@ local function makeUnitTestExample()
    local expectedLikelihood = prob11 ^ testExample.s[1] * prob23 ^ testExample.s[2]
    testExample.expectedLogLikelihood = math.log(expectedLikelihood)
 
-   local of =  LogregOpfuncMurphyBatch(testExample.X, 
+   local of =  OpfuncLogregMurphyBatch(testExample.X, 
                                        testExample.y, 
                                        testExample.s, 
                                        testExample.nClasses, 
@@ -84,7 +84,7 @@ local function _loss_probabilities_test()
    assert(probabilities:size(1) == testExample.nSamples)
    assert(probabilities:size(2) == testExample.nClasses)
 
-   -- expected values computed in octave script LogregOpfunc_test.m
+   -- expected values computed in octave script OpfuncLogreg_test.m
    assertEq(probabilities[1], torch.Tensor{2.2596e-6, 9.9966e-1, 3.3535e-4}, .0001)
    assertEq(probabilities[2], torch.Tensor{4.1397e-8, 9.9995e-1, 4.5398e-5}, .0001)
 end
@@ -163,7 +163,21 @@ end
 _loss_structureTheta_test()
 
 
--- test public methods
+-------------------------------------------------------------------------------
+-- TEST PUBLIC METHODS
+-------------------------------------------------------------------------------
+
+local function initialTheta_test()
+   local of, testExample = makeUnitTestExample()
+   local initialTheta = of:initialTheta()
+
+   assert(initialTheta:nDimension() == 1)
+   assert(initialTheta:size(1) == (testExample.nClasses - 1) * (testExample.nFeatures + 1))
+end
+
+initialTheta_test()
+
+-------------------------------------------------------------------------------
 
 local function gradient_test(lambda)   
    local vp = makeVp(0, 'gradient_test')
@@ -175,8 +189,7 @@ local function gradient_test(lambda)
       return of:loss(theta)
    end
   
-   local loss, lossInfo = of:loss(testExample.theta)
-   local gradient = of:gradient(lossInfo)
+   local gradient = of:gradient(testExample.theta)
 
    local eps = 1e-5
    local fdGradient = finiteDifferenceGradient(f, testExample.theta, eps)
@@ -189,15 +202,7 @@ end
 gradient_test(0)  -- first test without the regularizer
 gradient_test(.001)  -- now test with the regularizer
 
-local function initialTheta_test()
-   local of, testExample = makeUnitTestExample()
-   local initialTheta = of:initialTheta()
-
-   assert(initialTheta:nDimension() == 1)
-   assert(initialTheta:size(1) == (testExample.nClasses - 1) * (testExample.nFeatures + 1))
-end
-
-initialTheta_test()
+-------------------------------------------------------------------------------
 
 local function loss_test()
    local of, testExample = makeUnitTestExample()
@@ -210,4 +215,36 @@ end
 
 loss_test()
 
-print('ok LogregOpfuncMurphyBatch')
+-------------------------------------------------------------------------------
+
+local function lossGradient_test()
+   -- just test form of returned values
+   local of, testExample = makeUnitTestExample()
+   local loss, gradient, predictions = of:lossGradient(testExample.theta)
+   assert(type(loss) == 'number')
+   assert(loss >= 0)
+
+   assert(gradient:nDimension() == 1)
+end
+
+lossGradient_test()
+
+-------------------------------------------------------------------------------
+
+local function predictions_test()
+   if true then
+      -- skip test, as not implemented
+      return
+   end
+   local of, testExample = makeUnitTestExample()
+   local newX = testExample.X:clone()
+   local probabilities = of:predictions(newX, testExample.theta)
+   printVariable('probabilities')
+   error('write test')
+end
+
+predictions_test()
+
+-------------------------------------------------------------------------------
+
+print('ok OpfuncLogregMurphyBatch')
