@@ -58,7 +58,11 @@ end
 -- ARGS
 -- newX  : 2D Tensor, each row is an observation
 -- theta : 1D Tensor of parameters (often the optimalTheta returned by method fit()
-function Model:runPredict(newX, theta)
+-- RETURNS
+-- predictions : 2D Tensor of probabilities
+-- predictInfo : table
+--               .mostLikelyClasses : 1D Tensor of integers, the most likely class numbers
+function Model:runPredict(newX, theta)j
    return self:runrunPredict(newX, theta)  -- work is done by subclass
 end
 
