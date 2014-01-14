@@ -107,7 +107,7 @@ function OpfuncLogregNnOne:runrunLossGradient(theta)
       self.nextRandomIndex = 1
    end
 
-   local loss, gradient = self:_lossGradient(theta, self.nextRandomIndex)
+   local gradient, loss, _ = self:_gradientLossLogprobabilities(theta, self.nextRandomIndex)
    assert(loss)
    assert(gradient)
 
