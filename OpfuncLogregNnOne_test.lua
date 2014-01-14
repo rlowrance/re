@@ -1,10 +1,10 @@
--- LogregOpfuncNnOne_test.lua
+-- OpfuncLogregNnOne_test.lua
 -- unit test
 
 require 'assertEq'
 require 'finiteDifferenceGradient'
 require 'makeVp'
-require 'LogregOpfuncNnOne'
+require 'OpfuncLogregNnOne'
 require 'printVariable'
 require 'printAllVariables'
 require 'printTableVariable'
@@ -71,8 +71,8 @@ local function makeUnitTestExample(lambdaValue)
    testExample.expectedLossSample1 = 
       17 * testExample.s[1] + testExample.lambda * (testExample.sumSquaredWeights)
 
-   vp(2, 'LogregOpfuncNnOne', LogregOpfuncNnOne)
-   local of =  LogregOpfuncNnOne(testExample.X, 
+   vp(2, 'OpfuncLogregNnOne', OpfuncLogregNnOne)
+   local of =  OpfuncLogregNnOne(testExample.X, 
                                  testExample.y, 
                                  testExample.s, 
                                  testExample.nClasses, 
@@ -83,22 +83,28 @@ end
       
 -- test default implementation of private methods support runLoss() method
 
-local function _lossGradient_test()
+local function _gradientLossLogprobabilities_test()
    local vp = makeVp(0, '_lossGradient_test')
    local of, testExample = makeUnitTestExample()
    
    local sampleIndex = 1
-   local loss, gradient = of:_lossGradient(testExample.theta, sampleIndex)
-   vp(1, 'loss', loss, 'gradient', gradient)
-   assertEq(loss, testExample.expectedLossSample1, .0001)
+   local gradient, loss, logProbabilities = of:_gradientLossLogprobabilities(testExample.theta, sampleIndex)
+   vp(1, 'gradient', gradient, 'loss', loss, 'logProbabilities', logProbabilities)
    assert(gradient:nDimension() == 1)
    assert(gradient:size(1) == 9)
+
+   assertEq(loss, testExample.expectedLossSample1, .0001)
+
+   assert(logProbabilities:nDimension() == 1)
+   local probabilities = torch.exp(logProbabilities)
+   local sum = torch.sum(probabilities)
+   assertEq(sum, 1, .00001)
 end
 
 if true then
-   _lossGradient_test()
+   _gradientLossLogprobabilities_test()
 else
-   print('skipped _lossGradient_test')
+   print('skipped _gradientLossLogprobabilities_test')
 end
    
 -- test public methods
@@ -123,18 +129,8 @@ local function loss_test(lambda)
    local of, testExample = makeUnitTestExample(lambda)
 
    -- test on first randomly-selected sample
-   local loss, lossInfo = of:loss(testExample.theta)
-   assert(lossInfo.i == 1)  -- make sure we use test the correct randomly-chosen index
-   -- the log Probs in lossInfo are the predictions that were previously computed
-   if false then
-      -- these tests work on old version of method loss
-      local logProbs = lossInfo.logsoftmax.output
-      assertEq(logProbs[1], testExample.logProb11, .0001)
-      assertEq(logProbs[2], testExample.logProb12, .0001)
-      assertEq(logProbs[3], testExample.logProb13, .0001)
-   end
+   local loss = of:loss(testExample.theta)
 
-   -- TODO: test the loss, which should be weighted by the salience
    local expectedLoss = 17 * testExample.s[1] + testExample.lambda * (testExample.sumSquaredWeights)
    vp(2, 'sumSquaredWeights', testExample.sumSquaredWeights, 'lambda', testExample.lambda)
    assertEq(loss,  expectedLoss, .0001)  -- since y == 1 on sample 1
@@ -151,6 +147,12 @@ loss_test(.01)  -- then with regularizer
 local function gradient_test_returns_same(lambda)
    -- make sure that public method gradient and private method _lossGradient return the same value
    -- do this because the test of the gradient value relies on calling the private method
+   -- NOTE: this test was stubbed out because the current API doesn't provide a way to determine the 
+   -- index of the last sample
+   if true then
+      return
+   end
+
    local vp = makeVp(0, 'gradient_test_returns_same')
    local of = makeUnitTestExample(lambda)
    local theta = of:initialTheta()  -- use random theta
@@ -159,7 +161,7 @@ local function gradient_test_returns_same(lambda)
    local gradientFromPublicMethod = of:gradient(lossInfo)
    vp(2, 'lossInfo', lossInfo, 'gradientFromPublicMethod', gradientFromPublicMethod)
 
-   local loss2, gradientFromPrivateMethod = of:_lossGradient(theta, lossInfo.i) -- use same sample
+   local loss2, gradientFromPrivateMethod = of:_gradientLossLosProbabilities(theta, lossInfo.i) -- use same sample
    vp(2, 'gradientFromPrivateMethod', gradientFromPrivateMethod)
 
    assertEq(gradientFromPublicMethod, gradientFromPrivateMethod, .0001)
@@ -174,14 +176,11 @@ local function gradient_test_gradient_value(lambda)
 
    local function f(theta)
       vp(3,'theta in f', theta)
-      local loss, gradient = of:_lossGradient(theta, sampleIndex)
+      local loss, _ = of:_lossLogprobabilities(theta, sampleIndex)
       return loss
    end
   
-   local loss, lossInfo = of:loss(testExample.theta)
-   vp(2, 'loss', loss, 'lossInfo', lossInfo)
-   assert(lossInfo.i == sampleIndex) -- make sure that the randomly-selected index is the one we want
-   local gradient = of:gradient(lossInfo)
+   local gradient, _ , _ = of:_gradientLossLogprobabilities(testExample.theta, sampleIndex)
    vp(2, 'gradient', gradient)
 
    local eps = 1e-5
@@ -205,4 +204,4 @@ if true then
    gradient_test(.001)  -- now test with the regularizer
 end
 
-print('ok LogregOpfuncNnOne')
+print('ok OpfuncLogregNnOne')
