@@ -1,19 +1,14 @@
 -- printTableValue_test.lua
 -- unit test
 
-require 'makeVp'
 require 'printTableValue'
 
-local vp, verboseLevel = makeVp(0, 'tester')
+t1 = {one = 1, abc = 'abc'}
+printTableValue('t1', t1)
+printTableValue(t1)
 
-local function f()
-   local vTable = {key1 = 1, key2 = 'abc', key3 = {'one', 'two'}}
-   
-   if verboseLevel > 0 then
-      printTableValue(vTable)
-   end
-end
-
-f()
+t2 = {def = 'def', nested = t1}
+printTableValue('t2', t2)
+printTableValue(t2)
 
 print('ok printTableValue')
