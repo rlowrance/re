@@ -1,12 +1,16 @@
--- LogregWeightedNnBatch_test.lua
+-- ModelLogregNnBatch_test.lua
 -- unit test
 
-require 'LogregWeightedNnBatch'
+require 'ModelLogregNnBatch'
 require 'makeVp'
+require 'OpfuncLogregNnBatch'
 require 'printAllVariables'
 require 'printTableVariable'
 require 'printVariable'
 require 'Random'
+require 'torch'
+
+torch.manualSeed(123)
 
 -------------------------------------------------------------------------------
 -- make test objects (fixtures in unit test frameworks)
@@ -16,17 +20,18 @@ require 'Random'
 -- RETURNS
 -- X, y, s, nCLasses : synthetic data
 -- actualTheta       : actual parameters used to generate y from X
-local function makeTrainingData(useSaliences)
+local function makeTrainingData(useSaliences, size)
    local nSamples = 60
    local nFeatures = 8
    local nClasses = 14
-   local lambda = 0       -- arbitrary value needed for APIs
-   if true then
+   if size == 'small' then
       nSamples = 5
       nFeatures = 2
       nClasses = 3
-      print('revert to 60 samples, 8 features, and 14 classes')
+      print('using small sample size')
    end
+
+   local lambda = 0       -- arbitrary value needed for APIs
 
    -- randomly generate data
    local X = torch.rand(nSamples, nFeatures)
@@ -38,63 +43,19 @@ local function makeTrainingData(useSaliences)
       s = torch.Tensor(nSamples):zero()
    end
 
-   -- get random weights from a model
-   local opfunc = LogregOpfuncNnBatch(X, y, s, nClasses, 0)
+   -- get random weights from the corresponding optimization function
+   local opfunc = OpfuncLogregNnBatch(X, y, s, nClasses, 0)
    local actualTheta = opfunc:initialTheta()
-
-      
-   -- by hand, fit a model that uses the actual parameters
-   local model = LogregWeightedNnBatch(X, y, s, nClasses, lambda)
-   --printTableVariable('model')
-
-   local probs, y = model:predict(X, actualTheta) -- predict using training data
-   --printVariable('probs') printVariable('y')
-   assert(probs:nDimension() == 2)
-   assert(probs:size(1) == nSamples)
-   assert(probs:size(2) == nClasses)
-   assert(y:nDimension() == 1)
-   assert(y:size(1) == nSamples)
 
    return X, y, s, nClasses, actualTheta
 end
 
+-- return model and X and y values for it
 local function makeModel(useSaliences, lambda)
    local X, y, s, nClasses, actualTheta = makeTrainingData(useSaliences)
 
-   local model = LogregWeightedNnBatch(X, y, s, nClasses, lambda)
-   return model
-end
-
--------------------------------------------------------------------------------
--- TEST SOME PRIVATE METHODS
--------------------------------------------------------------------------------
-
-local function test_converged()
-   local useSaliences = true
-   local lambda = 0.001
-   local model = makeMode(useSaliences, lambda)
-   
-   local nEpochs = 10
-   local nextTheta = torch.Tensor(3):fill(1)
-   local previousTheta = torch.Tensor(3):fill(3)
-   local nextLoss = 5
-   local previousLoss = 6
-
-   local function test(fittingOptions)
-      return model:_converged(fittingOptions, nEpochs, nextTheta, previousTheta, nextLoss, previousLoss)
-   end
-
-   local fittingOptions = {maxEpochs=100}
-   assert(test({maxEpochs == 10}))
-   assert(not test({maxEpochs == 11}))
-   
-   error('write more tests')
-end
-
-if false then
-   test_converged()
-else
-   print('did not run test_converged')
+   local model = ModelLogregNnBatch(X, y, s, nClasses, lambda)
+   return model, X, y
 end
 
 -------------------------------------------------------------------------------
@@ -118,62 +79,89 @@ testConstruction()
 -- test method fit
 -------------------------------------------------------------------------------
 
-local function testFit()
-   local useSaliences = true
-   local lambda = 0.0001
-   local model = makeModel(useSaliences, lambda)
+local function fitModel(model, toleranceLoss)
+   local vp = makeVp(1, 'fitModel')
+   vp(1, 'model', model)
+
+   toleranceLoss = toleranceLoss or .001
 
    local function nextStepSizes(currentStepSize)
-      return{currentStepSize, 0.5 * currentStepSize, 1.5 * currentStepSize}
+      return {currentStepSize, 0.5 * currentStepSize, 1.5 * currentStepSize}
    end
 
    local fittingOptions = {
       method = 'bottouEpoch',
+      printLoss = true,
       initialStepSize = 1,
       nEpochsBeforeAdjustingStepSize = 1,
+      nEpochsToAdjustStepSize = 2,
       nextStepSizes = nextStepSizes,
       nSteps = 2,    
-      maxEpochs = 10,
-      toleranceLoss = .1,
-      toleranceTheta = .1}
+      maxEpochs = 100,
+      toleranceLoss = toleranceLoss,
+      toleranceTheta = .01}
    local fitInfo = model:fit(fittingOptions)
-   printTableVariable('fitInfo')
+   return fitInfo
+end
+
+local function testFitInfo(fitInfo)
+   local vp = makeVp(2, 'testFitInfo')
    assert(type(fitInfo) == 'table')
    vp(2, 'convergedReason', fitInfo.convergedReason)
+   vp(2, 'finalLoss', fitInfo.finalLoss)
    vp(2, 'nEpochsUntilConvergence', fitInfo.nEpochsUntilConvergence)
-   vp(2, 'optimalTheta', fitInfo.optimalTheta)
-   error('write tests')
+   vp(2, 'optimalTheta size', fitInfo.optimalTheta:size())
+   -- MAYBE: Figure out some real tests
+end
+
+local function testFit()
+   local vp = makeVp(2, 'testFit')
+   local useSaliences = true
+   local lambda = 0.0001
+   local model = makeModel(useSaliences, lambda)
+   local fitInfo = fitModel(model)
+   testFitInfo(fitInfo)
 end
 
 testFit()
-
-   
 
 -------------------------------------------------------------------------------
 -- test method predict
 -------------------------------------------------------------------------------
 
-local function testPredictValues(useSaliences, lambda)
-   local X, y, s, nClasses, actualTheta = makeTrainingData(useSaliences)
+local function testPredictValues(useSaliences, lambda, toleranceLoss)
+   local vp = makeVp(1, 'testPredictValues')
+   local model, actualX, actualY = makeModel(useSaliences, lambda)
+   local fitInfo = fitModel(model, toleranceLoss)
 
-   -- train the model
-   local model = LogregWeightedNnBatch(X, y, s, nClasses, lambda)
-   local fittingOptions = {
-      method = 'bottouEpoch',
-      nEpochsBeforeAdjustingStepSize = 2,
-      maxEpochs = 100,
-      toleranceLoss = 0.001,
-      toleranceTheta = 0.01}
-   local optimalTheta, fitInfo  = model:fit(fittingOptions)
-   vp(2, 'convergedReason', fitInfo.convergedReason)
-   vp(2, 'nEpochsUntilConvergence', fitInfo.nEpochsUntilConvergence)
-   vp(2, 'optimalTheta', optimalTheta)
-   error('write more tests')
-   error('test 1D and 2D newX values')
+   -- predict each X used as training data
+   local predictedY, predictInfo = model:predict(actualX, fitInfo.optimalTheta)
+   vp(2, 'predictedY', predictedY)
+   printTableVariable('model')
+   assert(predictedY:nDimension() == 2)
+   assert(predictedY:size(1) == model.nSamples)
+   assert(predictedY:size(2) == model.nClasses)
+
+   assert(type(predictInfo) == 'table')
+   local predictedClasses = predictInfo.mostLikelyClasses
+   vp(2, 'predictedClasses', predictedClasses)
+   assert(predictedClasses:size(1) == model.nSamples)
+
+   -- see how we did
+   local nErrors = 0
+   for i = 1, model.nSamples do
+      local actual = actualY[i]
+      local predicted = predictedClasses[i]
+      vp(1, string.format('i %d actualY %f predictedY %f', i, actual, predicted))
+      if actual ~= predicted then
+         nErrors = nErrors + 1
+      end
+   end
+   vp(1, 'fraction errors', nErrors / model.nSamples)
+   stop()
 end
 
-testPredictValues(true, 0)  -- use saliences, not regularized
-      
+testPredictValues(false, 0.0001, .00001)  -- no saliences, regularized
+testPredictValues(true, 0.0001)  -- use saliences, regularized
 
-error('write some tests')
-print('ok LogregWeightedNnBatch')
+print('ok ModelLogregNnBatch')

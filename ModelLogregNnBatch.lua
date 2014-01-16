@@ -1,29 +1,33 @@
 -- LogregWweighedNnBatch.lua
--- concrete subclass of LogregWeighted, use batch approach with nn package
+-- concrete subclass of ModelLogreg, use batch approach with nn package
 
 if false then
    -- API overview
-   model = LogregWeightedNnBatch(X, y, s, nClasses, lambda)
+   model = ModelLogregNnBatch(X, y, s, nClasses, lambda)
    optimalTheta, fitInfo = model:fit(fittingOptions) 
-   probs, classes = model:predict(newX2D, theta)       -- returns 1D Tensor of predicted classes
+   probs2D, classes1D = model:predict(newX2D, theta)  
 end
 
 require 'keyWithMinimumValue'
-require 'LogregOpfuncNnBatch'
-require 'LogregWeighted'
+require 'ModelLogreg'
 require 'makeVp'
+require 'OpfuncLogregNnBatch'
 require 'printAllVariables'
+require 'printTableValue'
 require 'printTableVariable'
 
 -------------------------------------------------------------------------------
 -- CONSTRUCTOR
 -------------------------------------------------------------------------------
 
-local LogregWeightedNnBatch, parent = torch.class('LogregWeightedNnBatch', 'LogregWeighted')
+local ModelLogregNnBatch, parent = torch.class('ModelLogregNnBatch', 'ModelLogreg')
 
-function LogregWeightedNnBatch:__init(X, y, s, nClasses, lambda)
+function ModelLogregNnBatch:__init(X, y, s, nClasses, lambda)
+   local vp = makeVp(0, '__init')
+   vp(1, 'parent', parent)
+   vp(1, 'X', X, 'y', y, 's', s, 'nClasses', nClasses, 'lambda', lambda)
    parent.__init(self, X, y, s, nClasses, lambda)
-   self.opfunc = LogregOpfuncNnBatch(X, y, s, nClasses, lambda)
+   self.opfunc = OpfuncLogregNnBatch(X, y, s, nClasses, lambda)
    --printTableVariable('self')
 end
 
@@ -38,8 +42,10 @@ end
 --                  .maxEpochs : number
 --                  .toleranceLoss : number
 --                  .toleranceTheta : number
--- RETURNS: nothing, mutates self
-function LogregWeightedNnBatch:runFit(fittingOptions)
+-- RETURNS:
+-- optimalTheta : 1D Tensor of optimal parameters
+-- fitInfo      : table describing the convergence
+function ModelLogregNnBatch:runrunFit(fittingOptions)
    assert(type(fittingOptions) == 'table', 'table of fitting options not supplied')
    if fittingOptions.method == 'bottouEpoch' then
       return self:_fitBottouEpoch(fittingOptions)
@@ -54,32 +60,43 @@ end
 -- RETURNS
 -- probs         ; 2D Tensor
 -- predictions   : 1D Tensor
-function LogregWeightedNnBatch:runPredict(newX, theta)
-   printAllVariables()
-   local probs = self.opfunc:predict(newX, theta)
+-- RETURNS
+-- predictions : 2D Tensor of probabilities
+-- predictInfo : table
+--               .mostLikelyClasses : 1D Tensor of integers, the most likely class numbers
+function ModelLogregNnBatch:runrunPredict(newX, theta)
+   local vp = makeVp(2, 'runrunPredict')
+   --printAllVariables()
+   vp(1, 'self.opfunc', self.opfunc)
+   local probs = self.opfunc:predictions(newX, theta)
 
    local nSamples = newX:size(1)
-   local predictions = torch.Tensor(nSamples)
+   local mostLikelyClasses = torch.Tensor(nSamples)
    for sampleIndex = 1, nSamples do
-      predictions[sampleIndex] = argmax(probs[sampleIndex])
+      mostLikelyClasses[sampleIndex] = argmax(probs[sampleIndex])
+      vp(2, 'sampleIndex', sampleIndex, 
+            'probs[]', probs[sampleIndex], 
+            'mostLikelyClasses[]', mostLikelyClasses[sampleIndex])
    end
 
-   return probs,  predictions
+   vp(1, 'probs', probs, 'mostLikelyClasses', mostLikelyClasses)
+   return probs,  {mostLikelyClasses = mostLikelyClasses}
 end
 
 -------------------------------------------------------------------------------
 -- PRIVATE METHODS
 -------------------------------------------------------------------------------
 
-function LogregWeightedNnBatch:_lossAfterNSteps(stepSize, startingTheta, nSteps)
+-- return nextTheta and loss after taking nSteps of specified stepSize
+function ModelLogregNnBatch:_lossAfterNSteps(stepSize, startingTheta, nSteps)
    local nextTheta = startingTheta
    local loss = nil
    for stepNumber = 1, nSteps do
-      -- ISSUE: the computes the first loss (at startingTheta) over and over
-      nextTheta, loss = self:_step(stepSize, nextTheta)
+      nextTheta, lossBeforeStep = self:_step(stepSize, nextTheta)
    end
 
-   return nextTheta, loss
+   local lossAfterSteps = self.opfunc:loss(nextTheta)
+   return nextTheta, lossAfterSteps
 end
 
 -- adjust the step size by testing several choices and return the best
@@ -92,20 +109,24 @@ end
 -- bestStepSize    : number
 -- nextTheta       : 1D Tensor
 -- nextLoss        : number
-function LogregWeightedNnBatch:_adjustStepSizeAndStep(fittingOptions, currentStepSize, theta)
-   local vp = makeVp(2, '_adjustStepSizeAndStep')
+function ModelLogregNnBatch:_adjustStepSizeAndStep(fittingOptions, currentStepSize, theta)
+   local vp = makeVp(0, '_adjustStepSizeAndStep')
    vp(1, 'currentStepSize', currentStepSize)
    local possibleNextStepSizes = fittingOptions.nextStepSizes(currentStepSize)
    vp(2, 'possibleNextStepSizes', possibleNextStepSizes)
+   local nSteps = fittingOptions.nEpochsToAdjustStepSize
+   vp(2, 'nSteps', nSteps)
+
+   -- take nSteps using each possible step size
    local losses = {}
    local nextThetas = {}
-   local nSteps = fittingOptions.nSteps
-   for i, stepSize in ipairs(possibleNextStepSizes) do
+   for _, stepSize in ipairs(possibleNextStepSizes) do
       local nextTheta, loss = self:_lossAfterNSteps(stepSize, theta, nSteps)
       losses[stepSize] = loss
       nextThetas[stepSize] = nextTheta
       vp(2, 'stepSize', stepSize, 'loss', loss)
    end
+
    local bestStepSize = keyWithMinimumValue(losses)
    vp(1, 'bestStepSize', bestStepSize)
    return bestStepSize, nextThetas[bestStepSize], losses[bestStepSize]
@@ -113,16 +134,17 @@ end
 
 -- determine if we have converged
 -- RETURNS
--- hasConverged: boolean
--- howConverged: optional string, if hasConverged == true; reason for convergence
--- result : false or string explaining why the iterations have converged
-function LogregWeightedNnBatch:_converged(fittingOptions, 
-                                          nEpochs, 
-                                          nextTheta, previousTheta, 
-                                          nextLoss, previousLoss)
+-- hasConverged  : boolean
+-- howConverged  : string, if hasConverged == true; reason for convergence
+function ModelLogregNnBatch:_converged(fittingOptions, 
+                                       nEpochsCompleted, 
+                                       nextTheta, previousTheta, 
+                                       nextLoss, previousLoss)
+   local vp = makeVp(0, '_converged') 
+   vp(2, 'nEpochsComplete', nEpochsCompleted)
+   
    local maxEpochs = fittingOptions.maxEpochs
-   if maxEpochs ~= nil and
-      nEpochs >= maxEpochs then
+   if (maxEpochs ~= nil) and (nEpochsCompleted >= maxEpochs) then
       return true, 'maxEpochs'
    end
 
@@ -136,88 +158,128 @@ function LogregWeightedNnBatch:_converged(fittingOptions,
       return true, 'toleranceTheta'
    end
 
-   return false
+   vp(1, 'did not converge')
+   return false, 'did not converge'
 end
 
 -- ARGS
 -- fittingOptions : table with these fields
---                  .nEpochsBeforeAdjustingStepSize : number
---                  .maxEpochs : number
---                  .toleranceLoss : number
---                  .toleranceTheta : number
+--                  .initialStepSize                : number > 0
+--                  .nEpochsBeforeAdjustingStepSize : integer > 0
+--                  .nEpochsToAdjustStepSize        : integer > 0
+--                  .maxEpochs                      : integer > 0
+--                  .toleranceLoss                  : number > 0
+--                  .toleranceTheta                 : number > 0
+--                  NOTE: only one of the last 3 options must be supplied
+--                  .printLoss                      : boolean
 -- RETURNS:
--- fitInfo : table with these fields
---           .convergedReason         : string
---           .nEpochsUntilConvergence : number
---           .optimalTheta            : 1D Tensor
+-- optimalTheta  : 1D Tensor
+-- fitInfo       : table with these fields
+--                 .convergedReason         : string
+--                 .finalLoss               : number
+--                 .nEpochsUntilConvergence : number
+--
+--                 .optimalTheta            : 1D Tensor
 -- SIDE EFFECTS: set self.fitInfo
-function LogregWeightedNnBatch:_fitBottouEpoch(fittingOptions)
-   local vp = makeVp(2, '_fitBottouEpoch')
-   assert(fittingOptions.initialStepSize ~= nil, 'missing fittingOptions.initialStepSize')
-   assert(fittingOptions.initialStepSize > 0, 'fittingOptions.initialStepSize not positive')
+function ModelLogregNnBatch:_fitBottouEpoch(fittingOptions)
+   local vp = makeVp(0, '_fitBottouEpoch')
+   self:_validateFittingOptions(fittingOptions)
 
    -- initialize loop
-   local previousTheta = self.opfunc:initialTheta()
-   local stepSize = fittingOptions.initialStepSize
+   local printLoss = fittingOptions.printLoss
    local previousLoss = nil
-   local nEpochs = 0
+   local previousTheta = self.opfunc:initialTheta()
+   local stepSize = fittingOptions.initialStepSize  -- some folks call this variable eta
+   local nEpochsCompleted = 0
 
    repeat -- until convergence
-      vp(2, 'nEpochs', nEpochs, 'stepSize', stepSize)
-      if self:_timeToAdjustStepSize(nEpochs, fittingOptions) then
+      vp(2, 'nEpochsCompleted', nEpochsCompleted, 'stepSize', stepSize)
+      if self:_timeToAdjustStepSize(nEpochsCompleted, fittingOptions) then
          -- adjust stepsize and take a step with the adjusted size
          vp(2, 'adjusting step size and stepping')
          stepSize, nextTheta, nextLoss = self:_adjustStepSizeAndStep(fittingOptions, stepSize, previousTheta)
-         print('TODO: update nEpochs, accounting for the search')
+         nEpochsCompleted = nEpochsCompleted + fittingOptions.nEpochsToAdjustStepSize
       else
          -- take a step with the current stepsize
          vp(2, 'stepping with current step size')
          nextTheta, nextLoss = self:_step(stepSize, previousTheta)
+         nEpochsCompleted = nEpochsCompleted + 1
+      end
+
+      vp(2, 'nEpochsCompleted', nEpochsCompleted)
+      vp(2, 'nextLoss', nextLoss, 'previousLoss', previousLoss)
+      if printLoss then
+         print(string.format('ModelLogregNnBatch:fit nEpochsCompleted %d stepSize %f nextLoss %f',
+                             nEpochsCompleted, stepSize, nextLoss))
       end
       
-      nEpochs = nEpochs + 1  -- move this update to the _step() method
 
-      local hasConverged, convergedReason = self:_converged(fittingOptions, 
-                                                            nEpochs, 
-                                                            nextTheta, previousTheta, 
-                                                            nextLoss, previousLoss)
+      local hasConverged, convergedReason, relevantLimit = self:_converged(fittingOptions, 
+                                                                           nEpochsCompleted, 
+                                                                           nextTheta, previousTheta, 
+                                                                           nextLoss, previousLoss)
+      vp(2, 'hasConverged', hasConverged, 'convergedReason', convergedReason)
+
       if hasConverged then
          local fitInfo = {
             convergedReason = convergedReason,
-            nEpochsUntilConvergence = nEpochs,
+            finalLoss = nextLoss,
+            nEpochsUntilConvergence = nEpochsCompleted,
             optimalTheta = nextTheta
          }
          self.fitInfo = fitInfo
-         vp(1, 'fitInfo', fitInfo)
          return fitInfo
       end
       
-      prevLoss = nextLoss
-      prevTheta = nextTheta
-   until true
+      previousLoss = nextLoss
+      previousTheta = nextTheta
+   until false
 end
 
 -- take a step in the direction of the gradient implied by theta
 -- RETURNS
 -- nextTheta : 1D Tensor, theta after the step
 -- loss      : number, loss at the theta before the step
-function LogregWeightedNnBatch:_step(stepSize, theta)
+function ModelLogregNnBatch:_step(stepSize, theta)
    local vp = makeVp(0, '_step')
-   vp(1, 'stepSize', stepSize)
-   local loss, lossInfo = self.opfunc:loss(theta)
-   local gradient = self.opfunc:gradient(lossInfo)
-   vp(2, 'theta', theta)
-   local temp = gradient * stepSize
+   vp(1, 'stepSize', stepSize, 'theta', theta)
+   local loss = self.opfunc:loss(theta)
+   local gradient = self.opfunc:gradient(theta)
    local nextTheta = theta + gradient * stepSize
    return nextTheta, loss
 end
 
 -- determine if the step size should be adjusted
 -- ARGS
--- nEpochs : number of epochs already completed, in [0, infinity)
+-- nEpochsCompleted : number of epochs already completed, in [0, infinity)
 -- fittingOptions : table containing field nEpochsBeforeAdjustingStepSize
 -- RETURNS
--- adjustP : boolean, true if nEpochs >= nEpochsBeforeAdjustingStepSize
-function LogregWeightedNnBatch:_timeToAdjustStepSize(nEpochs, fittingOptions)
-   return (nEpochs % fittingOptions.nEpochsBeforeAdjustingStepSize) == 0
+-- adjustP : boolean, true if nEpochsCompleted >= nEpochsBeforeAdjustingStepSize
+function ModelLogregNnBatch:_timeToAdjustStepSize(nEpochsCompleted, fittingOptions)
+   return (nEpochsCompleted % fittingOptions.nEpochsBeforeAdjustingStepSize) == 0
+end
+
+   
+-- check types and values of fields we use in the fittingOptions table
+function ModelLogregNnBatch:_validateFittingOptions(fittingOptions)
+   validateAttributes(fittingOptions.initialStepSize, 'number', 'positive')
+   validateAttributes(fittingOptions.nEpochsBeforeAdjustingStepSize, 'number', 'integer', 'positive')
+   validateAttributes(fittingOptions.nEpochsToAdjustStepSize, 'number', 'integer', 'positive')
+
+   if fittingOptions.maxEpochs ~= nil then
+      validateAttributes(fittingOptions.maxEpochs, 'number', 'integer', 'positive')
+   end
+
+   if fittingOptions.toleranceLoss ~= nil then
+      validateAttributes(fittingOptions.toleranceLoss, 'number', 'positive')
+   end
+
+   if fittingOptions.toleranceTheta ~= nil then
+      validateAttributes(fittingOptions.toleranceTheta, 'number', 'positive')
+   end
+
+   assert(fittingOptions.maxEpochs ~= nil or
+          fittingOptions.toleranceLoss ~= nil or
+          fittingOptions.toleranceTheta ~= nil,
+          'at least one convergence options must be specified')
 end
