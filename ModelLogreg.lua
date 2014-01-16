@@ -1,6 +1,7 @@
 -- ModelLogreg.lua
 -- weighted logistic regression
 
+require 'Model'
 require 'torch'
 
 -------------------------------------------------------------------------------
@@ -16,15 +17,16 @@ local ModelLogreg, parent = torch.class('ModelLogreg', 'Model')
 -- nClasses : number of classes (max value in y)
 -- lambda   : number L2 regularizer importance
 function ModelLogreg:__init(X, y, s, nClasses, lambda)
+   parent.__init(self)
    assert(X:nDimension() == 2)
    self.nSamples = X:size(1)
    self.nFeatures = X:size(2)
 
    assert(y:nDimension() == 1)
-   assert(y:size(1) == self.nFeatures)
+   assert(y:size(1) == self.nSamples)
 
-   assert(s;nDimension() == 1)
-   assert(s:size(1) == self.nFeatures)
+   assert(s:nDimension() == 1)
+   assert(s:size(1) == self.nSamples)
 
    assert(type(nClasses) == 'number')
    assert(nClasses >= 1)
@@ -50,7 +52,7 @@ end
 -- RETURNS
 -- optimalTheta   : 1D Tensor of flat parameters
 -- fitInfo        : table, dependent on concrete subclass
-function Model:runFit(fittingOptions)
+function ModelLogreg:runFit(fittingOptions)
    return self:runrunFit(fittingOptions) -- work is done by subclass
 end
 
@@ -62,7 +64,7 @@ end
 -- predictions : 2D Tensor of probabilities
 -- predictInfo : table
 --               .mostLikelyClasses : 1D Tensor of integers, the most likely class numbers
-function Model:runPredict(newX, theta)j
+function ModelLogreg:runPredict(newX, theta)
    return self:runrunPredict(newX, theta)  -- work is done by subclass
 end
 
