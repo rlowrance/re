@@ -15,6 +15,7 @@ require 'OpfuncLogregNnBatch'
 require 'printAllVariables'
 require 'printTableValue'
 require 'printTableVariable'
+require 'vectorToString'
 
 -------------------------------------------------------------------------------
 -- CONSTRUCTOR
@@ -35,20 +36,42 @@ end
 -- PUBLIC METHODS
 -------------------------------------------------------------------------------
 
--- ARGS:
--- fittingOptions : table, fields depend on fittingOptions.method
---                  .method : string, must be 'bottouEpoch' for now
---                  .nEpochsBeforeAdjustingStepSize : number
---                  .maxEpochs : number
---                  .toleranceLoss : number
---                  .toleranceTheta : number
+-- methods are:
+--   bottouEpoch     : step size is adjusted periodically starting at initialStepSize
+--   gradientDescent : step size is fixed at initialStepSize
+-- ARGS
+-- fittingOptions : table with these fields
+--                  .initialStepSize                : number > 0
+--                  .nEpochsBeforeAdjustingStepSize : integer > 0
+--                  .nEpochsToAdjustStepSize        : integer > 0
+--                  .maxEpochs                      : integer > 0
+--                  .method                         : string
+--                  .nextStepSizes                  : function(stepSize) --> sequence of step sizes
+--                  .toleranceLoss                  : number > 0
+--                  .toleranceTheta                 : number > 0
+--                  NOTE: only one of the last 3 options must be supplied
+--                  .printLoss                      : boolean
+-- RETURNS:
+-- optimalTheta  : 1D Tensor
+-- fitInfo       : table with these fields
+--                 .convergedReason         : string
+--                 .finalLoss               : number, loss before the last step taken
+--                 .nEpochsUntilConvergence : number
+--
+--                 .optimalTheta            : 1D Tensor
 -- RETURNS:
 -- optimalTheta : 1D Tensor of optimal parameters
 -- fitInfo      : table describing the convergence
+-- NOTES; errors if the loss from epoch to epoch every increases
+-- This is because NnBatch computes the entire gradient and we know that a step size
+-- exists where there is always a reduction in the error.
 function ModelLogregNnBatch:runrunFit(fittingOptions)
    assert(type(fittingOptions) == 'table', 'table of fitting options not supplied')
-   if fittingOptions.method == 'bottouEpoch' then
+   local method = fittingOptions.method
+   if method == 'bottouEpoch' then
       return self:_fitBottouEpoch(fittingOptions)
+   elseif method == 'gradientDescent' then
+      return self:_fitGradientDescent(fittingOptions)
    else
       error(string.format('unknown fitting method %s', tostring(fittingOptions.method)))
    end
@@ -65,8 +88,11 @@ end
 -- predictInfo : table
 --               .mostLikelyClasses : 1D Tensor of integers, the most likely class numbers
 function ModelLogregNnBatch:runrunPredict(newX, theta)
-   local vp = makeVp(2, 'runrunPredict')
+   local vp = makeVp(0, 'runrunPredict')
+   assert(newX:nDimension() == 2, 'newX is not a 2D Tensor')
+   assert(theta:nDimension() == 1, 'theta is not a 1D Tensor')
    --printAllVariables()
+
    vp(1, 'self.opfunc', self.opfunc)
    local probs = self.opfunc:predictions(newX, theta)
 
@@ -92,11 +118,11 @@ function ModelLogregNnBatch:_lossAfterNSteps(stepSize, startingTheta, nSteps)
    local nextTheta = startingTheta
    local loss = nil
    for stepNumber = 1, nSteps do
-      nextTheta, lossBeforeStep = self:_step(stepSize, nextTheta)
+      nextTheta, lossBeforeLastStep = self:_step(stepSize, nextTheta)
    end
 
    local lossAfterSteps = self.opfunc:loss(nextTheta)
-   return nextTheta, lossAfterSteps
+   return nextTheta, lossAfterSteps, lossBeforeLastStep
 end
 
 -- adjust the step size by testing several choices and return the best
@@ -108,28 +134,35 @@ end
 -- RETURNS
 -- bestStepSize    : number
 -- nextTheta       : 1D Tensor
--- nextLoss        : number
+-- lossBeforeStep  : number, the loss before the last step taken
 function ModelLogregNnBatch:_adjustStepSizeAndStep(fittingOptions, currentStepSize, theta)
    local vp = makeVp(0, '_adjustStepSizeAndStep')
    vp(1, 'currentStepSize', currentStepSize)
+   vp(2, 'theta', vectorToString(theta))
    local possibleNextStepSizes = fittingOptions.nextStepSizes(currentStepSize)
-   vp(2, 'possibleNextStepSizes', possibleNextStepSizes)
+   vp(3, 'possibleNextStepSizes', possibleNextStepSizes)
    local nSteps = fittingOptions.nEpochsToAdjustStepSize
    vp(2, 'nSteps', nSteps)
 
    -- take nSteps using each possible step size
-   local losses = {}
+   local lossesAfterSteps = {}
+   local lossesBeforeLastStep = {}
    local nextThetas = {}
    for _, stepSize in ipairs(possibleNextStepSizes) do
-      local nextTheta, loss = self:_lossAfterNSteps(stepSize, theta, nSteps)
-      losses[stepSize] = loss
+      local nextTheta, lossAfterSteps, lossBeforeLastStep = self:_lossAfterNSteps(stepSize, theta, nSteps)
+      lossesAfterSteps[stepSize] = lossAfterSteps
+      lossesBeforeLastStep[stepSize] = lossBeforeLastStep
       nextThetas[stepSize] = nextTheta
-      vp(2, 'stepSize', stepSize, 'loss', loss)
+      vp(2, 'stepSize', stepSize, 'lossAfterSteps', lossAfterSteps)
    end
 
-   local bestStepSize = keyWithMinimumValue(losses)
+   local bestStepSize = keyWithMinimumValue(lossesAfterSteps)
+   local nextTheta = nextThetas[bestStepSize]
+   local lossBeforeStep = lossesBeforeLastStep[bestStepSize]
    vp(1, 'bestStepSize', bestStepSize)
-   return bestStepSize, nextThetas[bestStepSize], losses[bestStepSize]
+   vp(1, 'nextTheta', vectorToString(nextTheta))
+   vp(1, 'lossBeforeStep', lossBeforeStep)
+   return bestStepSize, nextTheta, lossBeforeStep
 end
 
 -- determine if we have converged
@@ -144,94 +177,164 @@ function ModelLogregNnBatch:_converged(fittingOptions,
    vp(2, 'nEpochsComplete', nEpochsCompleted)
    
    local maxEpochs = fittingOptions.maxEpochs
-   if (maxEpochs ~= nil) and (nEpochsCompleted >= maxEpochs) then
-      return true, 'maxEpochs'
+   if maxEpochs ~= nil then
+      if nEpochsCompleted >= maxEpochs then
+         return true, 'maxEpochs'
+      end
    end
 
    local toleranceLoss = fittingOptions.toleranceLoss
-   if (previousLoss ~= nil) and (math.abs(nextLoss - previousLoss) < toleranceLoss) then
-      return true, 'toleranceLoss'
+   if toleranceLoss ~= nil then
+      if previousLoss ~= nil then 
+         if math.abs(nextLoss - previousLoss) < toleranceLoss then
+            return true, 'toleranceLoss'
+         end
+      end
    end
 
    local toleranceTheta = fittingOptions.toleranceTheta
-   if (previousTheta ~= nil) and (torch.norm(nextTheta - previousTheta) < toleranceTheta) then
-      return true, 'toleranceTheta'
+   if toleranceTheta ~= nil then 
+      if previousTheta ~= nil then
+         if torch.norm(nextTheta - previousTheta) < toleranceTheta then
+            return true, 'toleranceTheta'
+         end
+      end
    end
 
    vp(1, 'did not converge')
    return false, 'did not converge'
 end
 
--- ARGS
--- fittingOptions : table with these fields
---                  .initialStepSize                : number > 0
---                  .nEpochsBeforeAdjustingStepSize : integer > 0
---                  .nEpochsToAdjustStepSize        : integer > 0
---                  .maxEpochs                      : integer > 0
---                  .toleranceLoss                  : number > 0
---                  .toleranceTheta                 : number > 0
---                  NOTE: only one of the last 3 options must be supplied
---                  .printLoss                      : boolean
--- RETURNS:
--- optimalTheta  : 1D Tensor
--- fitInfo       : table with these fields
---                 .convergedReason         : string
---                 .finalLoss               : number
---                 .nEpochsUntilConvergence : number
---
---                 .optimalTheta            : 1D Tensor
--- SIDE EFFECTS: set self.fitInfo
+-- fit using Bottou's method where the iterants are epochs
 function ModelLogregNnBatch:_fitBottouEpoch(fittingOptions)
    local vp = makeVp(0, '_fitBottouEpoch')
-   self:_validateFittingOptions(fittingOptions)
+   self:_validateFittingOptionsBottouEpoch(fittingOptions)
 
    -- initialize loop
    local printLoss = fittingOptions.printLoss
    local previousLoss = nil
+   local lossBeforeStep = nil
+   local lossIncreasedOnLastStep = false
    local previousTheta = self.opfunc:initialTheta()
    local stepSize = fittingOptions.initialStepSize  -- some folks call this variable eta
    local nEpochsCompleted = 0
 
    repeat -- until convergence
+      vp(2, '----------------- loop restarts')
       vp(2, 'nEpochsCompleted', nEpochsCompleted, 'stepSize', stepSize)
-      if self:_timeToAdjustStepSize(nEpochsCompleted, fittingOptions) then
+      vp(2, 'previousLoss', previousLoss, 'previousTheta', vectorToString(previousTheta))
+      vp(2, 'lossIncreasedOnLastStep', tostring(lossIncreasedOnLastStep))
+      if self:_timeToAdjustStepSize(nEpochsCompleted, fittingOptions) or 
+         lossIncreasedOnLastStep then
          -- adjust stepsize and take a step with the adjusted size
          vp(2, 'adjusting step size and stepping')
-         stepSize, nextTheta, nextLoss = self:_adjustStepSizeAndStep(fittingOptions, stepSize, previousTheta)
+         stepSize, nextTheta, lossBeforeStep = 
+            self:_adjustStepSizeAndStep(fittingOptions, stepSize, previousTheta)
          nEpochsCompleted = nEpochsCompleted + fittingOptions.nEpochsToAdjustStepSize
       else
          -- take a step with the current stepsize
          vp(2, 'stepping with current step size')
-         nextTheta, nextLoss = self:_step(stepSize, previousTheta)
+         nextTheta, lossBeforeStep = self:_step(stepSize, previousTheta)
          nEpochsCompleted = nEpochsCompleted + 1
       end
 
-      vp(2, 'nEpochsCompleted', nEpochsCompleted)
-      vp(2, 'nextLoss', nextLoss, 'previousLoss', previousLoss)
+      vp(2, 'lossBeforeStep', lossBeforeStep, 'nextTheta', vectorToString(nextTheta))
       if printLoss then
-         print(string.format('ModelLogregNnBatch:fit nEpochsCompleted %d stepSize %f nextLoss %f',
-                             nEpochsCompleted, stepSize, nextLoss))
+         print(string.format('ModelLogregNnBatch:_fitBottouEpoch nEpochsCompleted %d stepSize %f lossBeforeStep %f',
+                             nEpochsCompleted, stepSize, lossBeforeStep))
       end
       
 
       local hasConverged, convergedReason, relevantLimit = self:_converged(fittingOptions, 
                                                                            nEpochsCompleted, 
                                                                            nextTheta, previousTheta, 
-                                                                           nextLoss, previousLoss)
+                                                                           lossBeforeStep, previousLoss)
       vp(2, 'hasConverged', hasConverged, 'convergedReason', convergedReason)
 
       if hasConverged then
          local fitInfo = {
             convergedReason = convergedReason,
-            finalLoss = nextLoss,
+            finalLoss = lossBeforeStep,
             nEpochsUntilConvergence = nEpochsCompleted,
             optimalTheta = nextTheta
          }
          self.fitInfo = fitInfo
-         return fitInfo
+         return nextTheta, fitInfo
       end
       
-      previousLoss = nextLoss
+      -- error if the loss is increasing
+      -- Because we are doing full gradient descent, there is always a small enough stepsize
+      -- so that the loss will not increase.
+      if previousLoss ~= nil then
+         lossIncreasedOnLastStep = lossBeforeStep > previousLoss
+         if lossIncreasedOnLastStep then
+            error(string.format('loss increased from %f to %f on epoch %d',
+            previousLoss, lossBeforeStep, nEpochsCompleted))
+         end
+      end
+      
+      previousLoss = lossBeforeStep
+      previousTheta = nextTheta
+   until false
+end
+
+-- fit using gradient decent with a fixed step size
+function ModelLogregNnBatch:_fitGradientDescent(fittingOptions)
+   local vp = makeVp(0, '_fitGradientDescent')
+   self:_validateFittingOptionsGradientDescent(fittingOptions)
+
+   -- initialize loop
+   local printLoss = fittingOptions.printLoss
+   local stepSize = fittingOptions.initialStepSize  -- some folks call this variable eta
+
+   local previousLoss = nil
+   local previousTheta = self.opfunc:initialTheta()
+   local nEpochsCompleted = 0
+
+   repeat -- until convergence
+      vp(2, '----------------- loop restarts')
+      vp(2, 'nEpochsCompleted', nEpochsCompleted, 'stepSize', stepSize)
+      vp(2, 'previousLoss', previousLoss, 'previousTheta', vectorToString(previousTheta))
+      vp(2, 'lossIncreasedOnLastStep', tostring(lossIncreasedOnLastStep))
+      
+      local nextTheta, lossBeforeStep = self:_step(stepSize, previousTheta)
+      nEpochsCompleted = nEpochsCompleted + 1
+
+      if printLoss then
+         print(string.format('ModelLogregNnBatch:_fitGradientDescent nEpochsCompleted %d stepSize %f lossBeforeStep %f',
+                             nEpochsCompleted, stepSize, lossBeforeStep))
+      end
+      
+
+      local hasConverged, convergedReason, relevantLimit = self:_converged(fittingOptions, 
+                                                                           nEpochsCompleted, 
+                                                                           nextTheta, previousTheta, 
+                                                                           lossBeforeStep, previousLoss)
+      vp(2, 'hasConverged', hasConverged, 'convergedReason', convergedReason)
+
+      if hasConverged then
+         local fitInfo = {
+            convergedReason = convergedReason,
+            finalLoss = lossBeforeStep,
+            nEpochsUntilConvergence = nEpochsCompleted,
+            optimalTheta = nextTheta
+         }
+         self.fitInfo = fitInfo
+         return nextTheta, fitInfo
+      end
+      
+      -- error if the loss is increasing
+      -- Because we are doing full gradient descent, there is always a small enough stepsize
+      -- so that the loss will not increase.
+      if previousLoss ~= nil then
+         local lossIncreasedOnLastStep = lossBeforeStep > previousLoss
+         if lossIncreasedOnLastStep then
+            error(string.format('loss increased from %f to %f on epoch %d',
+            previousLoss, lossBeforeStep, nEpochsCompleted))
+         end
+      end
+      
+      previousLoss = lossBeforeStep
       previousTheta = nextTheta
    until false
 end
@@ -242,10 +345,12 @@ end
 -- loss      : number, loss at the theta before the step
 function ModelLogregNnBatch:_step(stepSize, theta)
    local vp = makeVp(0, '_step')
-   vp(1, 'stepSize', stepSize, 'theta', theta)
+   vp(1, 'stepSize', stepSize, 'theta', vectorToString(theta))
    local loss = self.opfunc:loss(theta)
    local gradient = self.opfunc:gradient(theta)
-   local nextTheta = theta + gradient * stepSize
+   vp(2, 'gradient', vectorToString(gradient))
+   local nextTheta = theta - gradient * stepSize
+   vp(1, 'loss before step', loss, 'nextTheta', vectorToString(nextTheta))
    return nextTheta, loss
 end
 
@@ -261,10 +366,51 @@ end
 
    
 -- check types and values of fields we use in the fittingOptions table
-function ModelLogregNnBatch:_validateFittingOptions(fittingOptions)
+function ModelLogregNnBatch:_validateFittingOptionsBottouEpoch(fittingOptions)
+   local function present(fieldName)
+      assert(fittingOptions[fieldName] ~= nil,
+             'fittingOptions missing field ' .. fieldName)
+   end
+
+   present('initialStepSize')
+   present('nEpochsBeforeAdjustingStepSize')
+   present('nEpochsToAdjustStepSize')
+   present('nextStepSizes')
+
    validateAttributes(fittingOptions.initialStepSize, 'number', 'positive')
    validateAttributes(fittingOptions.nEpochsBeforeAdjustingStepSize, 'number', 'integer', 'positive')
    validateAttributes(fittingOptions.nEpochsToAdjustStepSize, 'number', 'integer', 'positive')
+   assert(type(fittingOptions.nextStepSizes) == 'function', 
+          'fittingOptions.nextStepSizes is not a function')
+
+   if fittingOptions.maxEpochs ~= nil then
+      validateAttributes(fittingOptions.maxEpochs, 'number', 'integer', 'positive')
+   end
+
+   if fittingOptions.toleranceLoss ~= nil then
+      validateAttributes(fittingOptions.toleranceLoss, 'number', 'positive')
+   end
+
+   if fittingOptions.toleranceTheta ~= nil then
+      validateAttributes(fittingOptions.toleranceTheta, 'number', 'positive')
+   end
+
+   assert(fittingOptions.maxEpochs ~= nil or
+          fittingOptions.toleranceLoss ~= nil or
+          fittingOptions.toleranceTheta ~= nil,
+          'at least one convergence options must be specified')
+end
+
+-- check types and values of fields we use in the fittingOptions table
+function ModelLogregNnBatch:_validateFittingOptionsGradientDescent(fittingOptions)
+   local function present(fieldName)
+      assert(fittingOptions[fieldName] ~= nil,
+             'fittingOptions missing field ' .. fieldName)
+   end
+
+   present('initialStepSize')
+
+   validateAttributes(fittingOptions.initialStepSize, 'number', 'positive')
 
    if fittingOptions.maxEpochs ~= nil then
       validateAttributes(fittingOptions.maxEpochs, 'number', 'integer', 'positive')
