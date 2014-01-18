@@ -6,6 +6,7 @@ require 'equalObjects'
 require 'isnan'
 require 'makeVp'
 require 'memoryUsed'
+require 'printTableVariable'
 require 'sequenceContains'
 require 'splitString'
 require 'Timer'
@@ -709,6 +710,11 @@ function NamedMatrix.readCsv(t)
    end
    vp(2, 'headerNames', headerNames)  -- all the header names
    vp(2, 'headerIndices', headerIndices)
+   if d then
+      for i, headerName in ipairs(headerNames) do
+         print('headerNames[' .. tostring(i) .. ']=' .. tostring(headerName))
+      end
+   end
 
    local fieldColumnIndex = {}
    for i, name in ipairs(headerNames) do
@@ -731,6 +737,11 @@ function NamedMatrix.readCsv(t)
    vp(2, 'isNumberColumn', isNumberColumn)
    vp(2, 'retainedColumnNames', retainedColumnNames)
    vp(2, 'isRetainedColumn', isRetainedColumn)
+   if d then 
+      for k, v in pairs(retainedColumnNames) do
+         print('retainedColumnNames[' .. tostring(k) .. ']=' .. tostring(v))
+      end
+   end
 
    -- read records into a numeric sequence for each column
    
@@ -851,6 +862,7 @@ function NamedMatrix.readCsv(t)
    levelOfString = nil
    nextOffset = nil
 
+   printTableVariable('retainedColumnNames')
    local result = NamedMatrix.new{tensor=tensor, 
                                   names=retainedColumnNames, 
                                   levels=levels}
