@@ -89,7 +89,10 @@ end
 --               .mostLikelyClasses : 1D Tensor of integers, the most likely class numbers
 function ModelLogregNnBatch:runrunPredict(newX, theta)
    local vp = makeVp(0, 'runrunPredict')
+   assert(newX ~= nil, 'newX is nil')
    assert(newX:nDimension() == 2, 'newX is not a 2D Tensor')
+   
+   assert(theta ~= nil, 'theta is nil')
    assert(theta:nDimension() == 1, 'theta is not a 1D Tensor')
    --printAllVariables()
 
@@ -129,13 +132,14 @@ end
 -- "best" means the stepsize that reduces the current loss the most
 -- ARGS
 -- fittingOptions  : table
--- currentStepSize        : number > 0
+-- currentStepSize : number > 0
 -- theta           : 1D Tensor
+-- printLoss       : boolean
 -- RETURNS
 -- bestStepSize    : number
 -- nextTheta       : 1D Tensor
 -- lossBeforeStep  : number, the loss before the last step taken
-function ModelLogregNnBatch:_adjustStepSizeAndStep(fittingOptions, currentStepSize, theta)
+function ModelLogregNnBatch:_adjustStepSizeAndStep(fittingOptions, currentStepSize, theta, printLoss)
    local vp = makeVp(0, '_adjustStepSizeAndStep')
    vp(1, 'currentStepSize', currentStepSize)
    vp(2, 'theta', vectorToString(theta))
@@ -154,6 +158,9 @@ function ModelLogregNnBatch:_adjustStepSizeAndStep(fittingOptions, currentStepSi
       lossesBeforeLastStep[stepSize] = lossBeforeLastStep
       nextThetas[stepSize] = nextTheta
       vp(2, 'stepSize', stepSize, 'lossAfterSteps', lossAfterSteps)
+      if printLoss then
+         print(string.format('stepsize %f leads to loss of %f', stepSize, lossAfterSteps))
+      end
    end
 
    local bestStepSize = keyWithMinimumValue(lossesAfterSteps)
@@ -229,7 +236,7 @@ function ModelLogregNnBatch:_fitBottouEpoch(fittingOptions)
          -- adjust stepsize and take a step with the adjusted size
          vp(2, 'adjusting step size and stepping')
          stepSize, nextTheta, lossBeforeStep = 
-            self:_adjustStepSizeAndStep(fittingOptions, stepSize, previousTheta)
+            self:_adjustStepSizeAndStep(fittingOptions, stepSize, previousTheta, printLoss)
          nEpochsCompleted = nEpochsCompleted + fittingOptions.nEpochsToAdjustStepSize
       else
          -- take a step with the current stepsize
@@ -259,6 +266,14 @@ function ModelLogregNnBatch:_fitBottouEpoch(fittingOptions)
             optimalTheta = nextTheta
          }
          self.fitInfo = fitInfo
+         if printLoss then
+            local function p(fieldName)
+               print('converged fitInfo.' .. fieldName .. ' = ' .. tostring(fitInfo[fieldName]))
+            end
+            p('convergedReason')
+            p('finalLoss')
+            p('nEpochsUntilConvergence')
+         end
          return nextTheta, fitInfo
       end
       
@@ -267,9 +282,9 @@ function ModelLogregNnBatch:_fitBottouEpoch(fittingOptions)
       -- so that the loss will not increase.
       if previousLoss ~= nil then
          lossIncreasedOnLastStep = lossBeforeStep > previousLoss
-         if lossIncreasedOnLastStep then
-            error(string.format('loss increased from %f to %f on epoch %d',
-            previousLoss, lossBeforeStep, nEpochsCompleted))
+         if lossIncreasedOnLastStep and printLoss then
+            print(string.format('loss increased from %f to %f on epoch %d',
+                                previousLoss, lossBeforeStep, nEpochsCompleted))
          end
       end
       
