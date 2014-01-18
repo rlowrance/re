@@ -4,9 +4,9 @@
 if false then
    -- API Overview
    cm = ConfusionMatrix()
-   cm.add(actual, predicted)  -- args are positive integers
-   er = cm.errorRate()        -- fraction for which actual == predicted
-   cm.printTo(file, heading)    -- print to open file
+   cm:add(actual, predicted)  -- args are positive integers
+   er = cm:errorRate()        -- fraction for which actual ~= predicted
+   cm:printTo(file, heading)  -- print to open file
 end
 
 require 'makeVp'
