@@ -3,6 +3,7 @@
 require 'makeVp'
 require 'optim'
 require 'sgdBottou'
+require 'Timer'
 require 'validateAttributes'
 
 -- use optim.sgdBottou to optimize a function
@@ -28,7 +29,7 @@ function sgdBottouDriver(opfunc, config, nSamples, initialX,
                          tolX, tolF, maxEpochs, 
                          verbose)
    local reportTiming = global.reportTiming.sgdBottouDriver
-   local vp = makeVp(0, 'sgdBottouDriver')
+   local vp = makeVp(2, 'sgdBottouDriver')
    local timer = Timer(vp)
 
 
@@ -59,6 +60,7 @@ function sgdBottouDriver(opfunc, config, nSamples, initialX,
       for iteration = 1, nSamples do
          vp(2, 'x before update', x)
          validateAttributes(x, 'Tensor')
+         vp(2, 'optim', optim)
          local xNew, losses = optim.sgdBottou(opfunc, x, config, state)
          vp(2, 'x after update', xNew)
          x = xNew

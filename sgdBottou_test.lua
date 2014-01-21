@@ -171,6 +171,10 @@ local function newEtas(currentEta)
 end
 
 -- configure the driver
+global = {}
+global.reportTiming = {}
+global.reportTiming.sgdBottouDriver = false
+
 local config =                    -- passed to optim.sgdBottou
    {nSamples = nSamples,          -- number of training samples available
    nSubsamples = .1 * nSamples,   -- number of samples to use when evaluating candidate

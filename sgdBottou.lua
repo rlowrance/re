@@ -1,12 +1,10 @@
 -- sgdBottou.lua
 
 require 'makeVp'
+require 'optim'
 require 'pressEnter'
 require 'validateAttributes'
 
-if optim == nil then
-   optim = {}
-end
 
 -- An implementation of Leon Bottou's idea for dynamically adjusting the learning rate eta.
 -- 
@@ -184,4 +182,12 @@ function optim.sgdBottou(opfunc, x, config, state)
    end
 
    return x, {loss}
+end
+
+if false then
+   -- print the optim table
+   print('optim table as defined in sgdBottout.lua')
+   for k, v in pairs(optim) do
+      print('optim.' .. tostring(k) .. '=' .. tostring(v))
+   end
 end
