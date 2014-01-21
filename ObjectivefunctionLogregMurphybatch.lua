@@ -80,9 +80,16 @@ end
 -- RETURNS
 -- theta : 1D Tensor size (nClasses -1) * (nFeatures + 1)
 function ObjectivefunctionLogregMurphybatch:runrunInitialTheta()
+   -- Start parameters at zero, unless fitting a true neural network, 
+   -- where one has the need to avoid a degenerative solution.
+   local startParametersAtZero = true
    local theta = torch.Tensor(self.nUserParameters)
-   local stdv = 1 / math.sqrt(self.nFeatures) -- mimic Torch's nn.Linear
-   theta:uniform(-stdv, stdv)
+   if startParametersAtZero then
+      theta:zero()
+   else
+      local stdv = 1 / math.sqrt(self.nFeatures) -- mimic Torch's nn.Linear
+      theta:uniform(-stdv, stdv)
+   end
    return theta
 end
 

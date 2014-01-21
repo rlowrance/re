@@ -38,13 +38,16 @@ function ObjectivefunctionLogregNnbatch:__init(X, y, s, nClasses, L2)
    
    -- couple and flatten parameters and gradient
    -- the only parameters are in the linear module
+   -- initialize the parameters to zero
    self.modelTheta, self.modelGradient = self.model:getParameters()
+   self.modelTheta:zero()
 
    -- define optimization criterion
    self.criterion = nn.ClassNLLCriterion()
 
    -- save initial parameters that were set by the Linear() constructor
    -- NOTE: self.initialTheta is a function defined in the parent class!
+   -- NOTE: Yann suggested that these parameters be set to zero values
    self.initialThetaValue = self.modelTheta:clone()
    
    -- build table of randomly-permuted sample indices

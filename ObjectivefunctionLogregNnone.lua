@@ -38,7 +38,9 @@ function ObjectivefunctionLogregNnone:__init(X, y, s, nClasses, L2)
    
    -- couple and flatten parameters and gradient
    -- the only parameters are in the linear module
+   -- set the parameters to zero
    self.modelTheta, self.modelGradient = self.model:getParameters()
+   self.modelTheta:zero()
 
    -- define optimization criterion
    self.criterion = nn.ClassNLLCriterion()

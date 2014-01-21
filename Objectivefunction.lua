@@ -2,7 +2,7 @@
 -- abstract class for optimization function
 
 if false then
-   of = ObjectivefunctionSUBCLASS(ubclass_parameters)
+   of = ObjectivefunctionSUBCLASS(subclass_parameters)
 
    -- implementation note: each method should do the minimum amount of work
    flatParameters = of:initialTheta()  -- return 1D Tensor
@@ -24,6 +24,7 @@ local Objectivefunction = torch.class('Objectivefunction')
 
 function Objectivefunction:__init()
    -- subclass will supply its own initialization
+   return
 end
 
 -------------------------------------------------------------------------------

@@ -118,6 +118,10 @@ local function initialTheta_test()
 
    assert(initialTheta:nDimension() == 1)
    assert(initialTheta:size(1) == (testExample.nClasses) * (testExample.nFeatures + 1))
+
+   for i = 1, initialTheta:size(1) do
+      assert(initialTheta[i] == 0)
+   end
 end
 
 initialTheta_test()
