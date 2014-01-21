@@ -51,6 +51,11 @@ torch metersPerLatitudeDegree_test.lua
 torch metersPerLongitudeDegree_test.lua
 torch ModelLinearL2Loss_test.lua
 torch NamedMatrix_test.lua
+luajit Objectivefunction_test.lua
+luajit ObjectivefunctionLogreg_test.lua
+luajit ObjectivefunctionLogregMurphybatch_test.lua
+luajit ObjectivefunctionLogregNnbatch_test.lua
+luajit ObjectivefunctionLogregNnone_test.lua
 torch parseCommandLine_test.lua
 luajit printAllVariables_test.lua
 luajit printTableValue_test.lua
