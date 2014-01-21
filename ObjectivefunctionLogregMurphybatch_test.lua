@@ -1,10 +1,10 @@
--- OpfuncLogregMurphyBatch_test.lua
+-- ObjectivefunctionLogregMurphybatch_test.lua
 -- unit test
 
 require 'assertEq'
 require 'finiteDifferenceGradient'
 require 'makeVp'
-require 'OpfuncLogregMurphyBatch'
+require 'ObjectivefunctionLogregMurphybatch'
 require 'printVariable'
 require 'printAllVariables'
 require 'printTableVariable'
@@ -43,7 +43,7 @@ local function makeUnitTestExample()
    local expectedLikelihood = prob11 ^ testExample.s[1] * prob23 ^ testExample.s[2]
    testExample.expectedLogLikelihood = math.log(expectedLikelihood)
 
-   local of =  OpfuncLogregMurphyBatch(testExample.X, 
+   local of =  ObjectivefunctionLogregMurphybatch(testExample.X, 
                                        testExample.y, 
                                        testExample.s, 
                                        testExample.nClasses, 
@@ -84,7 +84,7 @@ local function _loss_probabilities_test()
    assert(probabilities:size(1) == testExample.nSamples)
    assert(probabilities:size(2) == testExample.nClasses)
 
-   -- expected values computed in octave script OpfuncLogreg_test.m
+   -- expected values computed in octave script ObjectivefunctionLogreg_test.m
    assertEq(probabilities[1], torch.Tensor{2.2596e-6, 9.9966e-1, 3.3535e-4}, .0001)
    assertEq(probabilities[2], torch.Tensor{4.1397e-8, 9.9995e-1, 4.5398e-5}, .0001)
 end
@@ -247,4 +247,4 @@ predictions_test()
 
 -------------------------------------------------------------------------------
 
-print('ok OpfuncLogregMurphyBatch')
+print('ok ObjectivefunctionLogregMurphybatch')

@@ -1,4 +1,4 @@
--- OpfuncLogregNnBatch.lua
+-- ObjectivefunctionLogregNnbatch.lua
 -- logistic regression opfunc using nn package and 
 -- loss and gradient over the entire epoch (called a batch in this code)
 
@@ -6,7 +6,7 @@ require 'argmax'
 require 'assertEq'
 require 'checkGradient'
 require 'keyboard'
-require 'OpfuncLogreg'
+require 'ObjectivefunctionLogreg'
 require 'makeNextPermutedIndex'
 require 'makeVp'
 require 'memoryUsed'
@@ -23,10 +23,10 @@ require 'validateAttributes'
 -- CONSTRUCTOR
 -------------------------------------------------------------------------------
 
-local OpfuncLogregNnBatch, parent = torch.class('OpfuncLogregNnBatch', 'OpfuncLogreg')
+local ObjectivefunctionLogregNnbatch, parent = torch.class('ObjectivefunctionLogregNnbatch', 'ObjectivefunctionLogreg')
 
-function OpfuncLogregNnBatch:__init(X, y, s, nClasses, lambda)
-   parent.__init(self, X, y, s, nClasses, lambda)
+function ObjectivefunctionLogregNnbatch:__init(X, y, s, nClasses, L2)
+   parent.__init(self, X, y, s, nClasses, L2)
 
    -- define unregularized model
    -- make modules within model explicit for testing purposes
@@ -61,7 +61,7 @@ end
 -- return flat parameters that are a suitable starting point for optimization
 -- RETURNS
 -- theta : Tensor 1D of flat parameters
-function OpfuncLogregNnBatch:runrunInitialTheta()
+function ObjectivefunctionLogregNnbatch:runrunInitialTheta()
    return self.initialThetaValue
 end
 
@@ -70,7 +70,7 @@ end
 -- theta : Tensor 1D of flat parameters
 -- RETURNS
 -- gradient : Tensor !D
-function OpfuncLogregNnBatch:runrunGradient(theta)
+function ObjectivefunctionLogregNnbatch:runrunGradient(theta)
    local gradient, _, _ = self:_gradientLossLogprobabilities(theta)
    return gradient
 end
@@ -80,7 +80,7 @@ end
 -- theta    : Tensor 1D, parameters
 -- RETURNS
 -- loss     : number at next randomly-selected X, y, s sample
-function OpfuncLogregNnBatch:runrunLoss(theta)
+function ObjectivefunctionLogregNnbatch:runrunLoss(theta)
    assert(theta ~= nil, 'theta not supplied')
    assert(theta:nDimension() == 1, 'theta is not a 1D Tensor')
 
@@ -90,7 +90,7 @@ function OpfuncLogregNnBatch:runrunLoss(theta)
    return loss
 end
 
-function OpfuncLogregNnBatch:runrunLossGradient(theta)
+function ObjectivefunctionLogregNnbatch:runrunLossGradient(theta)
    assert(theta ~= nil, 'theta not supplied')
    assert(theta:nDimension() == 1, 'theta is not a 1D Tensor')
 
@@ -107,11 +107,11 @@ end
 -- theta          : 1D Tensor
 -- RETURNS
 -- probabilities  : 2D Tensor of probabilities
-function OpfuncLogregNnBatch:runrunPredictions(newX, theta)
+function ObjectivefunctionLogregNnbatch:runrunPredictions(newX, theta)
    assert(newX:nDimension() == 2, 'newX is not a 2D Tensor')
    assert(newX:size(2) == self.X:size(2), 'newX has wrong number of features')
 
-   -- avoid construction of a new OpfuncLogregNnBatch by replacing and restoring field X
+   -- avoid construction of a new ObjectivefunctionLogregNnbatch by replacing and restoring field X
    local currentX = self.X  -- save field X
    self.X = newX
    local logProbabilities = self:_logprobabilities(theta)
@@ -128,7 +128,7 @@ end
 
 -- RETURNS
 -- logProbabililites : 2D Tensor
-function OpfuncLogregNnBatch:_logprobabilities(theta)
+function ObjectivefunctionLogregNnbatch:_logprobabilities(theta)
    if self.modelTheta ~= theta then
       self.modelTheta:copy(theta)
    end
@@ -141,8 +141,8 @@ end
 -- RETURNS
 -- loss             : number, regularized loss
 -- logProbabilities : 2D Tensor
-function OpfuncLogregNnBatch:_lossLogprobabilities(theta)
-   local vp, verboseLevel = makeVp(0, 'OpfuncLogregNnBatch:_lossLogprobabilities')
+function ObjectivefunctionLogregNnbatch:_lossLogprobabilities(theta)
+   local vp, verboseLevel = makeVp(0, 'ObjectivefunctionLogregNnbatch:_lossLogprobabilities')
    local v = verboseLevel > 0
 
    local logProbabilities = self:_logprobabilities(theta)
@@ -169,9 +169,9 @@ function OpfuncLogregNnBatch:_lossLogprobabilities(theta)
    if v then
       vp(2, 'weights', weights)
       vp(2, 'regularizer', regularizer)
-      vp(2, 'self.lambda', self.lambda)
+      vp(2, 'self.L2', self.L2)
    end
-   local lossRegularized = loss + self.lambda * regularizer
+   local lossRegularized = loss + self.L2 * regularizer
 
    return lossRegularized, logProbabilities
 end
@@ -184,14 +184,14 @@ end
 -- gradientRegularized ; 1D Tensor with same shape as theta
 -- lossRegularized     : number
 -- logProbabilies      : 1D Tensor of size self.nClasses
-function OpfuncLogregNnBatch:_gradientLossLogprobabilities(theta)
-   local vp, verboseLevel = makeVp(0, 'OpfuncLogregNnBatch:_lossGradientPredictions')
+function ObjectivefunctionLogregNnbatch:_gradientLossLogprobabilities(theta)
+   local vp, verboseLevel = makeVp(0, 'ObjectivefunctionLogregNnbatch:_lossGradientPredictions')
    local v = verboseLevel > 0
    if v then
       vp(1, 'theta', theta, 'self', self)
       printTableVariable('self')
    end
-   assert(type(self.lambda) == 'number', 'lambda=' .. tostring(lambda))
+   assert(type(self.L2) == 'number', 'L2=' .. tostring(L2))
 
    local lossRegularized, logProbabilities = self:_lossLogprobabilities(theta)
    vp(2, 'lossRegularized', lossRegularized, 'logProbabilities', logProbabilities)
@@ -229,15 +229,15 @@ function OpfuncLogregNnBatch:_gradientLossLogprobabilities(theta)
          for d = 1, self.nFeatures do
             index = index + 1
             gradientRegularized1[index] = 
-            gradientRegularized1[index] + 2 * self.lambda * weights[c][d]
+            gradientRegularized1[index] + 2 * self.L2 * weights[c][d]
          end
       end
       gradientRegularized = gradientRegularized1
    elseif gradientVersion == 2 or gradientVersion == 'all' then
       gradientRegularized2 = self.modelGradient:clone()
       local weightsGradient = torch.Tensor(gradientRegularized2:storage(), 1, weights:nElement(), 1)
-      local weightsGradient1 = weightsGradient + (weights * 2 * self.lambda)
-      torch.add(weightsGradient, weightsGradient, 2 * self.lambda, weights)
+      local weightsGradient1 = weightsGradient + (weights * 2 * self.L2)
+      torch.add(weightsGradient, weightsGradient, 2 * self.L2, weights)
       gradientRegularized = gradientRegularized2
    end
    if gradientVersion == 'all' then

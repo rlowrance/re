@@ -1,9 +1,9 @@
--- OpfuncLogreg.lua
+-- ObjectivefunctionLogreg.lua
 -- abstract class for opfunc for salience-weighted logistic regression
 
 if false then
    -- API overview (version 2 API)
-   of = OpfuncLogregSUBCLASS(X, y, s, nClasses, lambda)
+   of = ObjectivefunctionLogregSUBCLASS(X, y, s, nClasses, L2)
 
    flatParameters = of:initialTheta()
    number= of:loss(flatParameters)
@@ -13,7 +13,7 @@ if false then
    
 end
 
-require 'Opfunc'
+require 'Objectivefunction'
 require 'printAllVariables'
 require 'torch'
 
@@ -21,9 +21,9 @@ require 'torch'
 -- CONSTRUCTOR
 -------------------------------------------------------------------------------
 
-local OpfuncLogreg, parent = torch.class('OpfuncLogreg', 'Opfunc')
+local ObjectivefunctionLogreg, parent = torch.class('ObjectivefunctionLogreg', 'Objectivefunction')
 
-function OpfuncLogreg:__init(X, y, s, nClasses, lambda)
+function ObjectivefunctionLogreg:__init(X, y, s, nClasses, L2)
    parent.__init(self)
    -- validate arguments
    assert(X, 'X not supplied')
@@ -42,9 +42,10 @@ function OpfuncLogreg:__init(X, y, s, nClasses, lambda)
    assert(nClasses, 'nClasses not supplied')
    assert(type(nClasses) == 'number', 'nClasses is not a number')
 
-   assert(lambda, 'lmabda not supplied')
-   assert(type(lambda) == 'number', 'lambda is not a number')
-   assert(lambda >= 0, 'lambda not non-negative')
+   L2 = L2 or 0  -- supply default
+   assert(L2, 'L2 regularizer importance not supplied')
+   assert(type(L2) == 'number', 'L2 is not a number')
+   assert(L2 >= 0, 'L2 not non-negative')
 
 
    -- save args
@@ -52,7 +53,7 @@ function OpfuncLogreg:__init(X, y, s, nClasses, lambda)
    self.y = y
    self.s = s
    self.nClasses = nClasses
-   self.lambda = lambda
+   self.L2 = L2
 end
 
 -------------------------------------------------------------------------------
@@ -62,7 +63,7 @@ end
 -- return a tensor (flat parameters) with reasonable initial values
 -- RETURN
 -- flatParameters : Tensor 1D
-function Opfunc:runInitialTheta()
+function ObjectivefunctionLogreg:runInitialTheta()
    return self:runrunInitialTheta()
 end
 
@@ -71,7 +72,7 @@ end
 -- flatParameters : table returned by method loss()
 -- RETURNS:
 -- gradient       : Tensor 1D (includes gradient of regularizer)
-function Opfunc:runGradient(flatParameters)
+function ObjectivefunctionLogreg:runGradient(flatParameters)
    return self:runrunGradient(flatParameters)
 end
 
@@ -80,7 +81,7 @@ end
 -- flatParameters : Tensor 1D
 -- RETURNS:
 -- gradient       : Tensor 1D (includes gradient of regularizer)
-function Opfunc:runLoss(flatParameters)
+function ObjectivefunctionLogreg:runLoss(flatParameters)
    return self:runrunLoss(flatParameters)
 end
 
@@ -90,7 +91,7 @@ end
 -- RETURNS:
 -- loss           : number
 -- gradient       : Tensor 1D (includes gradient of regularizer)
-function Opfunc:runLossGradient(flatParameters)
+function ObjectivefunctionLogreg:runLossGradient(flatParameters)
    return self:runrunLossGradient(flatParameters)
 end
 
@@ -100,6 +101,6 @@ end
 -- flatParameters : 1D Tensor
 -- RETURNS
 -- probabilies    : 2D Tensor, shape depends on subclass
-function Opfunc:runPredictions(newX, flatParameters)
+function ObjectivefunctionLogreg:runPredictions(newX, flatParameters)
    return self:runrunPredictions(newX, flatParameters)
 end

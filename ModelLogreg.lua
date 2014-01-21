@@ -18,21 +18,21 @@ local ModelLogreg, parent = torch.class('ModelLogreg', 'Model')
 -- lambda   : number L2 regularizer importance
 function ModelLogreg:__init(X, y, s, nClasses, lambda)
    parent.__init(self)
-   assert(X:nDimension() == 2)
+   assert(X:nDimension() == 2, 'X is not a 2D Tensor')
    self.nSamples = X:size(1)
    self.nFeatures = X:size(2)
 
-   assert(y:nDimension() == 1)
-   assert(y:size(1) == self.nSamples)
+   assert(y:nDimension() == 1, 'y is not a 1D Tensor')
+   assert(y:size(1) == self.nSamples, 'y has incorrect size')
 
-   assert(s:nDimension() == 1)
-   assert(s:size(1) == self.nSamples)
+   assert(s:nDimension() == 1, 's is not a 1D Tensor')
+   assert(s:size(1) == self.nSamples, 's has incorrect size')
 
-   assert(type(nClasses) == 'number')
-   assert(nClasses >= 1)
+   assert(type(nClasses) == 'number', 'nClasses is not a number')
+   assert(nClasses >= 2, 'number of classes is not at least 2')
 
-   assert(type(lambda) == 'number')
-   assert(lambda >= 0)
+   assert(type(lambda) == 'number', 'lambda is not a number')
+   assert(lambda >= 0, 'lambda is not at least zero')
 
    self.X = X
    self.y = y

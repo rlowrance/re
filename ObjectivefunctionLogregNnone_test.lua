@@ -1,10 +1,10 @@
--- OpfuncLogregNnOne_test.lua
+-- ObjectivefunctionLogregNnone_test.lua
 -- unit test
 
 require 'assertEq'
 require 'finiteDifferenceGradient'
 require 'makeVp'
-require 'OpfuncLogregNnOne'
+require 'ObjectivefunctionLogregNnone'
 require 'printVariable'
 require 'printAllVariables'
 require 'printTableVariable'
@@ -21,10 +21,10 @@ local vp = makeVp(2, 'tester')
 -- setup unit test example
 
 
-local function makeUnitTestExample(lambdaValue)
+local function makeUnitTestExample(L2Value)
    local vp = makeVp(0, 'makeUnitTestExample')
    -- inputs
-   lambdaValue = lambdaValue or .01  -- supply default value
+   L2Value = L2Value or .01  -- supply default value
    local testExample = {
       nFeatures = 2,
       nSamples = 2,
@@ -32,7 +32,7 @@ local function makeUnitTestExample(lambdaValue)
       X = torch.Tensor{{1,2}, {3,4}},
       y = torch.Tensor{1, 3},
       s = torch.Tensor{.1, .5},
-      lambda = lambdaValue,
+      L2 = L2Value,
       theta = torch.Tensor{-1, 2, -3, 4, -5, 6, -7, 8, -9}}  -- biases are last 3 entries
 
    -- outputs
@@ -69,14 +69,14 @@ local function makeUnitTestExample(lambdaValue)
 
                        
    testExample.expectedLossSample1 = 
-      17 * testExample.s[1] + testExample.lambda * (testExample.sumSquaredWeights)
+      17 * testExample.s[1] + testExample.L2 * (testExample.sumSquaredWeights)
 
-   vp(2, 'OpfuncLogregNnOne', OpfuncLogregNnOne)
-   local of =  OpfuncLogregNnOne(testExample.X, 
+   vp(2, 'ObjectivefunctionLogregNnone', ObjectivefunctionLogregNnone)
+   local of =  ObjectivefunctionLogregNnone(testExample.X, 
                                  testExample.y, 
                                  testExample.s, 
                                  testExample.nClasses, 
-                                 testExample.lambda)
+                                 testExample.L2)
 
    return of, testExample
 end
@@ -124,15 +124,15 @@ initialTheta_test()
 
 -------------------------------------------------------------------------------
 
-local function loss_test(lambda)
+local function loss_test(L2)
    local vp = makeVp(0, 'loss_test')
-   local of, testExample = makeUnitTestExample(lambda)
+   local of, testExample = makeUnitTestExample(L2)
 
    -- test on first randomly-selected sample
    local loss = of:loss(testExample.theta)
 
-   local expectedLoss = 17 * testExample.s[1] + testExample.lambda * (testExample.sumSquaredWeights)
-   vp(2, 'sumSquaredWeights', testExample.sumSquaredWeights, 'lambda', testExample.lambda)
+   local expectedLoss = 17 * testExample.s[1] + testExample.L2 * (testExample.sumSquaredWeights)
+   vp(2, 'sumSquaredWeights', testExample.sumSquaredWeights, 'L2', testExample.L2)
    assertEq(loss,  expectedLoss, .0001)  -- since y == 1 on sample 1
 
    -- test on second randomly-selected sample
@@ -144,7 +144,7 @@ loss_test(.01)  -- then with regularizer
 
 -------------------------------------------------------------------------------
 
-local function gradient_test_returns_same(lambda)
+local function gradient_test_returns_same(L2)
    -- make sure that public method gradient and private method _lossGradient return the same value
    -- do this because the test of the gradient value relies on calling the private method
    -- NOTE: this test was stubbed out because the current API doesn't provide a way to determine the 
@@ -154,7 +154,7 @@ local function gradient_test_returns_same(lambda)
    end
 
    local vp = makeVp(0, 'gradient_test_returns_same')
-   local of = makeUnitTestExample(lambda)
+   local of = makeUnitTestExample(L2)
    local theta = of:initialTheta()  -- use random theta
 
    local loss, lossInfo = of:loss(theta)
@@ -167,11 +167,11 @@ local function gradient_test_returns_same(lambda)
    assertEq(gradientFromPublicMethod, gradientFromPrivateMethod, .0001)
 end
 
-local function gradient_test_gradient_value(lambda)   
+local function gradient_test_gradient_value(L2)   
    -- make sure the gradient value returned by the private method _lossGradient is correct
    -- call the private method so that the index of the sample to use can be specified
    local vp = makeVp(0, 'gradient_test_gradient_value')
-   local of, testExample = makeUnitTestExample(lambda)
+   local of, testExample = makeUnitTestExample(L2)
    local sampleIndex = 1
 
    local function f(theta)
@@ -194,9 +194,9 @@ local function gradient_test_gradient_value(lambda)
 end
 
 -- test gradient in two steps, because the public method gradient(lossInfo) selects a random sample
-local function gradient_test(lambda)
-   gradient_test_returns_same(lambda)
-   gradient_test_gradient_value(lambda)
+local function gradient_test(L2)
+   gradient_test_returns_same(L2)
+   gradient_test_gradient_value(L2)
 end
 
 if true then
@@ -204,4 +204,4 @@ if true then
    gradient_test(.001)  -- now test with the regularizer
 end
 
-print('ok OpfuncLogregNnOne')
+print('ok ObjectivefunctionLogregNnone')

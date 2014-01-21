@@ -1,10 +1,10 @@
--- OpfuncLogregMurphyBatch_test.lua
+-- ObjectivefunctionLogregMurphybatch_test.lua
 -- unit test
 
 require 'assertEq'
 require 'finiteDifferenceGradient'
 require 'makeVp'
-require 'OpfuncLogregMurphyBatch'
+require 'ObjectivefunctionLogregMurphybatch'
 require 'printVariable'
 require 'printAllVariables'
 require 'printTableVariable'
@@ -32,16 +32,16 @@ local function makeOfFromTimingExample()
       nFeatures = 8,
       nSamples = 60,
       nClasses = 14,
-      lambda = .001
+      L2 = .001
    }
    timingExample.X = torch.rand(timingExample.nSamples, timingExample.nFeatures)
    timingExample.y = Random:integer(timingExample.nSamples, 1, timingExample.nClasses)
    timingExample.s = Random:uniform(timingExample.nSamples, 0.001, 1)
-   local of = OpfuncLogregMurphyBatch(timingExample.X, 
+   local of = ObjectivefunctionLogregMurphybatch(timingExample.X, 
                                      timingExample.y, 
                                      timingExample.s, 
                                      timingExample.nClasses, 
-                                     timingExample.lambda)
+                                     timingExample.L2)
    return of, timingExample
 end
 
@@ -212,7 +212,7 @@ local function timingPrivateMethods(nIterations)
    local theta = of:initialTheta()
    local loss, lossInfo = of:_lossLossinfoProbabilities(theta)  -- lossInfo is need later
    local nSamples = timingExample.nSamples
-   local lambda = timingExample.lambda
+   local L2 = timingExample.L2
 
    timerOverall = Timer()
    timer:reset()
@@ -254,4 +254,4 @@ end
 
 timingPrivateMethods(nIterations)
    
-print('ok OpfuncLogregMurphyBatch_timing')
+print('ok ObjectivefunctionLogregMurphybatch_timing')

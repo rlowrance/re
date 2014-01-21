@@ -1,8 +1,8 @@
--- OpfuncLogregNnBatch.lua
+-- ObjectivefunctionLogregNnbatch.lua
 -- unit test
 
 require 'finiteDifferenceGradient'
-require 'OpfuncLogregNnBatch'
+require 'ObjectivefunctionLogregNnbatch'
 require 'printVariable'
 require 'printAllVariables'
 require 'printTableVariable'
@@ -34,7 +34,7 @@ local function makeRandomExample(lambda)
    local s = Random:uniform(nSamples, .0001, 1)
 
    local theta = torch.rand((nFeatures + 1) * nClasses)
-   local initialTheta = OpfuncLogregNnBatch(X, y, s, nClasses, lambda):initialTheta()
+   local initialTheta = ObjectivefunctionLogregNnbatch(X, y, s, nClasses, lambda):initialTheta()
    vp(2, 'theta', theta, 'initialTheta', initialTheta)
    assert(initialTheta:nDimension() == 1)
    assert(theta:size(1) == initialTheta:size(1))
@@ -61,7 +61,7 @@ end
 -- ARGS
 -- lambdaValue : optional number, value of lambda in the example
 -- RETURN
--- of      : instance of OpfuncLogreg for the example
+-- of      : instance of ObjectivefunctionLogreg for the example
 -- example : table containing X, y, s, and other values
 local function makeKnownExample(lambdaValue)
    local vp = makeVp(0, 'makeKnownExample')
@@ -182,7 +182,7 @@ end
 local function _gradientLossLogprobabilities_test(example)
    local vp = makeVp(0, '_gradientLossLogprobabilities_test')
    
-   local of = OpfuncLogregNnBatch(example.X, example.y, example.s, example.nClasses, example.lambda)
+   local of = ObjectivefunctionLogregNnbatch(example.X, example.y, example.s, example.nClasses, example.lambda)
 
    local initialTheta = of:initialTheta()
    local gradient, loss, logProbabilities = of:_gradientLossLogprobabilities(initialTheta)
@@ -224,7 +224,7 @@ _gradientLossLogprobabilities_test(makeKnownExample())
 -- test method initialTheta
 local function initialTheta_test(example)
    local vp = makeVp(0, 'initialTheta_test')
-   local of = OpfuncLogregNnBatch(example.X, example.y, example.s, example.nClasses, example.lambda)
+   local of = ObjectivefunctionLogregNnbatch(example.X, example.y, example.s, example.nClasses, example.lambda)
    local initialTheta = of:initialTheta()
    vp(2, 'initialTheta', initialTheta)
 
@@ -244,7 +244,7 @@ local function loss_test(lambda, makeExampleFunction)
    vp(1, 'lambda', lambda, 'makeExampleFunction', makeExampleFunction)
 
    local example = makeExampleFunction(lambda)
-   local of = OpfuncLogregNnBatch(example.X, example.y, example.s, example.nClasses, lambda)
+   local of = ObjectivefunctionLogregNnbatch(example.X, example.y, example.s, example.nClasses, lambda)
 
    -- test on the batch (which is all of the samples)
    local theta = example.theta 
@@ -273,7 +273,7 @@ loss_test(.01, makeRandomExample)
 local function gradient_test_returns_same(lambda)
    local vp = makeVp(0, 'gradient_test_returns_same')
    local example = makeKnownExample(lambda)
-   local of = OpfuncLogregNnBatch(example.X, example.y, example.s, example.nClasses, example.lambda)
+   local of = ObjectivefunctionLogregNnbatch(example.X, example.y, example.s, example.nClasses, example.lambda)
    local theta = of:initialTheta()  -- use random theta
 
    local nTests = 10
@@ -299,7 +299,7 @@ local function gradient_test_gradient_value(lambda)
       local vp = makeVp(0, 'gradient_test_gradient_value::test')
       vp(1, 'makeExampleFunction', makeExampleFunction, 'lambda', lambda)
       local example = makeExampleFunction(lambda)
-      local of = OpfuncLogregNnBatch(example.X, example.y, example.s, example.nClasses, example.lambda)
+      local of = ObjectivefunctionLogregNnbatch(example.X, example.y, example.s, example.nClasses, example.lambda)
       local sampleIndex = 1
 
       local function f(theta)
@@ -362,7 +362,7 @@ local function predict_test()
    local vp = makeVp(0, 'testPredict')
    local lambda = 0
    local example = makeRandomExample(lambda)
-   local of = OpfuncLogregNnBatch(example.X, example.y, example.s, example.nClasses, example.lambda)
+   local of = ObjectivefunctionLogregNnbatch(example.X, example.y, example.s, example.nClasses, example.lambda)
    local theta = of:initialTheta()
 
    local newX = torch.rand(10, example.nFeatures)
@@ -391,4 +391,4 @@ end
 
 predict_test()
 
-print('ok OpfuncLogregNnBatch')
+print('ok ObjectivefunctionLogregNnbatch')

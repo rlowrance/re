@@ -1,12 +1,12 @@
--- OpfuncLogreg_timing_comparisons.lua
--- compare timing for concrete classes implementing abstract class OpfuncLogreg
+-- ObjectivefunctionLogreg_timing_comparisons.lua
+-- compare timing for concrete classes implementing abstract class ObjectivefunctionLogreg
 -- only test the method :lossGradient(), because it is typically in the inner loop of models
 
 require 'assertEq'
 require 'makeVp'
-require 'OpfuncLogregMurphyBatch'
-require 'OpfuncLogregNnBatch'
-require 'OpfuncLogregNnOne'
+require 'ObjectivefunctionLogregMurphybatch'
+require 'ObjectivefunctionLogregNnbatch'
+require 'ObjectivefunctionLogregNnone'
 require 'printVariable'
 require 'printAllVariables'
 require 'printTableVariable'
@@ -35,7 +35,7 @@ local function makeTimingExample()
       nFeatures = 8,
       nSamples = 60,
       nClasses = 14,
-      lambda = .001
+      L2 = .001
    }
    timingExample.X = torch.rand(timingExample.nSamples, timingExample.nFeatures)
    timingExample.y = Random:integer(timingExample.nSamples, 1, timingExample.nClasses)
@@ -50,25 +50,25 @@ local function timingComparisons(nIterations)
    local vp = makeVp(1, 'timingComparisons')
    local timingExample = makeTimingExample()
 
-   local ofMurphyBatch = OpfuncLogregMurphyBatch(timingExample.X, 
+   local ofMurphyBatch = ObjectivefunctionLogregMurphybatch(timingExample.X, 
                                                  timingExample.y, 
                                                  timingExample.s, 
                                                  timingExample.nClasses, 
-                                                 timingExample.lambda)
+                                                 timingExample.L2)
    local thetaMurphyBatch = ofMurphyBatch:initialTheta() 
 
-   local ofNnBatch = OpfuncLogregNnBatch(timingExample.X,
+   local ofNnBatch = ObjectivefunctionLogregNnbatch(timingExample.X,
                                          timingExample.y,
                                          timingExample.s,
                                          timingExample.nClasses,
-                                         timingExample.lambda)
+                                         timingExample.L2)
    local thetaNnBatch = ofNnBatch:initialTheta()
                                                 
-   local ofNnOne = OpfuncLogregNnOne(timingExample.X, 
+   local ofNnOne = ObjectivefunctionLogregNnone(timingExample.X, 
                                      timingExample.y, 
                                      timingExample.s, 
                                      timingExample.nClasses, 
-                                     timingExample.lambda)
+                                     timingExample.L2)
    local thetaNnOne = ofNnOne:initialTheta() 
 
 
@@ -98,7 +98,7 @@ local function timingComparisons(nIterations)
    end
 
 
-   vp(1, string.format('Timing results for OpfuncLogreg concrete implementations using %d iterations',
+   vp(1, string.format('Timing results for ObjectivefunctionLogreg concrete implementations using %d iterations',
                        nIterations))
    for implementationName, cpuTime in pairs(cpuTimes) do
       vp(1, string.format('implementation %15s avg CPU/iteration %f',
@@ -111,4 +111,4 @@ local nIterations = 1000
 print(string.format('starting timing comparisons for %d iterations', nIterations))
 timingComparisons(nIterations)
    
-print('finished OpfuncLogreg concrete implementations timing comparisons')
+print('finished ObjectivefunctionLogreg concrete implementations timing comparisons')
