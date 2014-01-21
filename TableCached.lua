@@ -42,7 +42,7 @@ local TableCached = torch.class('TableCached')
 --              basePath .. '-alternative' .. '.' .. format
 -- format   : string in {'ascii', 'binary'} format of file on disk
 function TableCached:__init(basePath, format)
-   local vp = makeVp(1, 'TableCached:__init')
+   local vp = makeVp(0, 'TableCached:__init')
    vp(1, 'basePath', basePath, 'format', format)
 
    validateAttributes(basePath, 'string')
@@ -71,7 +71,7 @@ end
 
 -- replaceWithFile
 function TableCached:replaceWithFile()
-   local vp = makeVp(2, 'TableCached:replaceWithFile')
+   local vp = makeVp(0, 'TableCached:replaceWithFile')
    vp(1, 'self', self)
    -- guard against cache file not existing
    local filePath = self.filePaths[1]
