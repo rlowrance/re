@@ -23,8 +23,11 @@ local function f(a, b, ...)
 end
 
 -- execute call to f to run a test
-if true then  
+local interactWithUser = false
+if interactWithUser then  
    f(10, 20, 'vararg1', 'vararg2')
+else
+   print('tests disabled')
 end
 
 
