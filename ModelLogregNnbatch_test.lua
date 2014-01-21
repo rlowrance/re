@@ -1,11 +1,11 @@
--- ModelLogregNnBatch_test.lua
+-- ModelLogregNnbatch_test.lua
 -- unit test
 -- ISSUE: For some unknown reason, the error rate on the fitted model is high
 
 require 'ConfusionMatrix'
-require 'ModelLogregNnBatch'
+require 'ModelLogregNnbatch'
 require 'makeVp'
-require 'OpfuncLogregNnBatch'
+require 'ObjectivefunctionLogregNnbatch'
 require 'printAllVariables'
 require 'printTableVariable'
 require 'printVariable'
@@ -37,7 +37,7 @@ local function makeTrainingData(bad)
    local s = torch.abs(torch.rand(nSamples)) -- saliences must be non-negative
 
    -- get random weights from the corresponding optimization function
-   local opfunc = OpfuncLogregNnBatch(X, y, s, nClasses, 0)
+   local opfunc = ObjectivefunctionLogregNnbatch(X, y, s, nClasses, 0)
    local initialTheta = opfunc:initialTheta()  -- random weights
    vp(2, 'initialTheta', initialTheta)
    
@@ -49,7 +49,7 @@ local function makeModel()
    local X, y, s, nClasses, initialTheta = makeTrainingData()
 
    local lambda = 0.001
-   local model = ModelLogregNnBatch(X, y, s, nClasses, lambda)
+   local model = ModelLogregNnbatch(X, y, s, nClasses, lambda)
    return model
 end
 
@@ -240,4 +240,4 @@ end
 local toleranceLoss = 1e-6  -- tests show that this toleranceLoss value lead to lowest overall Loss
 testPredictValues(toleranceLoss)
 
-print('ok ModelLogregNnBatch')
+print('ok ModelLogregNnbatch')
