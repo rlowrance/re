@@ -41,15 +41,16 @@ end
 --   gradientDescent : step size is fixed at initialStepSize
 -- ARGS
 -- fittingOptions : table with these fields
+--                  .callBackEndOfEpoch(lossBeforeStep, currentTheta) : optional function
 --                  .initialStepSize                : number > 0
 --                  .nEpochsBeforeAdjustingStepSize : integer > 0
 --                  .nEpochsToAdjustStepSize        : integer > 0
---                  .maxEpochs                      : integer > 0
+--                  .maxEpochs                      : optional integer > 0
 --                  .method                         : string
 --                  .nextStepSizes                  : function(stepSize) --> sequence of step sizes
---                  .toleranceLoss                  : number > 0
---                  .toleranceTheta                 : number > 0
---                  NOTE: only one of the last 3 options must be supplied
+--                  .toleranceLoss                  : optional number > 0
+--                  .toleranceTheta                 : optional number > 0
+--                  NOTE: only one of the optional convergence criteria must be supplied
 --                  .printLoss                      : boolean
 -- RETURNS:
 -- optimalTheta  : 1D Tensor
@@ -218,6 +219,7 @@ function ModelLogregNnbatch:_fitBottouEpoch(fittingOptions)
    self:_validateFittingOptionsBottouEpoch(fittingOptions)
 
    -- initialize loop
+   local callbackEndOfEpoch = fittingOptions.callBackEndOfEpoch
    local printLoss = fittingOptions.printLoss
    local previousLoss = nil
    local lossBeforeStep = nil
@@ -249,6 +251,10 @@ function ModelLogregNnbatch:_fitBottouEpoch(fittingOptions)
       if printLoss then
          print(string.format('ModelLogregNnbatch:_fitBottouEpoch nEpochsCompleted %d stepSize %f lossBeforeStep %f',
                              nEpochsCompleted, stepSize, lossBeforeStep))
+      end
+      
+      if endOfEpoch then
+         callBackEndOfEpoch(lossBeforeStep, nextTheta)
       end
       
 
@@ -414,6 +420,11 @@ function ModelLogregNnbatch:_validateFittingOptionsBottouEpoch(fittingOptions)
           fittingOptions.toleranceLoss ~= nil or
           fittingOptions.toleranceTheta ~= nil,
           'at least one convergence options must be specified')
+   
+   if fittingOptions.callBackEndOfEpoch ~= nil then
+      assert(type(fittingOptions.callBackEndOfEpoch == 'function',
+                  'callBackEndOfEpoch not a function of (lossBeforeStep, nextTheta)'))
+   end
 end
 
 -- check types and values of fields we use in the fittingOptions table
