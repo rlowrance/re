@@ -82,7 +82,7 @@ end
 -- ARGS
 -- theta    : Tensor 1D, parameters
 -- RETURNS
--- loss     : number at next randomly-selected X, y, s sample
+-- loss     : sum of losses for all the samples
 function ObjectivefunctionLogregNnbatch:runrunLoss(theta)
    assert(theta ~= nil, 'theta not supplied')
    assert(theta:nDimension() == 1, 'theta is not a 1D Tensor')
@@ -142,7 +142,7 @@ function ObjectivefunctionLogregNnbatch:_logprobabilities(theta)
 end
 
 -- RETURNS
--- loss             : number, regularized loss
+-- loss             : number, regularized loss on all samples
 -- logProbabilities : 2D Tensor
 function ObjectivefunctionLogregNnbatch:_lossLogprobabilities(theta)
    local vp, verboseLevel = makeVp(0, 'ObjectivefunctionLogregNnbatch:_lossLogprobabilities')
