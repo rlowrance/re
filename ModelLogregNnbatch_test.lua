@@ -86,17 +86,21 @@ local function fitModelBottouEpoch(model, toleranceLoss, printLoss)
       return {currentStepSize, 0.5 * currentStepSize, 1.5 * currentStepSize}
    end
 
-   local fittingOptions = {
-      method = 'bottouEpoch',
-      printLoss = printLoss,
+   local convergence = {
+      toleranceLoss = toleranceLoss}
+
+   local bottouEpoch = {
       initialStepSize = 1,
       nEpochsBeforeAdjustingStepSize = 10,
       nEpochsToAdjustStepSize = 2,
-      nextStepSizes = nextStepSizes,
-      nSteps = 2,    
-      maxEpochs = nil,
-      toleranceLoss = toleranceLoss,
-      toleranceTheta = nil}
+      nextStepSizes = nextStepSizes}
+
+   local fittingOptions = {
+      method = 'bottouEpoch',
+      convergence = convergence,
+      printLoss = printLoss,
+      bottouEpoch = bottouEpoch}
+
    local optimalTheta, fitInfo = model:fit(fittingOptions)
    return optimalTheta, fitInfo
 end
@@ -109,13 +113,42 @@ local function fitModelGradientDescent(model, toleranceLoss, printLoss)
    assert(toleranceLoss)
    assert(printLoss ~= nil)
 
+   local convergence = {
+      toleranceLoss = toleranceLoss}
+
+   local gradientDescent = {
+      stepSize = 1}
+      
    local fittingOptions = {
       method = 'gradientDescent',
+      convergence = convergence,
       printLoss = printLoss,
-      initialStepSize = 1,
-      maxEpochs = nil,
-      toleranceLoss = toleranceLoss,
-      toleranceTheta = nil}
+      gradientDescent = gradientDescent}
+
+   local optimalTheta, fitInfo = model:fit(fittingOptions)
+   return optimalTheta, fitInfo
+end
+
+local function fitModelLbfgs(model, toleranceLoss, printLoss)
+   local vp = makeVp(0, 'fitModelLbfgs')
+   vp(1, 'model', model)
+   assert(model)
+   assert(toleranceLoss)
+   assert(printLoss ~= nil)
+
+   local convergence = {
+      maxEpochs = 1,
+      toleranceLoss = toleranceLoss}
+
+   local lbfgs = {
+      lineSearch = 'wolf'}
+      
+   local fittingOptions = {
+      method = 'lbfgs',
+      convergence = convergence,
+      printLoss = printLoss,
+      lbfgs = lbfgs}
+
    local optimalTheta, fitInfo = model:fit(fittingOptions)
    return optimalTheta, fitInfo
 end
@@ -137,7 +170,8 @@ local function testFitInfo(fitInfo)
    
    assert(fitInfo.optimalTheta:nDimension() == 1)
 
-   assert(fitInfo.convergedReason == 'toleranceLoss')
+   assert(fitInfo.convergedReason == 'toleranceLoss' or
+          fitInfo.convergedReason == 'maxEpochs')
 end
 
 local function makeConfusionMatrix(actuals, predictions)
@@ -184,6 +218,7 @@ end
 local function testFit()
    local toleranceLoss = 1e-6
    local printLoss = false
+   testFitDriver(fitModelLbfgs, toleranceLoss, printLoss)
    testFitDriver(fitModelBottouEpoch, toleranceLoss, printLoss)
    testFitDriver(fitModelGradientDescent, toleranceLoss, printLoss)
 end
