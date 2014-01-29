@@ -11,8 +11,10 @@ if false then
    loss, tensor1D = of:lossGradient(flatParameters)
    tensor2D = of:predictions(newX, theta)  -- newX is 2D Tensor
    
+   -- Provides these fields: X, y, s, nClasses, L2, nSamples, nFeatures
 end
 
+require 'isTensor'
 require 'Objectivefunction'
 require 'printAllVariables'
 require 'torch'
@@ -25,28 +27,38 @@ local ObjectivefunctionLogreg, parent = torch.class('ObjectivefunctionLogreg', '
 
 function ObjectivefunctionLogreg:__init(X, y, s, nClasses, L2)
    parent.__init(self)
-   -- validate arguments
-   assert(X, 'X not supplied')
+
+   -- validate args
+
+   local function tensor(name, value)
+      if isTensor(value) then
+         return
+      end
+      error(string.format('%s is a %s, not a torch.Tensor', name, type(value)))
+   end
+
+   assert(X ~= nil, 'X not supplied')
+   tensor('X', X)
    assert(X:nDimension() == 2, 'X is not a 2D Tensor')
    self.nSamples = X:size(1)
    self.nFeatures = X:size(2)
 
-   assert(y, 'y not supplied')
+   assert(y ~= nil, 'y not supplied')
+   tensor('y', y)
    assert(y:nDimension() == 1, 'y is not a 1D Tensor')
    assert(y:size(1) == self.nSamples, 'y size is invalid')
 
-   assert(s, 's not supplied')
+   tensor('s', s)
    assert(s:nDimension() == 1, 's is not a 1D Tensor')
    assert(s:size(1) == self.nSamples, 's size is invalid')
 
-   assert(nClasses, 'nClasses not supplied')
+   assert(nClasses ~= nil, 'nClasses not supplied')
    assert(type(nClasses) == 'number', 'nClasses is not a number')
+   assert(nClasses >= 2, 'nClasses must be at least 2')
 
-   L2 = L2 or 0  -- supply default
-   assert(L2, 'L2 regularizer importance not supplied')
+   assert(L2 ~= nil, 'L2 not supplied')
    assert(type(L2) == 'number', 'L2 is not a number')
-   assert(L2 >= 0, 'L2 not non-negative')
-
+   assert(L2 >= 0, 'L2 must be non-negative')
 
    -- save args
    self.X = X
