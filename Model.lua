@@ -2,7 +2,7 @@
 -- Abstract class
 
 if false then
-   m = ModelCONCRETE_CLASS(X, y, otherParameters)
+   m = ModelCONCRETE_CLASS(X, ...) -- other parameters may include y, s, nClasses
    optimalTheta, fitInfo = m:fit(fittingOptions)  -- fittingOptions depends on CONCRETE_CLASS
    predictions, predictionInfo = m:predict(newX, optimalTheta)
 end
