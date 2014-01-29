@@ -34,6 +34,7 @@ torch head_test.lua
 torch ifelse_test.lua
 torch isnan_test.lua
 torch isSequence_test.lua
+luajit isTensor_test.lua
 torch kernelEpanechnikovQuadraticKnn_test.lua
 torch keyboard_test.lua
 torch keys_test.lua
