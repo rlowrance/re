@@ -3,9 +3,11 @@
 
 if false then
    -- API overview
-   model = ModelLogregNnbatch(X, y, s, nClasses, lambda)
+   model = ModelLogregNnbatch(X, y, s, nClasses)
    optimalTheta, fitInfo = model:fit(fittingOptions) 
    probs2D, classes1D = model:predict(newX2D, theta)  
+
+   -- constructor creates these fields: X, y, s, nClasses
 end
 
 require 'keyWithMinimumValue'
@@ -23,13 +25,12 @@ require 'vectorToString'
 
 local ModelLogregNnbatch, parent = torch.class('ModelLogregNnbatch', 'ModelLogreg')
 
-function ModelLogregNnbatch:__init(X, y, s, nClasses, lambda)
+function ModelLogregNnbatch:__init(X, y, s, nClasses, errorIfSupplied)
+   assert(errorIfSupplied == nil, 'lambda now supplied as part of call to method fit')
    local vp = makeVp(0, '__init')
    vp(1, 'parent', parent)
    vp(1, 'X', X, 'y', y, 's', s, 'nClasses', nClasses, 'lambda', lambda)
-   parent.__init(self, X, y, s, nClasses, lambda)
-   self.objectivefunction = ObjectivefunctionLogregNnbatch(X, y, s, nClasses, lambda)
-   --printTableVariable('self')
+   parent.__init(self, X, y, s, nClasses)  -- create and validate self.X, self.y, self.s, self.nClasses
 end
 
 -------------------------------------------------------------------------------
@@ -46,6 +47,9 @@ end
 --                                    .maxEpochs
 --                                    .toleranceLoss
 --                                    .toleranceTheta
+--                 .regularizer     : table with these optional fields
+--                                    .L1 : optional number default 0, strength of L1 regularizer
+--                                    .L2 : optional number default 0, strength of L2 regularizer
 --                 .printLoss       : boolean, loss is printed at each step if true
 --                 .bottouEpoch     : optional table with these fields
 --                                    .callBackEndOfEpoch(lossBeforeStep, currentTheta, stepSize) : optional function
@@ -72,24 +76,33 @@ end
 -- fitInfo      : table describing the convergence
 function ModelLogregNnbatch:runrunFit(fittingOptions)
    assert(type(fittingOptions) == 'table', 'table of fitting options not supplied')
-   local convergence = fittingOptions.convergence
-   local printLoss = fittingOptions.printLoss
 
+   local convergence = fittingOptions.convergence
    self:_validateOptionConvergence(convergence)
-   assert(type(printLoss) == 'boolean', 'printLoss not supplied')
+
+   local printLoss = fittingOptions.printLoss
+   self:_validateOptionPrintloss(printLoss)
    
+   local regularizer = fittingOptions.regularizer
+   self:_validateOptionRegularizer(regularizer)
+
+   -- create the objective function
+   -- the same objective function is used by all the fitting methods
+   self.objectivefunction = ObjectivefunctionLogregNnbatch(self.X, self.y, self.s, self.nClasses, regularizer.L2)
+
+   -- dispatch based on method
    local method = fittingOptions.method
    if method == 'bottouEpoch' then
-      assert(fittingOptions.bottouEpoch, 'did not supply bottouEpoch field')
-      return self:_fitBottouEpoch(convergence, fittingOptions.bottouEpoch, printLoss)
+      self:_validateMethodOptionsBottouEpoch(fittingOptions.bottouEpoch)
+      return self:_fitBottouEpoch(convergence, printLoss, fittingOptions.bottouEpoch)
 
    elseif method == 'gradientDescent' then
-      assert(fittingOptions.gradientDescent, 'did not supply gradientDescent field')
-      return self:_fitGradientDescent(convergence, fittingOptions.gradientDescent, printLoss)
+      self:_validateMethodOptionsGradientDescent(fittingOptions.gradientDescent)
+      return self:_fitGradientDescent(convergence, printLoss, fittingOptions.gradientDescent)
 
    elseif method == 'lbfgs' then
-      assert(fittingOptions.lbfgs, 'did not supply fittingOptions fields')
-      return self:_fitLbfgs(convergence, fittingOptions.lbfgs, printLoss)
+      self:_validateMethodOptionsLbfgs(fittingOptions.lbfgs)
+      return self:_fitLbfgs(convergence, printLoss, fittingOptions.lbfgs)
 
    else
       error(string.format('unknown fitting method %s', tostring(fittingOptions.method)))
@@ -231,10 +244,9 @@ function ModelLogregNnbatch:_converged(convergence,
 end
 
 -- fit using Bottou's method where the iterants are epochs
-function ModelLogregNnbatch:_fitBottouEpoch(convergence, bottouEpoch, printLoss)
+function ModelLogregNnbatch:_fitBottouEpoch(convergence, printLoss, bottouEpoch)
    local vp = makeVp(0, '_fitBottouEpoch')
-   self:_validateBottouEpochOptions(bottouEpoch)
-
+   
    -- initialize loop
    local callBackEndOfEpoch = bottouEpoch.callBackEndOfEpoch
    local previousLoss = nil
@@ -316,10 +328,8 @@ function ModelLogregNnbatch:_fitBottouEpoch(convergence, bottouEpoch, printLoss)
 end
 
 -- fit using gradient decent with a fixed step size
-function ModelLogregNnbatch:_fitGradientDescent(convergence, gradientDescent, printLoss)
+function ModelLogregNnbatch:_fitGradientDescent(convergence, printLoss, gradientDescent)
    local vp = makeVp(0, '_fitGradientDescent')
-   assert(gradientDescent)
-   self:_validateGradientDescentOptions(gradientDescent)
 
    -- initialize loop
    local stepSize = gradientDescent.stepSize  -- some folks call this variable eta
@@ -377,9 +387,8 @@ function ModelLogregNnbatch:_fitGradientDescent(convergence, gradientDescent, pr
 end
 
 -- fit using L-BFGS
-function ModelLogregNnbatch:_fitLbfgs(convergence, lbfgs, printLoss)
+function ModelLogregNnbatch:_fitLbfgs(convergence, printLoss, lbfgs)
    local vp = makeVp(0, '_fitLbfgs')
-   self:_validateLbfgsOptions(lbfgs)
 
    -- configure optim.lbfgs
    local lineSearch = lbfgs.lineSearch
@@ -466,8 +475,11 @@ function ModelLogregNnbatch:_timeToAdjustStepSize(nEpochsCompleted, fittingOptio
    return (nEpochsCompleted % fittingOptions.nEpochsBeforeAdjustingStepSize) == 0
 end
 
+  
 -- check types and values of fields we use in the fittingOptions table
-function ModelLogregNnbatch:_validateBottouEpochOptions(options)
+function ModelLogregNnbatch:_validateMethodOptionsBottouEpoch(options)
+   assert(options ~= nil, 'missing bottouEpoch options table')
+
    local function present(fieldName)
       assert(options[fieldName] ~= nil,
              'options missing field ' .. fieldName)
@@ -491,10 +503,45 @@ function ModelLogregNnbatch:_validateBottouEpochOptions(options)
    end
 end
 
+-- check types and values of fields we use in the gradientDescent options table
+function ModelLogregNnbatch:_validateMethodOptionsGradientDescent(options)
+   assert(options ~= nil, 'missing gradient descent options table')
+
+   local function present(fieldName)
+      assert(options[fieldName] ~= nil,
+             'options missing field ' .. fieldName)
+   end
+
+   present('stepSize')
+   validateAttributes(options.stepSize, 'number', 'positive')
+
+end
+
+-- check types and values of fields in lbfgs options table
+function ModelLogregNnbatch:_validateMethodOptionsLbfgs(options)
+   assert(options ~= nil, 'missing L-BFGS options table')
+
+   local function present(fieldName)
+      assert(options[fieldName] ~= nil,
+             'options missing field ' .. fieldName)
+   end
+
+   present('lineSearch')
+   local value = options.lineSearch
+   local t = type(value)
+   if value == 'wolf' or
+      t == 'number' or
+      t == 'function' then
+      return
+   else
+   error( 'lineSearch not "wolf" or a number of a function')
+   end
+end
+
 -- check convergence options
 -- NOTE: other convergence criteria are given at search(torch7 logistic regression example)
 function ModelLogregNnbatch:_validateOptionConvergence(convergence)
-   assert(convergence ~= nil, 'convergence option not supplied')
+   assert(convergence ~= nil, 'convergence table not supplied')
 
    if convergence.maxEpochs ~= nil then
       validateAttributes(convergence.maxEpochs, 'number', 'integer', 'positive')
@@ -515,35 +562,33 @@ function ModelLogregNnbatch:_validateOptionConvergence(convergence)
 
    return
 end
-   
--- check types and values of fields we use in the gradientDescent options table
-function ModelLogregNnbatch:_validateGradientDescentOptions(options)
-   local function present(fieldName)
-      assert(options[fieldName] ~= nil,
-             'options missing field ' .. fieldName)
-   end
-
-   present('stepSize')
-   validateAttributes(options.stepSize, 'number', 'positive')
-
+ 
+-- check printLoss
+function ModelLogregNnbatch:_validateOptionPrintloss(printLoss)
+   assert(printLoss ~= nil, 'printLoss option not supplied')
+   assert(type(printLoss) == 'boolean', 'printLoss not a boolean')
 end
 
--- check types and values of fields in lbfgs options table
-function ModelLogregNnbatch:_validateLbfgsOptions(options)
-   local function present(fieldName)
-      assert(options[fieldName] ~= nil,
-             'options missing field ' .. fieldName)
+-- check regularizer
+-- The fields are optional with default values of zero
+-- L1 ~= 0 is not yet supported
+function ModelLogregNnbatch:_validateOptionRegularizer(regularizer)
+   assert(regularizer ~= nil, 'regularizer table not supplied')
+
+   if regularizer.L1 == nil then
+      regularizer.L1 = 0
    end
 
-   present('lineSearch')
-   local value = options.lineSearch
-   local t = type(value)
-   if value == 'wolf' or
-      t == 'number' or
-      t == 'function' then
-      return
-   else
-   error( 'lineSearch not "wolf" or a number of a function')
+   local L1 = regularizer.L1
+   assert(type(L1) == 'number', 'L1 must be a number')
+   assert(L1 == 0, 'for now, L1 regularizers are not implemented')
+
+   if regularizer.L2 == nil then
+      regularizer.L2 = 0
    end
-end
+
+   local L2 = regularizer.L2
+   assert(type(L2) == 'number', 'L2 must be a number')
+   assert(L2 >= 0, 'L2 must be non negative')
+end 
 
