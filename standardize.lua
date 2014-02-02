@@ -1,4 +1,19 @@
 -- standardize.lua
+-- standardize sequence or 2D Tensor
+-- ARG
+-- obj : object to be standardized; either a sequence or a 2D Tensor
+--       a sequence, each element is transformed to (x-mu)/sd
+--       a 2D Tensor with nCol columns, each column is transformed to (x-mu)/sd
+-- means : optional 2D Tensor of size 1 x nCol
+-- stds  : optional 2D Tensor of size 1 x nCol
+--  if means and stds are supplied, then obj must be a 2D Tensor
+--  if means and stds are not supplied, they are computed and returned
+--    for a sequence, they are scalars
+--    for a 2D Tensor, they are 2D tensors of size 1 x nCol
+-- RETURNS 3 values
+-- standardizedObj : of same kind as arg obj
+-- means           : a number or 1D Tensor
+-- sds             : a number or 1D Tensor
 
 require 'viewAdditionalRows'
 
@@ -84,21 +99,6 @@ local function getMeansStds(obj)
    end
 end
 
--- standardize sequence or 2D Tensor
--- ARG
--- obj : object to be standardized; either a sequence or a 2D Tensor
---       a sequence, each element is transformed to (x-mu)/sd
---       a 2D Tensor with nCol columns, each column is transformed to (x-mu)/sd
--- means : optional 2D Tensor of size 1 x nCol
--- stds  : optional 2D Tensor of size 1 x nCol
---  if means and stds are supplied, then obj must be a 2D Tensor
---  if means and stds are not supplied, they are computed and returned
---    for a sequence, they are scalars
---    for a 2D Tensor, they are 2D tensors of size 1 x nCol
--- RETURNS 3 values
--- standardizedObj : of same kind as arg obj
--- means           : a number or 1D Tensor
--- sds             : a number or 1D Tensor
 function standardize(obj, means, stds)
    local vp = makeVp(0, 'standardize')
    vp(1, 'obj', obj, 'means', means, 'stds', stds)
