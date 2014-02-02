@@ -8,7 +8,7 @@
 -- - test case B: classes are very separated
 
 require 'ConfusionMatrix'
-require 'ModelLogregNnbatch'
+require 'ModelLogreg'
 require 'makeVp'
 require 'ObjectivefunctionLogregNnbatch'
 require 'printAllVariables'
@@ -67,11 +67,11 @@ local function makeData(caseName)
 end
 
 local function makeModel(data)
-   local lambda = 0
-   local model = ModelLogregNnbatch(data.X, data.y, data.s, data.nClasses, lambda)
+   local model = ModelLogreg(data.X, data.y, data.s, data.nClasses)
    return model
 end
 
+-- return optimalTheta, fitInfo
 local function fitModelBottouEpoch(model, toleranceLoss, printLoss, initialStepSize)
    local vp = makeVp(1, 'fitModelBottouEpoch')
    vp(1, 'model', model)
@@ -92,17 +92,19 @@ local function fitModelBottouEpoch(model, toleranceLoss, printLoss, initialStepS
    end
 
    local fittingOptions = {
-      method = 'bottouEpoch',
-      callBackEndOfEpoch = callback,
-      printLoss = printLoss,
-      initialStepSize = initialStepSize,
-      nEpochsBeforeAdjustingStepSize = 20,
-      nEpochsToAdjustStepSize = 2,
-      nextStepSizes = nextStepSizes,
-      nSteps = 2,    
-      maxEpochs = 1000,
-      toleranceLoss = toleranceLoss,
-      toleranceTheta = .01}
+      method = 'bottou',
+      sampling = 'epoch',
+      methodOptions = {printLoss = printLoss,
+                       initialStepSize = initialStepSize,
+                       nEpochsBeforeAdjustingStepSize = 20,
+                       nEpochsToAdjustStepSize = 2,
+                       nextStepSizes = nextStepSizes},
+      samplingOptions = {},
+      convergence = {maxEpochs = 1000,
+                     toleranceLoss = toleranceLoss,
+                     toleranceTheta = .01},
+      regularizer = {L2 = 0}
+   }
    local optimalTheta, fitInfo = model:fit(fittingOptions)
    return optimalTheta, fitInfo
 end
@@ -216,6 +218,7 @@ local function testEverything()
    }
 
    local algos = {'bottouEpoch', 'gradientDescent'}
+   local algos = {'bottouEpoch'}  -- for now, ModelLogreg only implements this algo
    
    local testResults = {}
    for _, dataset in ipairs(datasets) do
