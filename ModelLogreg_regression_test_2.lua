@@ -96,10 +96,10 @@ end
 local function makeModel(X, y, s, nClasses)
    local vp = makeVp(1, 'makeModel')
    vp(1, 'X', X)
-   local lambda = 0.001
-   local lambda = 0
+   local L2 = 0.001
+   local L2 = 0
    print('model not regularized')
-   local model = ModelLogregNnbatch(X, y, s, nClasses, lambda)
+   local model = ModelLogregNnbatch(X, y, s, nClasses, L2)
 
    return model
 end
