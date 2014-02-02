@@ -3,9 +3,9 @@
 
 -- API overview
 if false then
-   local vp, verbose, prefix, vpTable = makeVp(2, 'functionName')
-   local ifvp1 = verbose >= 1
-   local ifvp2 = verbose >= 2
+   local vp, verboseLevel, prefix, vpTable = makeVp(2, 'functionName')
+   local ifvp1 = verboseLevel >= 1
+   local ifvp2 = verboseLevel >= 2
    
    if vp2 then vp(2, 'name', value) end  -- avoid evaluating args to vp()
    
