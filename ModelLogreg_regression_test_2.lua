@@ -5,10 +5,11 @@
 require 'argmax'
 require 'ConfusionMatrix'
 require 'makeVp'
-require 'ModelLogregNnbatch'
+require 'ModelLogreg'
 require 'NamedMatrix'
 require 'printTableValueFields'
 require 'printTableVariable'
+require 'standardize'
 
 torch.manualSeed(123)
 
@@ -47,7 +48,14 @@ local function readData()
 end
 
 
--- return uncentered data: X, y, s, nClasses, XColumns (table: k = feature name, v = column number)
+-- parse inputs, targets, etc out of the named matrix
+-- RETURNS
+-- X           : centered inputs
+-- y           : 1D Tensor
+-- s           : 1D Tensor (all ones)
+-- nClasses    : number
+-- XColumns    : table s.t. CXcolumns[<feature name>] == <column in X>
+-- transformer : function(input_samples) --> transformed_input_sample
 local function makeTrainingSamples(namedMatrix)
    local vp, verboseLevel = makeVp(2, 'makeXysnClasses')
    vp(1, 'namedMatrix', namedMatrix)
@@ -90,18 +98,14 @@ local function makeTrainingSamples(namedMatrix)
 
    local nClasses = torch.max(y)
    vp(1, 'nClasses', nClasses)
-   return X, y, s, nClasses, XColumns
-end
+   
+   -- center the inputs and provide a means for caller to center test data
+   local XCentered, means, stdv = standardize(X)
+   local function centeringFunction(X)
+      return standardize(X, means, stdv)
+   end
 
-local function makeModel(X, y, s, nClasses)
-   local vp = makeVp(1, 'makeModel')
-   vp(1, 'X', X)
-   local L2 = 0.001
-   local L2 = 0
-   print('model not regularized')
-   local model = ModelLogregNnbatch(X, y, s, nClasses, L2)
-
-   return model
+   return XCentered, y, s, nClasses, XColumns, centeringFunction
 end
 
 local function fitModelGradientDescent(model)
@@ -129,27 +133,25 @@ local function fitModelBottouEpoch(model)
       return {currentStepSize, currentStepSize * .5, currentStepSize * 1.5}
    end
 
-   local toleranceLoss = 1e-6
-   --local toleranceLoss = 1e-7
-   --local toleranceLoss = 1e-8       
-   --local toleranceLoss = 1e-9
-
-
    local fittingOptions = {
-      method = 'bottouEpoch'
-      ,initialStepSize = .001
-      ,nEpochsBeforeAdjustingStepSize = 10
-      ,nEpochsToAdjustStepSize = 1
-      ,nextStepSizes = nextStepSizesFunction
-      ,maxEpochs = 1000
-      -- :w
-      -- ,maxEpochs = 10000  -- test only
-      ,toleranceLoss = toleranceLoss
-      ,printLoss = true
+      method = 'bottou',
+      sampling = 'epoch',
+      methodOptions = {
+         printLoss = true,
+         initialStepSize = .001,
+         nEpochsBeforeAdjustingStepSize = 10,
+         nEpochsToAdjustStepSize = 1,
+         nextStepSizes = nextStepSizesFunction
+      },
+      samplingOptions = {},
+      convergence = {
+         toleranceLoss = 1e-5
+      },
+      regularizer = {}
    }
    
    local optimalTheta, fitInfo = model:fit(fittingOptions)
-   assert(fitInfo.convergedReason == 'toleranceLoss', 'hit maxEpochs, not toleranceLoss')
+   assert(fitInfo.convergedReason == 'toleranceLoss', printTableValue('fitInfo', fitInfo))
    return optimalTheta, fitInfo, toleranceLoss
 end
 
@@ -166,10 +168,13 @@ end
 local function makeConfusionMatrix(actuals, predictions)
    local vp = makeVp(0, 'makeConfusionMatrix')
    vp(1, 'actuals', actuals, 'predictions', predictions)
+   assert(actuals:size(1) == predictions:size(1))
    local cm = ConfusionMatrix()
    for i = 1, actuals:size(1) do
+      vp(1, string.format('i %d actual %d prediction %d', i, actuals[i], predictions[i]))
       cm:add(actuals[i], predictions[i])
    end
+   cm:printTo(io.stdout, 'confusion matrix')
    return cm
 end
 
@@ -232,7 +237,7 @@ local function determineActualProbabilities(X, y, female, age, XColumns)
 end
 
 
-local function determineModelProbabilities(female, age, model, optimalTheta, XColumns)
+local function determineModelProbabilities(female, age, model, optimalTheta, XColumns, centeringFunction)
    local vp = makeVp(0, 'determineModelProbabilities')
    vp(1, 'female', female, 'age', age)
    assert(XColumns)
@@ -240,7 +245,9 @@ local function determineModelProbabilities(female, age, model, optimalTheta, XCo
    newX[1][XColumns.female] = female
    newX[1][XColumns.age] = age
 
-   local probabilities2D, predictInfo = model:predict(newX, optimalTheta)
+   local newXCentered = centeringFunction(newX)
+
+   local probabilities2D, predictInfo = model:predict(newXCentered, optimalTheta)
    assert(probabilities2D:size(1) == 1)
    local probabilities = probabilities2D[1]
    vp(1, 'probabilities', probabilities)
@@ -277,6 +284,20 @@ local function determineTextProbabilities(female, age)
    local probabilities = torch.Tensor({prob1, prob2, prob3})
    vp(1, 'probabilities', probabilities)
    return probabilities
+end
+
+local function determineTextPrediction(female, age)
+   local probs = determineTextProbabilities(female, age)
+   local largest = 0
+   local index = nil
+   for i = 1, probs:size(1) do
+      local nextP = probs[i]
+      if nextP > largest then
+         largest = nextP
+         index = i
+      end
+   end
+   return index
 end
 
 local function printHeader()
@@ -318,7 +339,7 @@ local function printRow(female, age, actualProbabilities, textProbabilities, mod
 end
 
 
-local function compareToText(X, y, model, optimalTheta, XColumns)
+local function compareToText(X, y, model, optimalTheta, XColumns, centeringFunction)
    local vp = makeVp(1, 'compareToText')
    assert(XColumns)
    local nSamples = X:size(1)
@@ -335,7 +356,12 @@ local function compareToText(X, y, model, optimalTheta, XColumns)
       for age = minAge, maxAge do
          local actualProbabilities = determineActualProbabilities(X, y, female, age, XColumns)
          local textProbabilities = determineTextProbabilities(female, age)
-         local modelProbabilities = determineModelProbabilities(female, age, model, optimalTheta, XColumns)
+         local modelProbabilities = determineModelProbabilities(female, 
+                                                                age, 
+                                                                model, 
+                                                                optimalTheta, 
+                                                                XColumns, 
+                                                                centeringFunction)
          printRow(female, age, actualProbabilities, textProbabilities, modelProbabilities)
          local textPrediction = argmax(textProbabilities)
          local modelPrediction = argmax(modelProbabilities)
@@ -361,11 +387,11 @@ end
 -------------------------------------------------------------------------------
 
 local namedMatrix = readData()
-local X, y, s, nClasses, XColumns = makeTrainingSamples(namedMatrix)
+local X, y, s, nClasses, XColumns, centeringFunction = makeTrainingSamples(namedMatrix)
 -- XColumns.featureName = index in X of that feature's column
 
 -- make model
-local model = makeModel(X, y, s, nClasses)
+local model = ModelLogreg(X, y, s, nClasses)
 
 -- fit model
 local algo = 'BottouEpoch'
@@ -379,28 +405,34 @@ local ages = {24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38}
 
 local nSamples = #females * #ages
 local newX = torch.Tensor(nSamples, 2)
-local newXIndex = 0
+local textPredictions = torch.Tensor(nSamples)
+local newIndex = 0
 for _, female in ipairs(females) do
    for _, age in ipairs(ages) do
-      newXIndex = newXIndex + 1
-      newX[newXIndex][XColumns.female] = female
-      newX[newXIndex][XColumns.age] = age
+      newIndex = newIndex + 1
+      newX[newIndex][XColumns.female] = female
+      newX[newIndex][XColumns.age] = age
+      brand = determineTextPrediction(female, age)
+      textPredictions[newIndex] = brand
+      print(string.format('text female %d age %d brand %d', female, age, brand))
    end
 end
 
-local predictedProbabilities, predictInfo = model:predict(newX, optimalTheta)
+local newXCentered = centeringFunction(newX)
+assert(newXCentered)
+
+local predictedProbabilities, predictInfo = model:predict(newXCentered, optimalTheta)
 print('preditedProbabilities head')
 printHead(predictedProbabilities)
-stop()
 
-local errorRate = determineErrorRate(y, predictInfo.mostLikelyClasses)
-vp(1, 'errorRate on training data', errorRate)
+local errorRate = determineErrorRate(textPredictions, predictInfo.mostLikelyClasses)
+vp(1, 'errorRate', errorRate)
 
-local nErrors, nExamples = compareToText(X, y, model, optimalTheta, XColumns)
+--local nErrors, nExamples = compareToText(X, y, model, optimalTheta, XColumns)
 print('toleranceLoss = ' .. tostring(toleranceLoss))
 print('finalLoss = ' .. tostring(fitInfo.finalLoss))
 print('errorRate = ' .. tostring(errorRate))
-assert(nErrors == 0, string.format('made %d errors vs. text out of %d examples', nErrors, nExamples))
+assert(errorRate == 0, 'error rate too high')
 
 print('ok ModelLogreg_regression_test_2')
 
