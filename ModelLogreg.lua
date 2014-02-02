@@ -433,30 +433,45 @@ function ModelLogreg:_validateMethodOptions(method, methodOptions)
 end
 
 -- TODO: move function into alphabetic order
-function ModelLogreg:_hasOnlyFields(table, fields)
+function ModelLogreg:_hasOnlyFields(table, expectedFields)
    -- make set of all fields in the table
-   local allFieldsSet = {}
+   local actualFieldsSet = {}
    for k, v in pairs(table) do
-      allFieldsSet[k] = true
+      actualFieldsSet[k] = true
    end
    
    -- convert fields arg into a set
-   local theseFieldsSet = {}
-   for _, v in ipairs(fields) do
-      theseFieldsSet[v] = true
+   local expectedFieldsSet = {}
+   for _, v in ipairs(expectedFields) do
+      expectedFieldsSet[v] = true
    end
 
    local function contains(set, item)
       return set[item] == true
    end
+
+   -- Is A a subset  of B?
+   -- RETURNS
+   -- boolean : result
+   -- item    : option object in A but not in B
+   local function isSubset(A, B)  -- a is a subset of b
+      for item in pairs(A) do
+         if not B[item] then
+            return false, item
+         end
+      end
+      return true
+   end
    
    -- check that each set contains the other
-   for item in pairs(allFieldsSet) do
-      assert(contains(theseFieldsSet, item), 'missing field ' .. item)
+   local subset, extraItem = isSubset(actualFieldsSet, expectedFieldsSet)
+   if not subset then
+      error('extra field ' .. extraItem)
    end
 
-   for item in pairs(theseFieldsSet) do
-      assert(contains(allFieldsSet, item), 'extra field ' .. item)
+   local subset, extraItem = isSubset(expectedFieldsSet, actualFieldsSet)
+   if not subset then
+      error('missing field ' .. extraItem)
    end
 end
 
