@@ -1,6 +1,7 @@
 -- printTableVariable.lua
 -- print value of variable in current function
 
+require 'printTableValue'
 require 'StackFrame'
 
 function printTableVariable(variableName)
@@ -9,7 +10,5 @@ function printTableVariable(variableName)
    local sf = StackFrame('caller')
    local table = sf:variableValue(variableName)
    assert(type(table) == 'table', variableName .. ' is not a table in the current function')
-   for k, v in pairs(table) do
-      print(string.format('function %s %s.%s = %s', sf:functionName(), variableName, tostring(k), tostring(v)))
-   end
+   printTableValue(variableName, table)
 end
