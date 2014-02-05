@@ -1,61 +1,73 @@
--- equalObjects_test.lua
+-- equalObjectValues_test.lua
 -- unit test
 
-require 'equalObjects'
+require 'equalObjectValues'
 require 'makeVp'
 require 'NamedMatrix'
 
 local vp = makeVp(0, 'tester')
 
--- type number
-assert(equalObjects(27, 20 + 7))
-assert(not equalObjects(27, 28))
+local function assertEqual(a, b)
+   local vp = makeVp(0, 'assertEqual')
+   vp(1, 'a', a, 'b', b)
+   local result, whynot = equalObjectValues(a, b)
+   vp(2, 'result', result, 'whynot', whynot)
+   assert(result, whynot)
+end
 
--- type boolean
-assert(equalObjects(true, true))
-assert(equalObjects(false, false))
-assert(not equalObjects(true, false))
-assert(not equalObjects(false, true))
-
--- type nil
-assert(equalObjects(nil, nil))
-assert(not equalObjects(nil, 123))
-assert(not equalObjects('abc', nil))
-
--- type string
-assert(equalObjects('abc', 'ab' .. 'c'))
-assert(not equalObjects('abc', 'ab'))
-
--- type function
-local function f(x) return x end
-assert(equalObjects(f, f))
-assert(not equalObjects(f, vp))
-
--- type table
-assert(equalObjects({1,2,3}, {1,2,3}))
-local t = {a = 1, b = 2}
-assert(equalObjects(t, t))
-local t2 = {a = 1, b = 2, c = 3}
-assert(not equalObjects(t, t2))
-
+local function assertNotEqual(a, b)
+   local result, whynot = equalObjectValues(a, b)
+   assert(not result)
+end
+   
 -- torch.typename Tensor
+local t = torch.rand(3, 4)
+local s = t:clone()
+vp(1, 't', t, 's', s)
+assertEqual(t, s)
+s[1][2] = t[1][2] + 1
+vp(1, 't', t, 's', s)
+assertNotEqual(t, s)
+
 local t = torch.Tensor{1,2,3}
 local s = torch.Tensor{1,2,3}
 assert(t ~= s)
-assert(equalObjects(t, s))
+assertEqual(t, s)
 s[1] = 3
-assert(not equalObjects(t, s))
+assertNotEqual(t, s)
 
--- torch.typename NamedMatrix
-local factorLevelsA1 = {'first level for a 1'}
-local factorLevelsA4 = {'first level for a 4'}
-local nm1 = NamedMatrix{tensor=t, names={'a', 'b', 'c'}, levels=factorLevelsA1}
-assert(equalObjects(nm1, nm1))
-local nm2 = NamedMatrix{tensor=s, names={'a', 'b', 'c'}, levels=factorLevelsA1}
-assert(not equalObjects(nm1, nm2))
-local nm3 = NamedMatrix{tensor=t, names={'a', 'b2', 'c'}, levels=factorLevelsA1}
-assert(not equalObjects(nm1, nm3))
-local nm4 = NamedMatrix{tensor=t, names={'a', 'b2', 'c'}, levels=factorLevelsA4}
-assert(not equalObjects(nm1, nm4))
+-- type number
+assertEqual(27, 20 + 7)
+assertNotEqual(27, 28)
 
-print('ok equalObjects')
+-- type boolean
+assertEqual(true, true)
+assertEqual(false, false)
+assertNotEqual(true, false)
+assertNotEqual(false, true)
+
+-- type nil
+assertEqual(nil, nil)
+assertNotEqual(nil, 123)
+assertNotEqual('abc', nil)
+
+-- type string
+assertEqual('abc', 'ab' .. 'c')
+assertNotEqual('abc', 'ab')
+
+-- type function
+local function f(x) return x end
+assertEqual(f, f)
+assertNotEqual(f, vp)
+
+-- type table
+assertEqual({1,2,3}, {1,2,3}) -- check sequence
+assertNotEqual({1,2,3},{1,3,2})
+
+local t = {a = 1, b = 2}  -- check general table
+assertEqual(t, t)
+local t2 = {a = 1, b = 2, c = 3}
+assertNotEqual(t, t2)
+
+
+print('ok equalObjectValues')
