@@ -8,6 +8,19 @@ require 'NamedMatrix'
 local verbose = 0
 local vp = makeVp(verbose, 'tester')
 
+-- bug #1: test case to repliace
+local nm = NamedMatrix.readCsv{
+   file='NamedMatrix_test_data.csv',
+   sep=',',
+   nanString='',
+   nRows=-1,
+   numberColumns={'number1', 'number2'},
+   factorColumns={'factor1', 'factor2'},
+   skip=0}
+
+error('expected to fail')
+stop()
+
 -- construction: sequence
 local seq = {1, 2, 3}
 local names = {'a', 'b', 'c'}

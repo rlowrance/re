@@ -2,7 +2,7 @@
 -- a great simplification of Dataframe with many of same benefits
 
 require 'bytesIn'
-require 'equalObjects'
+require 'equalObjectValues'
 require 'isnan'
 require 'makeVp'
 require 'memoryUsed'
@@ -639,7 +639,7 @@ function NamedMatrix.readCsv(t)
    local d = verbose > 0
    assert(t ~= nil)
    local arg = t
-   vp(1, 't', t)
+   if d then vp(1,' arguments') printTableValue('t', t) end
 
    -- supply default values
    local function defaultTransformF(stringSeq, isHeader) 
@@ -673,6 +673,7 @@ function NamedMatrix.readCsv(t)
 
    -- open input file, skip initial records, and return unparsed header
    local function openSkipHeader()
+      local vp = makeVp(0, 'openSkipHeader')
       local f, err = io.open(arg.file, 'r')
       if f == nil then 
          error('unable to open file ' .. arg.file .. ' message = ' .. err)
@@ -691,10 +692,13 @@ function NamedMatrix.readCsv(t)
       local header = nil
       if t.headerString then
          header = t.headerString
+         vp(2, 'used supplied header string')
       else  
          header = f:read()
+         vp(2, 'read header record')
       end
 
+      vp(1, 'f', f, 'header', header)
       return f, header
    end
    
@@ -821,7 +825,7 @@ function NamedMatrix.readCsv(t)
             valueNumber = tonumber(valueString)
             if valueNumber == nil then
                print('record=' .. record)
-               print('fields') print(fields)
+               printTableValue('fields', fields)
                print('valueString = ' .. tostring(valueString))
                error('data record ' .. nRead .. 
                      ' column ' .. colName ..
@@ -862,7 +866,6 @@ function NamedMatrix.readCsv(t)
    levelOfString = nil
    nextOffset = nil
 
-   printTableVariable('retainedColumnNames')
    local result = NamedMatrix.new{tensor=tensor, 
                                   names=retainedColumnNames, 
                                   levels=levels}
@@ -1040,7 +1043,7 @@ end
 function NamedMatrix:equalValue(other)
    return 
       torch.typename(other) == 'NamedMatrix' and
-      equalObjects(self.t, other.t) and
-      equalObjects(self.names, other.names) and
-      equalObjects(self.levels, other.levels)
+      equalObjectValues(self.t, other.t) and
+      equalObjectValues(self.names, other.names) and
+      equalObjectValues(self.levels, other.levels)
 end
