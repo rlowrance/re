@@ -75,12 +75,24 @@ function printTableValue(variableName, tableValue)
       end
    end
 
+   local function errorBadType(tableValue)
+      error(string.format('tableValue is type %s, not table', type(tableValue)))
+   end
+
    -- handle the first arg, which is optional so that f(b) --> f('', b)
    -- also type check arguments
-   if type(variableName) == 'string' and type(tableValue) == 'table' then
-      printTableNameValue(variableName, tableValue)
-   elseif type(variableName) == 'table' and type(value) == 'nil' then
-      printTableNameValue('', variableName)
+   if type(variableName) == 'string' then
+      if type(tableValue) == 'table' then
+         printTableNameValue(variableName, tableValue)
+      else
+         errorBadType(tableValue)
+      end
+   elseif type(variableName) == 'table' then
+      if type(tableValue) == nil then
+         printTableNameValue('', tableValue)
+      else
+         errorBadType(tableValue)
+      end
    else
       error('calling sequence is printTableValue(variableName, tableValue) or printTableValue(tableValue)')
    end
