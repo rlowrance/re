@@ -36,7 +36,7 @@ if false then
                           byX=colNameinX, byY=colNameInY,
                           newBy=nameForNewColumn}
    nm = NamedMatrix.concatenateHorizontally(nm1, nm2)  -- adding columns
-   nm = nm:onlyColumns({'a', 'b', 'c'})
+   nm = nm:onlyColumns({'a', 'b', 'c'})                -- selecting columns
 
    -- public fields
    tensor2D = nm.t                -- 2D Tensor
