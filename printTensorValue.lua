@@ -11,7 +11,7 @@ require 'makeVp'
 -- maxColumns : optional integer, default value:size(2)
 -- formatString : option string used to format each number, default is '%.4g'
 function printTensorValue(name, value, maxRows, maxColumns, formatString)
-   local vp = makeVp(1, 'printTensorValue')
+   local vp = makeVp(0, 'printTensorValue')
    vp(1, '******************************************')
    vp(1, 'name', name, 'value', value, 'maxRows', maxRows, 'maxColumns', maxColumns, 'formatString', formatString)
    
@@ -108,7 +108,7 @@ function printTensorValue(name, value, maxRows, maxColumns, formatString)
    end
 
    local function printNameValue(name, value, maxRows, maxColumns, formatString)
-      local vp = makeVp(2, 'printNameValue')
+      local vp = makeVp(0, 'printNameValue')
       vp(1, 'name', name, 'value', value, 'maxRows', maxRows, 'maxColumns', maxColumns)
 
       -- set default values for optional args
