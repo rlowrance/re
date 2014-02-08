@@ -60,11 +60,10 @@ end
 -- MAIN PROGRAM
 ------------------------------------------
 
-local vp = makeVp(2, 'imputeRandomHyperparameters')
+local vp = makeVp(2, 'program_hpsets_impute')
 
 -- configure
-local programName = 'imputeRandomHyperparameters'
-local pathOutput = '../data/v6/output/' .. programName .. '.csv'
+local pathOutput = '../data/v6/output/hpsets-impute.csv'
 
 local nSets = 100   -- number of sets to generate
 
