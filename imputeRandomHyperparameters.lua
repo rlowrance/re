@@ -2,6 +2,8 @@
 -- main program to generate random sets of hyperparameters needed to impute
 -- missing features
 --
+-- See advisory notes for settings of hyperparameters
+--
 -- INPUT FILES: None
 --
 -- OUTPUT FILES:
@@ -10,19 +12,48 @@
 --
 -- There are 3 hyperparameters with these sampling distributions
 -- k     : number of neighbors
---         drawn uniformly from the interval 1, 120
+--         drawn uniformly from the interval 2, 120
 -- mPerYear : meters in one year
---            drawn uniformly from the interval 0 to 10000 (6.2 miles)
+--            drawn geometrically from the interval 0 to 10000 (6.2 miles)
 -- lambda   : regularization coefficient
+--            drawu uniformly from [.1, .00001]
 --            drawn uniformy form -1 to -5, then transformed by raising 10 to that power
 --            hence in the range [.1, .00001]
 
+local choiceK = {'uniform', 2, 120}
+local choiceLambda = {'uniform', .00001, .1}
+local choiceMPerYear = {'geometric', 1, 10000}
+
 require 'makeVp'
+require 'Random'
 
-stop('rework this program to draw geometrically-spaced samples in all ranges')
+-- return 1D tensor containing a set of randomly-generated hyperparameters
+local function generate(nSets, choice)
+   local which = choice[1]
+   local lowest = choice[2]
+   local highest = choice[3]
+   if which == 'uniform' then
+      return Random():uniform(nSets, lowest, highest)
+   elseif which == 'geometric' then
+      return Random():geometric(nSets, lowest, highest)
+   else
+      error('cannot happen ' .. tostring(which))
+   end
+end
 
-local function round(x)
-   return math.floor(x + 0.5)
+-- write the csv file
+local function writeCsvFile(pathOutput, k, lambda, mPerYear)
+   local output, err = io.open(pathOutput, 'w')
+   assert(output, err)
+
+   -- write CSV header
+   output:write('set,k,lambda,mPerYear\n')
+
+   -- write the data records
+   for n = 1, k:size(1) do
+      output:write(string.format('%d,%d,%f,%f\n', n, k[n], lambda[n], mPerYear[n]))
+   end
+   output:close()
 end
 
 ------------------------------------------
@@ -30,45 +61,17 @@ end
 ------------------------------------------
 
 local vp = makeVp(2, 'imputeRandomHyperparameters')
+
+-- configure
 local programName = 'imputeRandomHyperparameters'
 local pathOutput = '../data/v6/output/' .. programName .. '.csv'
 
-local output, err = io.open(pathOutput, 'w')
-assert(output, err)
-
--- write CSV header
-output:write('set,k,mPerYear,lambda\n')
-
--- set control parameters for generating the random numbers
 local nSets = 100   -- number of sets to generate
-local kMin = 1
-local kMax = 120
 
-local mPerYearMin = 0
-local mPerYearMax = 10000
+local k = generate(nSets, choiceK)
+local lambda = generate(nSets, choiceLambda)
+local mPerYear = generate(nSets, choiceMPerYear)
 
-local lambdaMin = -5
-local lambdaMax = -1
-
-for n = 1, nSets do
-   local k = round(torch.uniform(kMin, kMax))
-
-   local mPerYear = torch.uniform(mPerYearMin, mPerYearMax)
-
-   local lambdaLog = torch.uniform(lambdaMin, lambdaMax)
-   local lambda = 10 ^ lambdaLog
-   vp(2, 'lambdaLog', lambdaLog)
-
-   vp(1, 'n', n, 'k', k, 'mPerYear', mPerYear, 'lambda', lambda)
-
-   output:write(tostring(n) .. ',' .. 
-                tostring(k) .. ',' .. 
-                tostring(mPerYear) .. ',' ..
-                string.format('%10.8f', lambda) ..
-                '\n')
-   --stop()
-end
-
-output:close()
+writeCsvFile(pathOutput, k, lambda, mPerYear)
 print('finished')
 
