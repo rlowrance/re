@@ -6,6 +6,7 @@
 -- --factors name, name, ...
 --   names of factor columns, if any
 --   all other columns are considered number columns
+-- --tensortype [Double | Byte], default Double
 -- INPUT FILES:
 -- OUTPUT FILES:
 
@@ -24,9 +25,12 @@ local function parseCommandLine(arg)
    local index = 1
    while index <= #arg do
       local keyword = arg[index]
+      local field = string.sub(keyword, 3)
       index = index + 1
-      if keyword == '--input' then
-         clArgs.input = arg[index]
+      if keyword == '--input' or
+         keyword == '--output' or
+         keyword == '--tensorType' then
+         clArgs[field] = arg[index]
          index = index + 1
       elseif keyword == '--output' then
          clArgs.output = arg[index]
@@ -43,9 +47,18 @@ local function parseCommandLine(arg)
       end
    end
 
+   -- check that required args are present
    assert(clArgs.input ~= nil, 'missing --input argument')
    assert(clArgs.output ~= nil, 'missing --output argument')
    assert(clArgs.factors ~= nil, 'missing --factors argument')
+   
+   -- supply default values
+   if clArgs.tensorType == nil then
+      clArgs.tensorType = 'Double'
+   end
+
+   -- check values
+   assert(clArgs.tensorType == 'Double' or clArgs.tensorType == 'Byte')
    return clArgs
 end
 
@@ -110,6 +123,35 @@ local function equalNamedMatrix(a, b)
    return true
 end
 
+-- maybe convert a tensor from Double type to another
+-- if converting, make sure no loss of information
+local function maybeConvert(tensor, to)
+   assert(tensor:nDimension() == 2)
+   assert(to == 'Byte' or to == 'Double')
+
+   if to == 'Double' then
+      return tensor
+   end
+
+   print('converting to ByteTensor')
+
+   local nRows = tensor:size(1)
+   local nCols = tensor:size(2)
+   local result = torch.ByteTensor(nRows, nCols)
+
+   for r = 1, nRows do
+      for c = 1, nCols do
+         local value  = tensor[r][c]
+         assert(0 <= value and value <= 255,
+                string.format('value %d out of range at r %d c %d', value, r, c))
+         result[r][c] = value
+      end
+   end
+   return result
+end
+
+
+
 -------------------------------------------------------------------------------
 -- MAIN PROGRAM
 -------------------------------------------------------------------------------
@@ -133,7 +175,9 @@ local csv = NamedMatrix.readCsv{
    skip=0}
 local csvCpu, csvWallclock = csvTimer:cpuWallclock()
 printTimes('csv', csvCpu, csvWallclock)
-assert(csv.t[1][3] == 913062344, csv.t[1])
+
+-- maybe convert csv.t Tensor which is a DoubleTensor to another type
+csv.t = maybeConvert(csv.t, clArgs.tensorType)
 
 -- write serialized version for the data in the csv file
 print('writing serialized file ' .. clArgs.output)
