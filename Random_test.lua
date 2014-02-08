@@ -2,9 +2,11 @@
 -- unit test
 
 require 'makeVp'
+require 'printTableValue'
 require 'Random'
+require 'round'
 
-local vp = makeVp(0, 'tester')
+local vp, verboseLevel = makeVp(0, 'tester')
 
 local nSamples = 100
 local lowest = 1
@@ -32,10 +34,17 @@ r1:apply(isInteger)
 local r1 = Random():geometric(nSamples, lowest, highest)
 vp(1, 'geometric r1', r1)
 assert(r1:size(1) == nSamples)
+local buckets = {}
 for i = 1, nSamples do
    local value = r1[i]
    assert(lowest <= value, value)
    assert(value <= highest, value)
+   local bucket = round(value, 0)
+   vp(2, 'bucket', bucket)
+   buckets[bucket] = (buckets[bucket] or 0) + 1
+end
+if verboseLevel > 0 then 
+   printTableValue('buckets', buckets)
 end
 
 

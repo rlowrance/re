@@ -6,6 +6,7 @@ if false then
    r = Random():uniform(nSamples, lowest, highest) -- uniform reals in [lowest, highest]
 end
 
+require 'assertEq'
 require 'round'
 require 'torch'
 
@@ -60,30 +61,31 @@ end
 -- lowest   : number, each number is in the range [lowest, highest]
 -- highest  : number
 -- NOTE: The selection procedure suggested by Yann is to define
--- t(x) = a b^x and then to sample uniformly in [0,1] after
--- selection a and b s.t. a b^0 = lowest and a b^1 = highest.
+-- t(x) = a e ^(bx) and then to sample x uniformly in [0,1] after
+-- selection a and b s.t. t(0) = lowest and t(1) = highest.
 -- MATH
--- Since lowest = a b^0 = a and highest = a b^1 = a b, we have
--- a = lowest
--- b = highest /a = highest / lowest
--- Then t(x) = a b ^x = lowest (highest / lowest) ^ x
+-- 1. t(0) == lowest <==> a e ^ 0 = lowest <==> a == lowest
+-- 2. t(1) == highest <==> a e ^ b == highest <==> e^b == highest/a
+--    <==> e^b = highest/lowest <==> b = ln(highest / lowest)
 function Random:geometric(nSamples, lowest, highest)
    local vp = makeVp(0, 'geometric')
+   vp(1, 'nSamples', nSamples, 'lowest', lowest, 'highest', highest)
    
    assert(nSamples > 0)
    assert(lowest <= highest)
    assert(lowest ~= 0)
 
    local a = lowest
-   local b = highest / lowest
+   local b = math.log(highest / lowest)
    vp(2, 'a', a, 'b', b)
 
    local function t(x) 
-      return a * (b ^ x)
+      local e = math.exp(1)
+      return a * (e ^ (b * x))
    end
-   assert(t(0) == lowest)
-   assert(t(1) == highest)
-   
+
+   assertEq(t(0), lowest,  .00001)
+   assertEq(t(1), highest, .00001)
 
    local u = self:uniform(nSamples, 0, 1)
    local result = torch.Tensor(nSamples)
