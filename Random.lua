@@ -71,9 +71,9 @@ function Random:geometric(nSamples, lowest, highest)
    local vp = makeVp(0, 'geometric')
    vp(1, 'nSamples', nSamples, 'lowest', lowest, 'highest', highest)
    
-   assert(nSamples > 0)
-   assert(lowest <= highest)
-   assert(lowest ~= 0)
+   assert(nSamples > 0, 'cannot have zero samples')
+   assert(lowest <= highest, 'lowest exceed highest')
+   assert(lowest ~= 0, 'lowest cannot be zero')
 
    local a = lowest
    local b = math.log(highest / lowest)
