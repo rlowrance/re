@@ -1,4 +1,4 @@
--- imputeRandomHyperparameters.lua
+-- program_hpsets_impute.lua
 -- main program to generate random sets of hyperparameters needed to impute
 -- missing features
 --
@@ -7,7 +7,7 @@
 -- INPUT FILES: None
 --
 -- OUTPUT FILES:
--- imputeRandomHyperparameters.csv
+-- hpsets_impute.csv
 --   randomly generated hyperparamters
 --
 -- There are 3 hyperparameters with these sampling distributions
