@@ -1,61 +1,59 @@
--- distancesSurface.lua
-
-error('deprecated: use distancesSurface2 instead for a more secure API')
+-- distancesSurface2.lua
 
 require 'head' 
 require 'makeVp'
 require 'metersPerLatitudeDegree'
 require 'metersPerLongitudeDegree'
-require 'validateAttributes'
+require 'torch'
 
 -- determine surface distances on earth from a query point to a other points
 -- ARGS
--- query     : 1D Tensor of size m
--- others    : 2D Tensor of size n x m
+-- query     : table with fields .latitude .longitude .year, each a number
+-- others    : table with fields .latitude .longitude .year, each a 1D Tensor of size n
 -- mPerYear  : number, number of meters corresponding to one year
--- names     : table with fields .latitude, .longitude, .year
---             the column number is query and others of the corresponding values
 -- RETURNS
 -- distances : 1D Tensor of distances in equivalent meters
-function distancesSurface(query, others, mPerYear, names)
+function distancesSurface2(query, others, mPerYear)
    local vp, verboseLevel = makeVp(0, 'distancesSurface')
    local v = verboseLevel > 0
    if v then
-      vp(1, 'query', query)
-      vp(1, 'others size', others:size())
-      vp(1, 'others head', head(others))
-      vp(1, 'mPerYear', mPerYear)
-      vp(1, 'names', names)
+      vp(1, 'query', query, 'othes', others, 'mPerYear', mPerYear)
    end
 
-   -- validate args
-   validateAttributes(query, 'Tensor', '1d')
-   validateAttributes(others, 'Tensor', '2d')
-   validateAttributes(mPerYear, 'number', '>=', 0)
-   validateAttributes(names, 'table')
-   validateAttributes(names.latitude, 'number', '>=', 1)
-   validateAttributes(names.longitude, 'number', '>=', 1)
-   validateAttributes(names.year, 'number', '>=', 1)
+   -- create 1D tensor for each query element
+   local n = others.latitude:size(1)
+   local function make1DTensor(value)
+      return torch.Tensor(n):fill(value)
+   end
 
-   -- set column numbers
-   local cLatitude = names.latitude
-   local cLongitude = names.longitude
-   local cYear = names.year
+   local queryTensor1d = {
+      latitude = make1DTensor(query.latitude),
+      longitude = make1DTensor(query.longitude),
+      year = make1DTensor(query.year),
+   }
+
+   -- surface distances depend on the latitude on the surface
+   -- use the average latitude
+   local avgLatitude = (others.latitude + query.latitude) / 2
+   
+   -- find distances in meters along each of the 3 dimensions
+   local dLatitudeMeters = torch.cmul(others.latitude - query.latitude, 
+                                      metersPerLatitudeDegree(avgLatitude))
+   local dLongitudeMeters = torch.cmul(others.longitude - query.longitude,
+                                       metersPerLongitudeDegree(avgLatitude))
+   local dYearsMeters = (others.year - query.year) * mPerYear
+
+   local distances = (torch.cmul(dLatitudeMeters, dLatitudeMeters) +
+                      torch.cmul(dLongitudeMeters, dLongitudeMeters) +
+                      torch.cmul(dYearsMeters, dYearsMeters)) : sqrt()
+
    if v then
-       vp(2, 'cLatitude', cLatitude)
-       vp(2, 'cLongitude', cLongitude)
-       vp(2, 'cYear', cYear)
+      vp(1, 'distances', distance)
    end
 
-
-   -- view query as 2D by replicating the row n times
-   -- NOTE: since the queryLocation might have been formed with borrowed
-   -- storage, it is necessary to clone it first. This bug was very hard
-   -- to find.
-   local n = others:size(1)
-   local m = others:size(2)
-   assert(m == query:size(1))
-
+   return distances
+end
+--[[ OLD CODE
    -- new version without 2D views
    local avgLatitude = (others:select(2, cLatitude) + query[cLatitude]) / 2
    if v then
@@ -85,3 +83,4 @@ function distancesSurface(query, others, mPerYear, names)
 
    return distances -- in equivalent meters
 end
+--]]
