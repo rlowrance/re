@@ -1,76 +1,76 @@
 # unit-test-all.sh
 # run all unit tests
 
-torch allZero_test.lua
-torch argmax_test.lua
-torch asColumnMatrix_test.lua
-torch asFactor_test.lua
-torch assertEq_test.lua
-torch augment_test.lua
+luajit allZero_test.lua
+luajit argmax_test.lua
+luajit asColumnMatrix_test.lua
+luajit asFactor_test.lua
+luajit assertEq_test.lua
+luajit augment_test.lua
 
-torch bestApns_test.lua
-torch bytesIn_test.lua
+luajit bestApns_test.lua
+luajit bytesIn_test.lua
 
-torch CacheFile_test.lua
-torch center_test.lua
+luajit CacheFile_test.lua
+luajit center_test.lua
 luajit checkGradient_test
-torch CommandLine_test.lua
-torch concatHorizontal_test.lua
+luajit CommandLine_test.lua
+luajit concatHorizontal_test.lua
 luajit ConfusionMatrix_test.lua
 
-torch Dataframe_test.lua
-torch directoryAssureExists_test.lua
-torch directoryAssureNotExists_test.lua
-torch directoryDelete_test.lua
-torch directoryExists_test.lua
+luajit Dataframe_test.lua
+luajit directoryAssureExists_test.lua
+luajit directoryAssureNotExists_test.lua
+luajit directoryDelete_test.lua
+luajit directoryExists_test.lua
 luajit distancesEuclidean_test.lua
-torch distancesSurface2_test.lua
+luajit distancesSurface2_test.lua
 
-torch equalObjectValues_test.lua
-torch equalTensors_test.lua
-torch extract_test.lua
-torch extractTensor_test.lua
+luajit equalObjectValues_test.lua
+luajit equalTensors_test.lua
+luajit extract_test.lua
+luajit extractTensor_test.lua
 
-torch fileAssureExists_test.lua
-torch fileAssureNotExists_test.lua
-torch fileDelete_test.lua
-torch fileExists_test.lua
+luajit fileAssureExists_test.lua
+luajit fileAssureNotExists_test.lua
+luajit fileDelete_test.lua
+luajit fileExists_test.lua
 luajit finiteDifferenceGradient_test.lua
 
-torch hasNA_test.lua
-torch hasNaN_test.lua
-torch head_test.lua
+luajit hasNA_test.lua
+luajit hasNaN_test.lua
+luajit head_test.lua
 
-torch ifelse_test.lua
+luajit ifelse_test.lua
 luajit imputeissingFeature_test.lua
-torch isnan_test.lua
-torch isSequence_test.lua
+luajit isnan_test.lua
+luajit isSequence_test.lua
 luajit isTensor_test.lua
 
-torch kernelEpanechnikovQuadraticKnn_test.lua
-torch keyboard_test.lua
-torch keys_test.lua
+luajit kernelEpanechnikovQuadraticKnn_test.lua
+luajit keyboard_test.lua
+luajit keys_test.lua
 luajit kroneckerProduct.lua 
 
-torch makeDistanceSurface_test.lua
-torch makeLogreg_test.lua
-torch makeNextNonZeroImportanceIndex_test.lua
-torch makeNextPermutedIndex_test.lua
-torch makeSampler_test.lua
-torch makeSampleIndexer_test.lua
-torch maxIndex_test.lua
-torch memoizedComputationOnDisk_test.lua
-torch memoryUsed_test.lua
-torch metersPerLatitudeDegree_test.lua
-torch metersPerLongitudeDegree_test.lua
-torch ModelLinearL2Loss_test.lua
+luajit makeDistanceSurface_test.lua
+luajit makeLogreg_test.lua
+luajit makeNextNonZeroImportanceIndex_test.lua
+luajit makeNextPermutedIndex_test.lua
+luajit makeSampler_test.lua
+luajit makeSampleIndexer_test.lua
+luajit maxIndex_test.lua
+luajit memoizedComputationOnDisk_test.lua
+luajit memoryUsed_test.lua
+luajit metersPerLatitudeDegree_test.lua
+luajit metersPerLongitudeDegree_test.lua
+luajit ModelLinearL2Loss_test.lua
 luajit ModelLogisticRegression_OLD_test.lua
 luajit ModelLogreg01_test.lua
 luajit ModelLogregNnbatch_test.lua
 luajit ModelLogregOLD_test.lua
 luajit ModelLogreg_test.lua
 
-torch NamedMatrix_test.lua
+luajit NamedMatrix_test.lua
 
 luajit ObjectivefunctionLogregMurphybatch_test.lua
 luajit ObjectivefunctionLogregNnbatch_test.lua
@@ -80,7 +80,7 @@ luajit Objectivefunction_test.lua
 luajit optim_gd_test.lua
 luajit optim_vsgfd_test.lua
 
-torch parseCommandLine_test.lua
+luajit parseCommandLine_test.lua
 luajit printAllVariables_test.lua
 luajit printTableValueOLD_test.lua
 luajit printTableValue_test.lua
@@ -90,29 +90,29 @@ luajit printVariable_test.lua
 luajit Random_test.lua
 
 luajit Sequence2String_test.lua
-torch sequenceContains_test.lua
-torch sgdBottou_test.lua
+luajit sequenceContains_test.lua
+luajit sgdBottou_test.lua
 luajit sigmoid_tet.lua
-torch SliceReader_test.lua
-torch softmaxes_test.lua
+luajit SliceReader_test.lua
+luajit softmaxes_test.lua
 luajit splitString_test.lua
-torch splitTensor_test.lua
+luajit splitTensor_test.lua
 luajit StackFrame_test.lua
-torch standardize_test.lua
-torch stop_test.lua
+luajit standardize_test.lua
+luajit stop_test.lua
 
-torch TableCached_test.lua
-torch Timer_test.lua
+luajit TableCached_test.lua
+luajit Timer_test.lua
 luajit time_test.lua
 
-torch unique_test.lua
+luajit unique_test.lua
 
-torch validateAttributes_test.lua
+luajit validateAttributes_test.lua
 luajit validate_test.lua
-torch view1DAs2D_test.lua
+luajit view1DAs2D_test.lua
 luajit variableValue_test.lua
-torch viewAdditionalRows_test.lua
-torch viewAsColumnVector_test.lua
+luajit viewAdditionalRows_test.lua
+luajit viewAsColumnVector_test.lua
 
 echo "ALL UNIT TESTS COMPLETED"
 
