@@ -18,6 +18,8 @@ if false then
    if verboseLevel >= 3 then action() end
 end
 --require 'keyboard'
+
+require 'printTableValue'
 require 'torch'
 
 -- create verbosePrint function
@@ -68,13 +70,13 @@ function makeVp(verboseVar, prefix)
    end
    
    local function vp2(name, value)
-      --print('vp2()') print('name') print(name) print('value') print(value) print('done')
-      --keyboard()
-      --if name == '\npredictionAttributes' or name == '\nlambda' then
-      --   print('entered vp2') print(name) print(value)
-      --end
+      --print('vp2()', 'name=', name, 'value=', value, 'DONE')
       name = maybeSkipLine(name)
-      if type(value) == 'userdata' or type(value) == 'table' then
+      if type(value) == 'table' then
+         print(prefixString .. name .. '=a table')
+         printTableValue(name, value)
+
+      elseif type(value) == 'userdata'  then
          if torch.typename(value) == 'Dataframe' then
             print(prefixString .. name .. '=a Dataframe')
             value:print()
@@ -82,9 +84,9 @@ function makeVp(verboseVar, prefix)
             print(prefixString .. name .. '=a NamedMatrix')
             value:print()
          else
-            print(prefixString .. name .. '=')
-            print(value)
+            print(prefixString .. name .. '=', tostring(value))
          end
+
       else
          print(prefixString .. name .. '=' .. tostring(value))
       end
