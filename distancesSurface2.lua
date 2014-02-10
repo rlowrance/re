@@ -53,34 +53,3 @@ function distancesSurface2(query, others, mPerYear)
 
    return distances
 end
---[[ OLD CODE
-   -- new version without 2D views
-   local avgLatitude = (others:select(2, cLatitude) + query[cLatitude]) / 2
-   if v then
-       vp(2, 'others head', head(others))
-       vp(2, 'query', query)
-       vp(2, 'avgLatitude head', head(avgLatitude))
-   end
-
-   local dLatitudeMeters = 
-      torch.cmul(others:select(2, cLatitude) - query[cLatitude],
-                 metersPerLatitudeDegree(avgLatitude))
-   local dLongitudeMeters =
-      torch.cmul(others:select(2, cLongitude) - query[cLongitude],
-                 metersPerLongitudeDegree(avgLatitude))
-   local dYearMeters =
-      (others:select(2, cYear) - query[cYear]) * mPerYear
-   if v then 
-       vp(2, 'dLatitudeMeters head', head(dLatitudeMeters)) 
-       vp(2, 'dLongitudeMeters head', head(dLongitudeMeters))
-       vp(2, 'dYearMeters size', dYearMeters:size())
-       vp(2, 'dYearMeters head', head(dYearMeters))
-   end
-   local distances = (torch.cmul(dLatitudeMeters, dLatitudeMeters) +
-                      torch.cmul(dLongitudeMeters, dLongitudeMeters) +
-                      torch.cmul(dYearMeters, dYearMeters)):sqrt()
-   if v then vp(2, 'distances head', head(distances)) end
-
-   return distances -- in equivalent meters
-end
---]]
