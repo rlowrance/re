@@ -14,5 +14,5 @@ assert(result[1] == math.sqrt(1 + 1))
 assert(result[2] == math.sqrt(1 + 9)) -- fix me
 assert(result[3] == math.sqrt(9 + 25))
 
-print('successfully completed all unit tests for distancesEuclidean')
+print('ok distancesEuclidean')
 
