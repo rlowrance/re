@@ -36,7 +36,8 @@ function tests.d1()
 
    local a = torch.Tensor(1):fill(3)
    local _, gradient = f(a)
-   local d, dy, dh = checkGradient(f, a, epsilon, gradient)
+   local verbose = false
+   local d, dy, dh = checkGradient(f, a, epsilon, gradient, verbose)
    if trace then
       print('a', a)
       print('d', d)
@@ -48,7 +49,8 @@ function tests.d1()
    local b = torch.Tensor(1):fill(3)
    epsilon = 1e-1
    local _, gradient = f(b)
-   local d, dy = checkGradient(f, b, epsilon, gradient)
+   local verbose = false
+   local d, dy = checkGradient(f, b, epsilon, gradient, verbose)
    if trace then
       print('b', b)
       print('d', d)
@@ -84,7 +86,8 @@ function tests.d2()
    local x = torch.Tensor(2):fill(1)
    local epsilon = 1e-5
    local _, gradient = f(x)
-   local d, dy = checkGradient(f, x, epsilon, gradient)
+   local verbose = false
+   local d, dy = checkGradient(f, x, epsilon, gradient, verbose)
    if trace then
       print('\n')
       print('x', x)
