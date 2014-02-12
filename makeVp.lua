@@ -20,6 +20,7 @@ end
 --require 'keyboard'
 
 require 'printTableValue'
+require 'printTensorValue'
 require 'torch'
 
 -- create verbosePrint function
@@ -74,10 +75,15 @@ function makeVp(verboseVar, prefix)
       name = maybeSkipLine(name)
       if type(value) == 'table' then
          print(prefixString .. name .. '=a table')
-         printTableValue(name, value)
+         printTableValue(' ' .. name, value)
 
       elseif type(value) == 'userdata'  then
-         if torch.typename(value) == 'Dataframe' then
+         if isTensor(value) then
+            print(prefixString .. name .. '=a torch.Tensor')
+            local maxRows = 6
+            local maxCols = 6
+            printTensorValue(' ' .. name, value, maxRows, maxCols)
+         elseif torch.typename(value) == 'Dataframe' then
             print(prefixString .. name .. '=a Dataframe')
             value:print()
          elseif torch.typename(value) == 'NamedMatrix' then
