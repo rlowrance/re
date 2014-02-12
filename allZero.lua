@@ -10,7 +10,6 @@ require 'validateAttributes'
 
 function allZero(t)
    local vp = makeVp(2, 'allZero')
-   validateAttributes(t, 'Tensor')
 
    return t:nElement() == torch.sum(torch.eq(t, 0))
 end
