@@ -4,7 +4,7 @@
 require 'makeVp'
 require 'time'
 
-local vp = makeVp(0, 'tester')
+local vp = makeVp(1, 'tester')
 
 local function sum(a,b)
    local vp = makeVp(0, 'sum')
@@ -50,6 +50,17 @@ assert(product == 24)
 local cpu, fact= time(factorial, 25)
 vp(1, 'cpu', cpu, 'fact', fact)
 assert(fact > 1.5e25) -- from wikipedia at "Factorial"
+
+local wallclock, fact = time('wallclock', factorial, 25)
+vp(1, 'wallclock', wallclock, 'fact', fact)
+assert(wallclock > 0)
+assert(wallclock >= cpu)  -- expected to use one CPU
+assert(fact > 1.5e25)
+
+local cpu, wallclock, fact = time('both', factorial, 25)
+vp(1, 'cpu', cpu, 'wallclock', wallclock, 'fact', fact)
+assert(wallclock >= cpu)
+assert(fact > 1.5e25)
 
 print('ok time')
 
