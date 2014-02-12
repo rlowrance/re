@@ -2,7 +2,7 @@
 -- print value of a Tensor
 
 require 'isTensor'
-require 'makeVp'
+--require 'makeVp'
 
 -- ARGS
 -- name       : optional string, name of variable holding a table value
