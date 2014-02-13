@@ -111,6 +111,7 @@ function standardize(obj, means, stds)
       end
    else
       -- used provided means and standard deviations to center the obj values
+      assert(stds, 'must provide stdvs when providing means')
       if type(obj) == 'table' then
          return standardizeSeq(obj, means, stds)
       elseif type(obj) == 'userdata' then
