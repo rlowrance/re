@@ -1,6 +1,8 @@
 -- Timer.cpu
 -- measure wall clock or CPU time
 
+require 'ifelse'
+
 -- API overview
 if false then
    timer = Timer()
@@ -18,6 +20,7 @@ if false then
    timer:lap('part 1')
    timer:lap('part 2')
    timer:write()  -- write all CPU and Wallclock lap times
+   timer:write('name', openFileDescriptor) -- alternative call
 end
 
 require 'makeVp'
@@ -29,39 +32,38 @@ function Timer:__init(functionName, fileDescriptor)
    self.timer = torch.Timer()
    self.functionName = functionName
    self.fileDescriptor = fileDescriptor
-   self.lapNames = {}
    self.cpuTimes = {}
    self.wallclockTimes = {}
 end
 
--- save cpu and wallclock time; then reset
+-- save time from last lap, both cpu and wallclock time
 function Timer:lap(lapName)
-   --local vp = makeVp(2, 'Timer:lap')
-   --vp(1, 'self', self, 'lapName', lapName)
-   validateAttributes(lapName, 'string')
-   table.insert(self.lapNames, lapName)
-   table.insert(self.cpuTimes, self:cpu())
-   table.insert(self.wallclockTimes, self:wallclock())
-   self:reset()  -- restart the clock
+   local vp = makeVp(0, 'Timer:lap')
+   vp(1, 'self', self, 'lapName', lapName)
+   self.cpuTimes[lapName] = (self.cpuTimes[lapName] or 0) + self:cpu()
+   self.wallclockTimes[lapName] = (self.wallclockTimes[lapName] or 0) + self:wallclock()
+   self:reset()  -- restart clock for next lap
 end
 
+
 -- verbose write cpu and wallclock time
-function Timer:write()
-   if self.functionName == nil then
-      error('did not supply a function name')
-   end
-    
-   if self.fileDescriptor == nil then
-      error('did not supply a file descriptor')
-   end
+function Timer:write(name, fd)
+   name = ifelse(name ~= nil, name, self.functionName)
+   name = ifelse(name == nil, ' ', name)
+
+   fd = ifelse(fd ~= nil, fd, self.fileDescriptor)
+   fd = ifelse(fd == nil, io.stderr, fd)
    
-   for i, lapName in ipairs(self.lapNames) do
-      io.write(self.functionName .. ' ' ..
-               lapName .. ' ' ..
-               ' cpu ' .. tostring(self.cpuTimes[i]) ..
-               ' wallclock ' .. tostring(self.wallclockTimes[i]) ..
-               '\n')
+   local totalCpu = 0
+   local totalWallclock = 0
+   local format = '%30s %30s cpu %8.6f wallclock %8.6f\n'
+   for lapName, cpu in pairs(self.cpuTimes) do
+      local wallclock = self.wallclockTimes[lapName]
+      totalCpu = totalCpu + cpu
+      totalWallclock = totalWallclock + wallclock
+      fd:write(string.format(format, name, lapName, cpu, wallclock))
    end
+   fd:write(string.format(format, name, 'TOTAL', totalCpu, totalWallclock))
 end
 
 function Timer:reset()
