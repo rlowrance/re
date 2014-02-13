@@ -8,7 +8,7 @@
 function printTableValue(variableName, tableValue)
 
    local function printField(tableName, fieldName, fieldValue)
-      assert(fieldValue)
+      assert(fieldValue ~= nil)
       print(string.format('%s.%s = %s', tableName, fieldName, tostring(fieldValue)))
    end
 
