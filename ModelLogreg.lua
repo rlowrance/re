@@ -93,6 +93,10 @@ end
 --                 .finalLoss               : number, loss before the last step taken
 --                 .nEpochsUntilConvergence : number
 --                 .optimalTheta            : 1D Tensor
+--                 .evaluations             : sequence with each evalution, each element is another sequence
+--                                            {'step', stepsize, loss-before-step}
+--                                            {'explore', stepsize, loss-before-step}
+--                                            The number of evaluations of the loss function is #evaluations
 function ModelLogreg:runFit(fittingOptions)
    assert(fittingOptions ~= nil, 'missing arg fittingOptions')
    assert(type(fittingOptions) == 'table', 'fittingOptions not a table')
@@ -124,7 +128,8 @@ end
 -- predictInfo : table
 --               .mostLikelyClasses : 1D Tensor of integers, the most likely class numbers
 function ModelLogreg:runPredict(newX, theta)
-   local vp = makeVp(0, 'runrunPredict')
+   local vp = makeVp(0, 'ModelLogreg:runrunPredict')
+   vp(1, 'newX', newX, 'theta', theta)
    assert(newX ~= nil, 'newX is nil')
    assert(newX:nDimension() == 2, 'newX is not a 2D Tensor')
    
@@ -133,6 +138,7 @@ function ModelLogreg:runPredict(newX, theta)
 
    vp(1, 'self.objectivefunction', self.objectivefunction)
    local probs = self.objectiveFunction:predictions(newX, theta)
+   vp(1, 'probs', probs)
 
    local nSamples = newX:size(1)
    local mostLikelyClasses = torch.Tensor(nSamples)
@@ -159,11 +165,12 @@ end
 -- currentStepSize : number > 0
 -- theta           : 1D Tensor
 -- printLoss       : boolean
+-- evaluations     : table for recording history
 -- RETURNS
 -- bestStepSize    : number
 -- nextTheta       : 1D Tensor
 -- lossBeforeStep  : number, the loss before the last step taken
-function ModelLogreg:_adjustStepSizeAndStep(feval, methodOptions, currentStepSize, theta, printLoss)
+function ModelLogreg:_adjustStepSizeAndStep(feval, methodOptions, currentStepSize, theta, printLoss, evaluations)
    local vp = makeVp(0, '_adjustStepSizeAndStep')
    vp(1, 'currentStepSize', currentStepSize)
    vp(2, 'theta', vectorToString(theta))
@@ -177,7 +184,9 @@ function ModelLogreg:_adjustStepSizeAndStep(feval, methodOptions, currentStepSiz
    local lossesBeforeLastStep = {}
    local nextThetas = {}
    for _, stepSize in ipairs(possibleNextStepSizes) do
-      local nextTheta, lossAfterSteps, lossBeforeLastStep = self:_lossAfterNSteps(feval, stepSize, theta, nSteps)
+      local nextTheta, lossAfterSteps, lossBeforeLastStep = 
+         self:_lossAfterNSteps(feval, stepSize, theta, nSteps)
+      table.insert(evaluations, {'adjust', stepSize, lossAfterSteps})
       lossesAfterSteps[stepSize] = lossAfterSteps
       lossesBeforeLastStep[stepSize] = lossBeforeLastStep
       nextThetas[stepSize] = nextTheta
@@ -197,6 +206,10 @@ function ModelLogreg:_adjustStepSizeAndStep(feval, methodOptions, currentStepSiz
 end
 
 -- fit using Bottou's stepsize adjustment on full epochs
+-- RETURNS:
+-- objectiveFunction
+-- optimalTheta
+-- fitInfo
 function ModelLogreg:_algoBottouEpoch(fittingOptions)
    local vp, verboseLevel, myName = makeVp(0, '_algoBottouEpoch')
    local vp2 = verboseLevel >= 2
@@ -205,6 +218,7 @@ function ModelLogreg:_algoBottouEpoch(fittingOptions)
    local methodOptions = fittingOptions.methodOptions
    local callBackEndOfEpoch = methodOptions.callBackEndOfEpoch
    local printLoss = methodOptions.printLoss
+   assert(printLoss == false)
    local stepSize = methodOptions.initialStepSize  -- some folks call this variable eta
    local nEpochsToAdjustStepSize = methodOptions.nEpochsToAdjustStepSize
 
@@ -222,6 +236,7 @@ function ModelLogreg:_algoBottouEpoch(fittingOptions)
    local lossIncreasedOnLastStep = false
    local previousTheta = of:initialTheta()
    local nEpochsCompleted = 0
+   local evaluations = {}  -- history of evaluations
 
    repeat -- until convergence
       if vp2 then
@@ -235,12 +250,13 @@ function ModelLogreg:_algoBottouEpoch(fittingOptions)
          -- adjust stepsize and take a step with the adjusted size
          if vp2 then vp(2, 'adjusting step size and stepping') end
          stepSize, nextTheta, lossBeforeStep = 
-            self:_adjustStepSizeAndStep(feval, methodOptions, stepSize, previousTheta, printLoss)
+            self:_adjustStepSizeAndStep(feval, methodOptions, stepSize, previousTheta, printLoss, evaluations)
          nEpochsCompleted = nEpochsCompleted + nEpochsToAdjustStepSize
       else
          -- take a step with the current stepsize
          if vp2 then vp(2, 'stepping with current step size') end
          nextTheta, lossBeforeStep = self:_step(feval, stepSize, previousTheta)
+         table.insert(evaluations, {'step', stepSize, lossBeforeStep})
          nEpochsCompleted = nEpochsCompleted + 1
       end
 
@@ -266,9 +282,10 @@ function ModelLogreg:_algoBottouEpoch(fittingOptions)
             convergedReason = convergedReason,
             finalLoss = lossBeforeStep,
             nEpochsUntilConvergence = nEpochsCompleted,
-            optimalTheta = nextTheta
+            optimalTheta = nextTheta,
+            evaluations = evaluations,
          }
-         self.fitInfo = fitInfo
+         self.fitInfo = fitInfo  -- save a copy
          if printLoss then
             local function p(fieldName)
                print('converged fitInfo.' .. fieldName .. ' = ' .. tostring(fitInfo[fieldName]))
@@ -280,9 +297,7 @@ function ModelLogreg:_algoBottouEpoch(fittingOptions)
          return of, nextTheta, fitInfo
       end
       
-      -- error if the loss is increasing
-      -- Because we are doing full gradient descent, there is always a small enough stepsize
-      -- so that the loss will not increase.
+      -- Determine if loss is increasing, so that we can search for a smaller stepsize
       if previousLoss ~= nil then
          lossIncreasedOnLastStep = lossBeforeStep > previousLoss
          if lossIncreasedOnLastStep and printLoss then
@@ -294,6 +309,7 @@ function ModelLogreg:_algoBottouEpoch(fittingOptions)
       previousLoss = lossBeforeStep
       previousTheta = nextTheta
    until false
+   error('cannot get here')
 end
 
 -- determine if we have converged
@@ -355,16 +371,16 @@ end
 
 -- take a step in the direction of the gradient implied by theta
 -- ARGS
--- feval     : function(theta) --> loss, gradient
--- stepSize  : number
--- theta     : 1D Tensor
+-- feval       : function(theta) --> loss, gradient
+-- stepSize    : number
+-- theta       : 1D Tensor
 -- RETURNS
--- nextTheta : 1D Tensor, theta after the step
--- loss      : number, loss at the theta before the step
+-- nextTheta   : 1D Tensor, theta after the step
+-- loss        : number, loss at the theta before the step
 function ModelLogreg:_step(feval, stepSize, theta)
    local vp = makeVp(0, '_step')
    vp(1, 'stepSize', stepSize, 'theta', vectorToString(theta))
-   local loss, gradient =feval(theta)
+   local loss, gradient =feval(theta)  -- loss before step
    vp(2, 'gradient', vectorToString(gradient))
    local nextTheta = theta - gradient * stepSize
    vp(1, 'loss before step', loss, 'nextTheta', vectorToString(nextTheta))
@@ -432,7 +448,6 @@ function ModelLogreg:_validateMethodOptions(method, methodOptions)
    end
 end
 
--- TODO: move function into alphabetic order
 function ModelLogreg:_hasOnlyFields(table, expectedFields)
    -- make set of all fields in the table
    local actualFieldsSet = {}
