@@ -111,14 +111,19 @@ end
 -- RETURNS
 -- probabilities  : 2D Tensor of probabilities
 function ObjectivefunctionLogregNnbatch:runrunPredictions(newX, theta)
+   local vp = makeVp(0, 'ObjectivefunctionLogregNnbatch:runrunPredictions')
+   vp(1, 'newX', newX, 'theta', theta)
+
    assert(newX:nDimension() == 2, 'newX is not a 2D Tensor')
    assert(newX:size(2) == self.X:size(2), 'newX has wrong number of features')
+
 
    -- avoid construction of a new ObjectivefunctionLogregNnbatch by replacing and restoring field X
    local currentX = self.X  -- save field X
    self.X = newX
    local logProbabilities = self:_logprobabilities(theta)
    local probabilities = torch.exp(logProbabilities)
+   vp(2, 'logProbabilities', logProbabilites, 'probabilites', probabilities)
    self.X = currentX  -- restore field X
    return probabilities
 end
