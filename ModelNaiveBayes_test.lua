@@ -45,7 +45,7 @@ end
          
 -- MAIN PROGRAM
 
-local vp = makeVp(0, 'tester')
+local vp, verboseLevel = makeVp(2, 'tester')
 
 local data = makeData()
 local X, featureNames = makeX(data)
@@ -88,5 +88,32 @@ end
 
 assert(predictions[1][1] > predictions[1][2])  -- is female
 assert(predictInfo.mostLikelyClasses[1] == 1)
+
+-- another use case: one of the classes is not in the training data
+local data = makeData()
+local X, feauresNames = makeX(data)
+local nSamples = X:size(1)
+local y, codes = makeY(data)
+local nClasses = #codes
+
+-- change every occurence of class 1 to class 2
+for i = 1, nSamples do
+   if y[i] == 1 then
+      y[i] = 2
+   end
+end
+vp(2, 'y', y)
+
+-- fit the model that is missing class 1 in the training data
+local model = ModelNaiveBayes(X, y, nClasses)
+local fittingOptions = {method = 'gaussian'}
+local optimalTheta, fitInfo = model:fit(fittingOptions)
+local predictions, predictInfo = model:predict(X, optimalTheta)  -- predict the training data
+if verboseLevel > 1 then
+   printTensorValue('predictInfo.mostLikelyClasses', predictInfo.mostLikelyClasses)
+end
+for i = 1, nSamples do
+   assert(predictInfo.mostLikelyClasses[i] == 2)
+end
 
 print('ok ModelNaiveBayes')

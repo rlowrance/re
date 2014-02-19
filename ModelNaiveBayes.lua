@@ -113,46 +113,85 @@ function ModelNaiveBayes:_predictGaussian(newX, theta)
    local function uProbability(x, c)
 
       -- probability density of drawing x from a Guassian with given mean and std
+      -- return prob, err
       local function gaussian(x, mean, std)
          local vp = makeVp(0, 'gaussian')
-         vp(1, 'x', x, 'mean', mean, 'std', std)
-         local variance = std * std
-         local coefficient = 1 / math.sqrt(2 * math.pi * variance)
-         local difference = x - mean
-         local term = (- difference * difference) / (2 * variance)
-         local pd = coefficient * math.exp(term)
-         vp(1, 'pd', pd)
-         return pd
+         if std == 0 then
+            return 0, 'std == 0'
+         else
+            local variance = std * std
+            local coefficient = 1 / math.sqrt(2 * math.pi * variance)
+            local difference = x - mean
+            local term = (- difference * difference) / (2 * variance)
+            local pd = coefficient * math.exp(term)
+            assert(not isnan(pd))
+            return pd, nil
+         end
       end
 
-      local vp = makeVp(0, 'uProbability')
-      vp(1, 'x', x, 'c', c)
-      local up = theta.targetProbabilities[c]
-      vp(2, 'target probability', up)
-      for j = 1, x:size(1) do
-         local prob = gaussian(x[j], theta.means[c][j], theta.stds[c][j])
-         vp(2, string.format('j %d uProb %f', j, prob))
-         up = up * prob
+      local vp, verboseLevel = makeVp(0, 'uProbability')
+      local up = theta.targetProbabilities[c] -- p(y == c)
+      assert(not isnan(up))
+      if up == 0 then
+         if verboseLevel > 1 then 
+            vp(2, string.format('c=%d is not in training data', c))
+         end
+         return up 
+      else
+         for j = 1, x:size(1) do
+            local prob, err = gaussian(x[j], theta.means[c][j], theta.stds[c][j])
+            if err then
+               if err == 'std == 0' then
+                  prob = ifelse(x[i] == theta.means[c][j], 1, 0)
+                  if verboseLevel > 1 then 
+                     vp(2, string.format('%s c=%d j=%d prob=%f', err, c, j, prob))
+                  end
+               else
+                  error(err)
+               end
+            end
+            assert(not isnan(prob))
+            up = up * prob
+         end
       end
-      vp(2, 'up', up)
+      assert(not isnan(up))
       return up
    end
 
    local vp = makeVp(0, '_predictGaussian')
+   vp(2, 'self.targetProbabilities', self.targetProbabilities)
 
+   -- predict probabilities for each sample
    local nNewSamples = newX:size(1)
    local probs = torch.Tensor(nNewSamples, self.nClasses)
    local mostLikelyClasses = torch.Tensor(nNewSamples)
    for i = 1, nNewSamples do
+      -- determine unnormalized probability of new sample i
       local uProbs = torch.Tensor(self.nClasses)
       for c = 1, self.nClasses do
-         uProbs[c] = uProbability(newX[i], c)
+         if self.targetProbabilities[c] == 0 then
+            uProbs:zero()
+            break
+         else
+            local uProb = uProbability(newX[i], c)
+            assert(not isnan(uProb))
+            uProbs[c] = uProb
+         end
       end
-      vp(2, 'uProbs', uProbs)
 
-      probs[i] = uProbs:div(torch.sum(uProbs))
-      mostLikelyClasses[i] = argmax(uProbs)
+      -- convert unnormalized probabilities to normalized probabilities
+      local sumUProbs = torch.sum(uProbs)
+      if sumUProbs == 0 then
+         for c = 1, self.nClasses do
+            probs[i][c] = self.targetProbabilities[c] / 1
+         end
+      else
+         probs[i] = torch.div(uProbs, torch.sum(uProbs))
+      end
+      mostLikelyClasses[i] = argmax(probs[i])
    end
+
+   vp(1, 'probs', probs, 'mostLikelyClasses', mostLikelyClasses)
 
    return probs, {mostLikelyClasses = mostLikelyClasses}
 end
@@ -161,6 +200,7 @@ function ModelNaiveBayes:_fitGaussian()
 
    -- return mean, std, err
    local function getMeanStd(X, y, c, j)
+      -- MAYBE: These two calculations can be sped up by using torch.mean and torch.std 
 
       -- return mean, err
       local function getMean(X, y, c, j)
@@ -187,7 +227,6 @@ function ModelNaiveBayes:_fitGaussian()
       -- a given target value.
       local function getStd(X, y, c, j, mean)
          local vp = makeVp(0, 'getStd')
-         vp(1, 'c', c, 'j', j, 'mean', mean)
          local sumSquaredDifferences = 0
          local nFound = 0
          for i = 1, self.nSamples do
@@ -195,26 +234,21 @@ function ModelNaiveBayes:_fitGaussian()
                nFound = nFound + 1
                local value = X[i][j]
                local difference = value - mean
-               if c == 1 and j == 1 then
-                  -- for female foot
-                  vp(2, 'value', value, 'difference', difference)
-               end
                sumSquaredDifferences = sumSquaredDifferences + (difference * difference)
             end
          end
-         vp(1, 'sumSquaredDifferences', sumSquaredDifferences, 'nFound', nFound)
          if nFound == 0 then
             error('cannot happen')
          else
-            return math.sqrt(sumSquaredDifferences / nFound)
+            vp(2, 'sumSquaredDifferences', sumSquaredDifferences, 'nFound', nFound)
+            local std = math.sqrt(sumSquaredDifferences / nFound)
+            return std
          end
       end
       
       local vp = makeVp(0, 'getMeanStd')
-      vp(1, 'c', c, 'j', j)
 
       local mean, err = getMean(X, y, c, j)
-      vp(1, 'mean', mean, 'err', err)
       if err then
          return nil, nil, err
       end
@@ -235,27 +269,25 @@ function ModelNaiveBayes:_fitGaussian()
       local n = torch.sum(torch.eq(self.y, c))
       targetProbabilities[c] = n / self.nSamples
    end
-   vp(1, 'targetProbabilities', targetProbabilities)
+   self.targetProbabilities = targetProbabilities
 
    local means = torch.Tensor(self.nClasses, self.nFeatures)
    local stds = torch.Tensor(self.nClasses, self.nFeatures)
-   vp(1, 'self.nClasses', self.nClasses, 'self.nFeatures', self.nFeatures)
+
    for c = 1, self.nClasses do
       for j = 1, self.nFeatures do
          local mean, std, err = getMeanStd(self.X, self.y, c, j)
-         vp(1, string.format('c %d j %d mean %f var %f err %s', c, j, mean, std * std, err))
-         
          if err == 'none found' then
-            error(string.format('class %d does not occur in the data', c))
          elseif err ~= nil then
             error(err)
+         else
+            means[c][j] = mean
+            stds[c][j] = std
          end
-         means[c][j] = mean
-         stds[c][j] = std
       end
    end
    
-   vp(1, 'means', means, 'stds', stds)
+   vp(1, 'targetProbabilities', targetProbabilities, 'means', means, 'stds', stds)
 
    return {targetProbabilities = targetProbabilities, means = means, stds = stds}
 end
