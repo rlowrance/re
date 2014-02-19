@@ -18,10 +18,12 @@ require 'argmax'
 require 'distancesSurface2'
 require 'dropZeroSaliences'
 require 'equalObjectValues'
+require 'hasNaN'
 require 'ifelse'
 require 'isnan'
 require 'kernelEpanechnikovQuadraticKnn2'
 require 'ModelLogreg'
+require 'ModelNaiveBayes'
 require 'NamedMatrix'
 require 'printAllVariables'
 require 'printTableValue'
@@ -552,7 +554,184 @@ local function findBestInitialStepSize(X, y, s, nClasses, fittingOptions)
    vp(1, 'bestInitialStepSize', bestInitialStepSize)
    return bestInitialStepSize
 end
+
+-- return reduced X, y, and s and possible error
+-- return standardized X values
+local function reduceToKTrainingSamples(data, testIndex)
+   local vp = makeVp(2, 'reduceToKTrainingSamples')
+   local timer = Timer()
+   local saliences, err = makeWeights(data.train.location, 
+                                      makeQueryLocation(data.test.location, testIndex),
+                                      data.hp.mPerYear, 
+                                      data.hp.k,
+                                      testIndex)
+   timer:lap('makeWeights')
+   if err then
+      return nil, nil, nil, err
+   else
+      -- drop samples that have zero salience
+      -- this will be most of them, as about 600,000 samples and 60 with zero salience
+      local reducedX, reducedY, reducedS = dropZeroSaliences(data.train.XStandardized,
+                                                             data.train.y,
+                                                             saliences)
+      assert(reducedS:size(1) > 1)
+      timer:lap('dropZeroSaliences')
+      return reducedX, reducedY, reducedS, nil
+   end
+end
    
+-- return predicted probabilities, prediction info
+-- mutate timer
+local function predictUsingLLR(X, y, s, newX, nClasses, lambda, bestInitialStepSizes, timer)
+
+   local function setInitialFittingOptions()
+      local function nextStepSizes(currentStepSize)
+         return {currentStepSize, .5 * currentStepSize, 1.5 * currentStepSize}
+      end
+      local fittingOptions = {
+         method = 'bottou',
+         sampling = 'epoch',
+         methodOptions = {
+            printLoss = false,
+            initialStepSize = 1,
+            nEpochsBeforeAdjustingStepSize = 10,
+            nEpochsToAdjustStepSize = 1,
+            nextStepSizes = nextStepSizes,
+         },
+         samplingOptions = {},  -- no sampling options when sampling == 'epoch'
+         convergence = {  -- these will need to be tuned
+         maxEpochs = 1000,
+         toleranceLoss = 1e-4, 
+         },
+      regularizer = {
+         L2 = lambda,
+         },
+      }
+
+      return fittingOptions
+   end
+
+   local vp, verboseLevel = makeVp(0, 'predictUsingLLR')
+   local debug = verboseLevel > 0
+     
+
+   -- set the fitting options
+   -- grid search for best initial step size
+   local fittingOptions = setInitialFittingOptions()
+   local bestInitialStepSize = findBestInitialStepSize(X, y, s, nClasses, fittingOptions)
+   fittingOptions.methodOptions.initialStepSize = bestInitialStepSize -- finalize fitting options
+   if verboseLevel > 0 then 
+      printTableValue('fittingOptionsLLR', fittingOptionsLLR)
+   end
+
+   -- keep track of best sizes
+   -- perhaps we can optimize the search
+   bestInitialStepSizes[bestInitialStepSize] = (bestInitialStepSizes[bestInitialStepSize] or 0) + 1
+   timer:lap('find best initial step size')
+
+   -- build and fit the model
+   local model = ModelLogreg(X, y, s, nClasses)
+
+   local function fit(fittingOptions)
+      return model:fit(fittingOptions)
+   end
+
+   local fitCpu, fitWallclock, optimalTheta, fitInfo = time('both', fit, fittingOptions)
+   timer:lap('construct and fit model')
+   if false then
+      analyzeEvaluations(fitInfo.evaluations, fitCpu, fitWallclock)
+   end
+   if debug then 
+      vp(2, 'testIndex', testIndex, 'fitInfo', fitInfo) 
+   end
+
+   -- fit the test sample using the model
+   local predictions, predictionInfo = model:predict(newX, optimalTheta)
+   timer:lap('predict one test sample')
+
+   return predictions, predictionInfo
+end
+
+torch.class('LLR')
+
+function LLR:__init()
+   self.timer = Timer()
+   self.timer:stop()
+end
+
+function LLR:run(X, y, s, newX, nClasses, lambda, bestInitialStepSizes)
+   self.timer:resume()
+   local predictions, predictionInfo = 
+      predictUsingLLR(X, y, s, newX, nClasses, lambda, bestInitialStepSizes, self.timer)
+   self.timer:stop()
+   return predictions, predictionInfo
+end
+
+function LLR:getTimer()
+   return self.timer
+end
+
+-- return predicted probabilities, prediction info; maintain timer
+local function predictUsingLNB(X, y, newX, nClasses, timer)
+   local vp, verboseLevel = makeVp(0, 'predictUsingNB')
+   vp(1, 'testIndex', testIndex)
+
+   -- set the fitting options for NB = naive bayes
+   local fittingOptions = {
+      method = 'gaussian',
+   }
+
+   local model = ModelNaiveBayes(X, y, nClasses)
+   vp(2, 'model', model)
+
+   local optimalTheta, fitInfo = model:fit(fittingOptions)
+   timer:lap('construct and fit model')
+   vp(2, 'optimalTheta', optimalTheta, 'fitInfo', fitInfo)
+
+   local predictions, predictionInfo = model:predict(newX, optimalTheta)
+   timer:lap('predict one test sample')
+   vp(2, 'predictions', predictions, 'predictionInfo', predictionInfo)
+   if verboseLevel > 1 then 
+      timer:write()
+   end
+
+   return predictions, predictionInfo
+end
+
+torch.class('LNB')
+function LNB:__init()
+   self.timer = Timer()
+   self.timer:stop()
+end
+
+-- predict newX using Naive Bayes
+-- maintain timer
+function LNB:run(X, y, newX, nClasses)
+   self.timer:resume()
+   local predictions, predictonInfo = predictUsingLNB(X, y, newX, nClasses, self.timer)
+   self.timer:stop()
+   return predictions, predictionInfo
+end
+
+function LNB:getTimer()
+   return self.timer
+end
+
+-- return true if the predictions are correct
+-- NOTE; if predictionProbabilities is all NaNs, then
+--   - c was not in the training data for some class C; and
+--   - every other training sample had just one occurrence of class C:w
+local function isCorrect(actual, predictionProbabilities)
+   local vp = makeVp(0, 'isCorrect')
+   vp(1, 'actual', actual, 'predictionProbabilities', predictionProbabilities)
+   local predicted = argmax(predictionProbabilities)
+   vp(2, 'predicted', predicted)
+
+   local result = actual == predicted
+   vp(1, 'result', result)
+   return result
+end
+
 
 -------------------------------------------------------------------------------
 -- MAIN PROGRAM
@@ -602,106 +781,90 @@ local cpu, data = time('cpu', readCacheOrBuildData, clArgs, config)
 print('cpu secs to read and build data =', cpu)
 printTableValue('data', data)
 
--- set the fitting options
-local function nextStepSizes(currentStepSize)
-   return {currentStepSize, .5 * currentStepSize, 1.5 * currentStepSize}
-end
-
-local fittingOptions = {
-   method = 'bottou',
-   sampling = 'epoch',
-   methodOptions = {
-      printLoss = false,
-      initialStepSize = 1,
-      nEpochsBeforeAdjustingStepSize = 10,
-      nEpochsToAdjustStepSize = 1,
-      nextStepSizes = nextStepSizes,
-   },
-   samplingOptions = {},  -- no sampling options when sampling == 'epoch'
-   convergence = {  -- these will need to be tuned
-      maxEpochs = 1000,
-      toleranceLoss = 1e-4, 
-   },
-   regularizer = {
-      L2 = data.hp.lambda,
-   },
-}
-printTableValue('fittingOptions', fittingOptions)
 
 -- create and run a local logistic regression model for each test sample
 local nClasses = torch.max(data.test.y)
 local nFeatures = data.train.X:size(2)
-vp(2, 'nClasses', nClasses, 'nFeatures', nFeatures)
-local timer = Timer('program_impute main loop timings', io.stdout)
-local debug = false
+local nTestSamples = data.test.y:size(1)
+vp(2, 'nClasses', nClasses, 'nFeatures', nFeatures, 'nTestSamples', nTestSamples)
+
+local timerLLR = Timer('program_impute main loop timings for LLR', io.stdout)
+local timerLNB = Timer('program_impute main loop timings for LNB', io.stdout)
+local timer= Timer('program_impute main loop cumulative timings', io.stdout)
+local debug = true
 local bestInitialStepSizes = {}
-local nAccurate = 0
-for testIndex = 1, data.test.y:size(1) do
-   local saliences, err = makeWeights(data.train.location, 
-                                      makeQueryLocation(data.test.location, testIndex),
-                                      data.hp.mPerYear, 
-                                      data.hp.k,
-                                      testIndex)
-   timer:lap('getWeights')
-   if false and verboseLevel > 1 then writeNonZeroSaliences(saliences) end
+
+local nCorrectLLR = 0
+local nCorrectLNB = 0
+
+local llr = LLR()
+local lnb = LNB()
+
+for testIndex = 1, nTestSamples do
+   -- extract standardized X subset of samples
+   local reducedX, reducedY, reducedS, err = reduceToKTrainingSamples(data, testIndex, timerOverall)
+   timer:lap('reduce to k samples')
+
    if err then
-      print(string.format('skipped testIndex %d error from makeWeights %s', testIndex, err))
-      error(err)
+      print(string.format('unable to reduce number of samples for testIndex %d reason %s', testIndex, err))
+      error(err)  -- for now, later continue
    else
-      -- drop samples that have zero salience
-      -- this will be most of them, as about 600,000 samples and 60 with zero salience
-      local reducedX, reducedY, reducedS = dropZeroSaliences(data.train.XStandardized,
-                                                             data.train.y,
-                                                             saliences)
-      assert(reducedS:size(1) > 1)
-      timer:lap('dropZeroSaliences')
-      if debug then vp(2, 'reducedS', reducedS) end
-     
-      -- grid search for best initial step size
-      local bestInitialStepSize = findBestInitialStepSize(reducedX, reducedY, reducedS, nClasses, fittingOptions)
-      fittingOptions.methodOptions.initialStepSize = bestInitialStepSize
-      bestInitialStepSizes[bestInitialStepSize] = (bestInitialStepSizes[bestInitialStepSize] or 0) + 1
-      timer:lap('find best initial step size')
-
-      -- build and fit the model using the non-zero salience samples
-      local model = ModelLogreg(reducedX, reducedY, reducedS, nClasses)
+      local newX = data.test.XStandardized:sub(testIndex, testIndex)
+      --vp(2, 'newX', newX)
       
-      local function fit(fittingOptions)
-         return model:fit(fittingOptions)
+      local predictionsLLR, predictInfoLLR = 
+         llr:run(reducedX, reducedY, reducedS, newX, nClasses, data.hp.lambda, bestInitialStepSizes)
+      --predictUsingLLR(reducedX, reducedY, reducedS, newX, nClasses, data.hp.lambda, timerLLR, bestInitialStepSizes)
+      assert(not hasNaN(predictionsLLR))
+      timer:lap('predict using LLR')
+
+      local predictionsLNB, predictInfoNB = lnb:run(reducedX, reducedY, newX, nClasses)
+      --predictUsingLNB(reducedX, reducedY, newX, nClasses, timerLNB)
+      if hasNaN(predictionsLNB) then
+         -- verify that either class C is not present or class C has exactly one training sample
+         print('found NaN in predictions LNB')
+         if true then
+            for i = 1, reducedX:size(1) do
+               print(string.format('sample index %d sample class %d', i, reducedY[i]))
+            end
+            error('found NaN')
+         end
+      end
+      timer:lap('predict using LNB')
+
+      if false then
+         vp(2, ' ')
+         vp(2, '****')
+         vp(2, 'predictionsLLR', predictionsLLR,
+               'predictionsLNB', predictionsLNB,
+               'actual', data.test.y[testIndex])
       end
 
-      local fitCpu, fitWallclock, optimalTheta, fitInfo = time('both', fit, fittingOptions)
-      timer:lap('construct and fit model')
-      if true then
-         analyzeEvaluations(fitInfo.evaluations, fitCpu, fitWallclock)
+      if false then
+         -- TODO: fix this code 
+         -- write predictions for test sample
+         writePredictions(predictions[1],   -- convert 1 x N to just N, dropping first dimension
+         data.test.parcelsFileNumber[testIndex], 
+         data.test.parcelsRecordNumber[testIndex], 
+         testIndex)
+         timer:lap('write predictions')
       end
-      if debug then vp(2, 'testIndex', testIndex, 'fitInfo', fitInfo) end
-   
-      -- fit the test sample using the model
-      local newX = data.test.XStandardized:sub(testIndex, testIndex, 1, nFeatures) -- view 1 row as 1 x nFeatures
-      if debug then vp(2, 'newX', newX) end
-      local predictions, predictionInfo = model:predict(newX, optimalTheta)
-      timer:lap('predict one test sample')
-      if debug then vp(2, 'predictions', predictions, 'actual', data.test.y[testIndex]) end
 
-      -- write predictions for test sample
-      writePredictions(predictions[1],   -- convert 1 x N to just N, dropping first dimension
-                       data.test.parcelsFileNumber[testIndex], 
-                       data.test.parcelsRecordNumber[testIndex], 
-                       testIndex)
-      timer:lap('write predictions')
-      
-      -- do some reporting
-      --   keep track of accuracy
-      local expected = data.test.y[testIndex]
-      local actual = argmax(predictions[1])
-      print('expected', expected, 'actual', actual)
-      if expected == actual then
-         nAccurate = nAccurate + 1
+      -- keep track of accuracy
+      -- NOTE: could also use the precomputed maximum likelihood values in predictInfoXXX
+      local actual = data.test.y[testIndex]
+      nCorrectLLR = nCorrectLLR + ifelse(isCorrect(actual, predictionsLLR[1]), 1, 0)
+      nCorrectLNB = nCorrectLNB + ifelse(isCorrect(actual, predictionsLNB[1]), 1, 0)
+
+      -- periodically write status
+      if testIndex % 1 == 0 then
+         print(string.format('testIndex %d nCorrectLLR %d nCorrectLNB %d', testIndex, nCorrectLLR, nCorrectLNB))
+         --timerLLR:write()
+         --timerLNB:write()
       end
 
       --   periodically write best initial step sizes and other info
-      if testIndex % 1 == 0 then
+      if testIndex % 1 == 0 and false then
          print('best initial step sizes at testIndex', testIndex)
          for k, v in pairs(bestInitialStepSizes) do
             print(string.format(' %f was used %d times', k, v))
@@ -710,13 +873,24 @@ for testIndex = 1, data.test.y:size(1) do
          printTableValue('data.hp', data.hp)
       end
 
-      timer:write('cumulate timing testIndex ' .. tostring(testIndex))
-      timer:lap('reporting')
-
       if testIndex == 100 then
+         print('stopping after testIndex', testIndex)
+         --print('NOTE: naive bayes codes has debugging output turned on (so is slower than in production)')
+
+         print('cumulative timings across all test samples')
+         timer:write         ('overall timings        ', io.stderr)
+         print()
+         lnb:getTimer():write('local naive bayes      ', io.stderr)
+         print()
+         llr:getTimer():write('local linear regression', io.stderr)
+         print()
+
+         print('nCorrectLLR', nCorrectLLR)
+         print('nCorrectLNB', nCorrectLNB)
          stop() -- for now, until one iteration works
       end
-   
+
+      timer:lap('tracking and reporting')
    end
 end
 closePredictionsFile()
