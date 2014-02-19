@@ -14,6 +14,8 @@ if false then
    timer:system()        -- just system CPU
 
    timer:reset()         -- restart from 0
+   timer:stop()          -- stop the timer
+   timer:resume()        -- restart from when stopped
    
    -- timing portions of a function
    timer = Timer('function name', io.stderr)
@@ -34,6 +36,14 @@ function Timer:__init(functionName, fileDescriptor)
    self.fileDescriptor = fileDescriptor
    self.cpuTimes = {}
    self.wallclockTimes = {}
+end
+
+function Timer:stop()
+   self.timer:stop()
+end
+
+function Timer:resume()
+   self.timer:resume()
 end
 
 -- save time from last lap, both cpu and wallclock time
