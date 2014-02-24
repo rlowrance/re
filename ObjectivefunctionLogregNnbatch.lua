@@ -111,8 +111,8 @@ end
 -- RETURNS
 -- probabilities  : 2D Tensor of probabilities
 function ObjectivefunctionLogregNnbatch:runrunPredictions(newX, theta)
-   local vp = makeVp(0, 'ObjectivefunctionLogregNnbatch:runrunPredictions')
-   vp(1, 'newX', newX, 'theta', theta)
+-- local vp = makeVp(0, 'ObjectivefunctionLogregNnbatch:runrunPredictions')
+-- vp(1, 'newX', newX, 'theta', theta)
 
    assert(newX:nDimension() == 2, 'newX is not a 2D Tensor')
    assert(newX:size(2) == self.X:size(2), 'newX has wrong number of features')
@@ -123,7 +123,7 @@ function ObjectivefunctionLogregNnbatch:runrunPredictions(newX, theta)
    self.X = newX
    local logProbabilities = self:_logprobabilities(theta)
    local probabilities = torch.exp(logProbabilities)
-   vp(2, 'logProbabilities', logProbabilites, 'probabilites', probabilities)
+-- vp(2, 'logProbabilities', logProbabilites, 'probabilites', probabilities)
    self.X = currentX  -- restore field X
    return probabilities
 end
@@ -150,8 +150,8 @@ end
 -- loss             : number, regularized loss on all samples
 -- logProbabilities : 2D Tensor
 function ObjectivefunctionLogregNnbatch:_lossLogprobabilities(theta)
-   local vp, verboseLevel = makeVp(0, 'ObjectivefunctionLogregNnbatch:_lossLogprobabilities')
-   local v = verboseLevel > 0
+-- local vp, verboseLevel = makeVp(0, 'ObjectivefunctionLogregNnbatch:_lossLogprobabilities')
+-- local v = verboseLevel > 0
 
    local logProbabilities = self:_logprobabilities(theta)
 
@@ -159,26 +159,26 @@ function ObjectivefunctionLogregNnbatch:_lossLogprobabilities(theta)
    -- local loss = self.criterion(self.model:forward(input), target) * importance
    local s2d = torch.Tensor(self.s:storage(), 1, self.nSamples, 1, self.nClasses, 0)
    local weightedLogPredictions = torch.cmul(logProbabilities, s2d)
-   vp(2, 'logProbabilities', logProbabilities, 'self.s', self.s)
-   vp(2, 'weightedLogPredictions', weightedLogPredictions, 'self.y', self.y)
+-- vp(2, 'logProbabilities', logProbabilities, 'self.s', self.s)
+-- vp(2, 'weightedLogPredictions', weightedLogPredictions, 'self.y', self.y)
    local loss = self.criterion(weightedLogPredictions, self.y)
-   if v and false then
-      vp(2, 'X', self.X)
-      vp(2, 'scores', self.linear.output)
-      vp(2, 'logProbabilities', logProbabilities)
-      vp(2, 's', self.s, 's2d', s2d)
-      vp(2, 'weightedLogPredictions', weightedLogPredictions)
-      vp(2, 'loss', loss)
-   end
+-- if v and false then
+--    vp(2, 'X', self.X)
+--    vp(2, 'scores', self.linear.output)
+--    vp(2, 'logProbabilities', logProbabilities)
+--    vp(2, 's', self.s, 's2d', s2d)
+--    vp(2, 'weightedLogPredictions', weightedLogPredictions)
+--    vp(2, 'loss', loss)
+-- end
 
    -- regularize loss
    local weights = self.linear.weight
    local regularizer = torch.sum(torch.cmul(weights, weights))
-   if v then
-      vp(2, 'weights', weights)
-      vp(2, 'regularizer', regularizer)
-      vp(2, 'self.L2', self.L2)
-   end
+-- if v then
+--    vp(2, 'weights', weights)
+--    vp(2, 'regularizer', regularizer)
+--    vp(2, 'self.L2', self.L2)
+-- end
    local lossRegularized = loss + self.L2 * regularizer
 
    return lossRegularized, logProbabilities
@@ -193,16 +193,16 @@ end
 -- lossRegularized     : number
 -- logProbabilies      : 1D Tensor of size self.nClasses
 function ObjectivefunctionLogregNnbatch:_gradientLossLogprobabilities(theta)
-   local vp, verboseLevel = makeVp(0, 'ObjectivefunctionLogregNnbatch:_lossGradientPredictions')
-   local v = verboseLevel > 0
-   if v then
-      vp(1, 'theta', theta, 'self', self)
-      printTableVariable('self')
-   end
+-- local vp, verboseLevel = makeVp(0, 'ObjectivefunctionLogregNnbatch:_lossGradientPredictions')
+-- local v = verboseLevel > 0
+-- if v then
+--    vp(1, 'theta', theta, 'self', self)
+--    printTableVariable('self')
+-- end
    assert(type(self.L2) == 'number', 'L2=' .. tostring(L2))
 
    local lossRegularized, logProbabilities = self:_lossLogprobabilities(theta)
-   vp(2, 'lossRegularized', lossRegularized, 'logProbabilities', logProbabilities)
+-- vp(2, 'lossRegularized', lossRegularized, 'logProbabilities', logProbabilities)
 
 
    -- compute gradient into self.modelGradient
@@ -211,18 +211,20 @@ function ObjectivefunctionLogregNnbatch:_gradientLossLogprobabilities(theta)
    local gradientCriterionUnweighted = self.criterion:backward(self.model.output, self.y) 
    local s2d = torch.Tensor(self.s:storage(), 1, self.nSamples, 1, self.nClasses, 0)
    local gradientCriterionWeighted = torch.cmul(gradientCriterionUnweighted, s2d)
-   self.model:backward(self.X, gradientCriterionWeighted)
-   if v then
-      vp(2, 'gradientCriterionUnweighted', gradientCriterionUnweighted)
-      vp(2, 'gradientCriterionWeighted', gradientCriterionWeighted)
-      vp(2, 'modelGradient', self.modelGradient)
-   end
+   --self.model:backward(self.X, gradientCriterionWeighted)
+   local dmodule2_do = self.model.modules[2]:backward(self.X, gradientCriterionWeighted)
+   self.model.modules[1]:accGradParameters(self.X, dmodule2_do) -- don't compute grad wrt Output
+-- if v then
+--    vp(2, 'gradientCriterionUnweighted', gradientCriterionUnweighted)
+--    vp(2, 'gradientCriterionWeighted', gradientCriterionWeighted)
+--    vp(2, 'modelGradient', self.modelGradient)
+-- end
+
+-- if v then
+--    vp(3, 'self.modelGradient', self.modelGradient, 'weights', weights)
+-- end
 
    -- regularize gradient; retain earlier slower versions as documentation
-   if v then
-      vp(3, 'self.modelGradient', self.modelGradient, 'weights', weights)
-   end
-
    -- during development, we first coded version 1 and then parallelized it to get version 2
    -- version 2 is faster
    local weights = self.linear.weight
