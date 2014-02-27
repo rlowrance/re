@@ -1,5 +1,6 @@
 -- Timer.cpu
--- measure wall clock or CPU time
+-- measure wall clock and CPU time
+-- fascade over torch.timer, providing easier-to-remember API
 
 require 'ifelse'
 
@@ -7,54 +8,36 @@ require 'ifelse'
 if false then
    timer = Timer()
 
-   timer:wallclock()     -- cumulative Wall Clock
+   -- obtain cumulative times since the timer was created or resumed
+   timer:wallclock()     -- wallclock (aka, real)
    timer:cpu()           -- user + system CPU
-   timer:cpuWallclock()  -- both at once
+   timer:cpuWallclock()  -- return cpu, wallclock
+
    timer:user()          -- just user CPU
    timer:system()        -- just system CPU
 
-   timer:reset()         -- restart from 0
+   timer:reset()         -- restart from 0; constructing the Timer starts it
+
    timer:stop()          -- stop the timer
    timer:resume()        -- restart from when stopped
-   
-   -- timing portions of a function
-   timer = Timer('function name', io.stderr)
-   timer:lap('part 1')
-   timer:lap('part 2')
-   timer:write()  -- write all CPU and Wallclock lap times
-   timer:write('name', openFileDescriptor) -- alternative call
-
-   -- accessing the timings
-   for k, v in pairs(timer:getLapTimes()) do
-      print('lap', k)
-      print('cpu secs', v.cpu)
-      print('wallclock secs' , v.wallclock)
-   end
 end
 
 require 'makeVp'
 require 'validateAttributes'
 
+-------------------------------------------------------------------------------
+-- CONSTRUCTION
+-------------------------------------------------------------------------------
+
 torch.class('Timer')
 
 function Timer:__init(functionName, fileDescriptor)
    self.timer = torch.Timer()
-   self.functionName = functionName
-   self.fileDescriptor = fileDescriptor
-   self.cpuTimes = {}
-   self.wallclockTimes = {}
 end
 
--- return table of cpu and wallclock times
-function Timer:getLapTimes()
-   local result = {}
-   for lapname, v in pairs(self.cpuTimes) do
-      local cpu = v
-      local wallclock = self.wallclockTimes[k]
-      result[lapname] = {cpu = cpu, wallclock = wallclock}
-   end
-   return result
-end
+-------------------------------------------------------------------------------
+-- PUBLIC METHODS
+-------------------------------------------------------------------------------
 
 function Timer:stop()
    self.timer:stop()
@@ -62,36 +45,6 @@ end
 
 function Timer:resume()
    self.timer:resume()
-end
-
--- save time from last lap, both cpu and wallclock time
-function Timer:lap(lapName)
-   local vp = makeVp(0, 'Timer:lap')
-   vp(1, 'self', self, 'lapName', lapName)
-   self.cpuTimes[lapName] = (self.cpuTimes[lapName] or 0) + self:cpu()
-   self.wallclockTimes[lapName] = (self.wallclockTimes[lapName] or 0) + self:wallclock()
-   self:reset()  -- restart clock for next lap
-end
-
-
--- verbose write cpu and wallclock time
-function Timer:write(name, fd)
-   name = ifelse(name ~= nil, name, self.functionName)
-   name = ifelse(name == nil, ' ', name)
-
-   fd = ifelse(fd ~= nil, fd, self.fileDescriptor)
-   fd = ifelse(fd == nil, io.stderr, fd)
-   
-   local totalCpu = 0
-   local totalWallclock = 0
-   local format = '%30s %30s cpu %8.6f wallclock %8.6f\n'
-   for lapName, cpu in pairs(self.cpuTimes) do
-      local wallclock = self.wallclockTimes[lapName]
-      totalCpu = totalCpu + cpu
-      totalWallclock = totalWallclock + wallclock
-      fd:write(string.format(format, name, lapName, cpu, wallclock))
-   end
-   fd:write(string.format(format, name, 'TOTAL', totalCpu, totalWallclock))
 end
 
 function Timer:reset()
@@ -119,6 +72,3 @@ end
 function Timer:system()
    return self.timer:time().sys
 end
-   
-
-   
