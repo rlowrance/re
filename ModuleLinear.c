@@ -3,6 +3,21 @@
 // 1. Rework to use GSL vectors and matrices and the gsl library for outer product, mantrix multipliation.
 // 2. Maybe create type Tensor that holds either a gsl vector or a gsl matrix.
 // 3. Maybe extend input type from vector to vector or matrix.
+// 4. Make API more uniform
+//    The forward and backward methods mutate self and return nothing
+//      _updateOutput(pSelf, pInput) --> void, mutate pOutput state var
+//      _updateGradInput(pSelf, pInput, pGradOutput) --> void, mutate pGradInput state var
+//      _accGradParameters(pSelf, pInput, pGradOutput) --> void, mutate pGradOutput state var 
+//      _zeroGradParameters(pSelf) --> void, mutate pGradParameters state var
+//      _updateParameters(pSelf, learningRate) --> void, mutate pParameters state var
+//      _accUpdateGradParameters(pSelf, pInput, pGradOutput, learningRate) --> void
+//    There are functions to access the state:
+//      _getOutput(pSelf) --> pVector
+//      _getGradInput(pSelf) --> pVector
+//      _getGradParameters(pSelf) --> pVector
+//    Accessing the parameters, which are maintained as pBias, pWeight, and pFlatParameters
+//      _getFlatParameters(pSelf)  --> pVector
+//      _setFlatParameters(pSelf)  --> void, mutate pFlatParameters, pBias, pWeight state vars
 
 #include "ModuleLinear.h"
 
