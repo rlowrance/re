@@ -39,6 +39,7 @@ function Accumulators:addAccumulators(other)
 end
 
 function Accumulators:addTable(table)
+   assert(table ~= nil, 'table is nil')
    for k, v in pairs(table) do
       self:add(k, v)
    end
