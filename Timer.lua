@@ -23,6 +23,13 @@ if false then
    timer:lap('part 2')
    timer:write()  -- write all CPU and Wallclock lap times
    timer:write('name', openFileDescriptor) -- alternative call
+
+   -- accessing the timings
+   for k, v in pairs(timer:getLapTimes()) do
+      print('lap', k)
+      print('cpu secs', v.cpu)
+      print('wallclock secs' , v.wallclock)
+   end
 end
 
 require 'makeVp'
@@ -36,6 +43,17 @@ function Timer:__init(functionName, fileDescriptor)
    self.fileDescriptor = fileDescriptor
    self.cpuTimes = {}
    self.wallclockTimes = {}
+end
+
+-- return table of cpu and wallclock times
+function Timer:getLapTimes()
+   local result = {}
+   for lapname, v in pairs(self.cpuTimes) do
+      local cpu = v
+      local wallclock = self.wallclockTimes[k]
+      result[lapname] = {cpu = cpu, wallclock = wallclock}
+   end
+   return result
 end
 
 function Timer:stop()
