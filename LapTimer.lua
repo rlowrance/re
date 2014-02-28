@@ -38,6 +38,7 @@ function LapTimer:lap(lapname)
    local t = self.timer:time()  -- returns t.user, t.sys, t.real
    self.cpuAccumulators:add(lapname, t.user + t.sys)
    self.wallclockAccumulators:add(lapname, t.real)
+   self.timer:reset()
 end
 
 function LapTimer:getTimes() 
