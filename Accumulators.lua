@@ -25,6 +25,10 @@ function Accumulators:__init()
    self.table = {}
 end
 
+-------------------------------------------------------------------------------
+-- PUBLIC METHODS
+-------------------------------------------------------------------------------
+
 function Accumulators:add(name, amount)
    assert(type(amount) == 'number', 'amount not a number; amount = ' .. tostring(amount))
    self.table[name] = (self.table[name] or 0) + amount
