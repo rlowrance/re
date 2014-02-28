@@ -15,6 +15,7 @@
 --   predicted    : string, predicted value
 
 require 'argmax'
+require 'Accumulators'
 require 'distancesSurface2'
 require 'dropZeroSaliences'
 require 'equalObjectValues'
@@ -25,6 +26,7 @@ require 'kernelEpanechnikovQuadraticKnn2'
 require 'ModelLogreg'
 require 'ModelNaiveBayes'
 require 'NamedMatrix'
+require 'LapTimer'
 require 'printAllVariables'
 require 'printTableValue'
 require 'printTableVariable'
@@ -32,6 +34,7 @@ require 'splitString'
 require 'standardize'
 require 'tableCopy'
 require 'time'
+require 'Timer'
 require 'torch'
 -- require 'view1DAS2D'
 
@@ -387,22 +390,23 @@ local function readCacheOrBuildData(clArgs, config)
    end
 end
 
--- return weights (1D) and optional error message
+-- determine kernelized weights of training locations from a query location
+-- RETURN
+-- weights  : 1D Tensor
+-- lapTable : table; key = lapname, value ={cpu,wallclock}
+-- err      : optional string, not nil if there was an error
 local function makeWeights(trainLocation, queryLocation, mPerYear, k, testIndex)
-   local vp, verboseLevel = makeVp(0, 'makeWeights')
-   vp(1, 'trainLocation', trainLocation, 'queryLocation', queryLocation,
-      'mPerYear', mPerYear, 'k', k, 'testIndex', testIndex)
    assert(k > 1)
-   local timer = Timer('makeWeights', io.stdout)
+   local lapTimer = LapTimer()
+   
    local distances = distancesSurface2(queryLocation, trainLocation, mPerYear)
-   timer:lap('distances')
+   lapTimer:lap('distances')
+
    local weights, err = kernelEpanechnikovQuadraticKnn2(distances, k)
-   timer:lap('weights')
-   if verboseLevel > 0 then
-      timer:write()
-   end
-   vp(1, 'weights', weights, 'err', err)
-   return weights, err
+   lapTimer:lap('weights')
+
+   local lapTimes = lapTimer:getTimes()
+   return weights, lapTimes, err
 end 
 
 local function makeQueryLocation(locations, index)
@@ -557,17 +561,23 @@ end
 
 -- return reduced X, y, and s and possible error
 -- return standardized X values
+-- RETURNS
+-- reducedX ; 2D Tensor
+-- reducedY : 1D Tensor
+-- reducedS ; 1D Tensor
+-- lapTimer : LapTimer containing times
+-- errorMsg : optional string
 local function reduceToKTrainingSamples(data, testIndex)
    local vp = makeVp(2, 'reduceToKTrainingSamples')
-   local timer = Timer()
-   local saliences, err = makeWeights(data.train.location, 
-                                      makeQueryLocation(data.test.location, testIndex),
-                                      data.hp.mPerYear, 
-                                      data.hp.k,
-                                      testIndex)
-   timer:lap('makeWeights')
+   local lapTimer = LapTimer()
+   local saliences, makeWeightsTimes, err = makeWeights(data.train.location, 
+                                         makeQueryLocation(data.test.location, testIndex),
+                                         data.hp.mPerYear, 
+                                         data.hp.k,
+                                         testIndex)
+   lapTimer:lap('makeWeights')
    if err then
-      return nil, nil, nil, err
+      return nil, nil, nil, lapTimer:getTimes(), err
    else
       -- drop samples that have zero salience
       -- this will be most of them, as about 600,000 samples and 60 with zero salience
@@ -575,14 +585,19 @@ local function reduceToKTrainingSamples(data, testIndex)
                                                              data.train.y,
                                                              saliences)
       assert(reducedS:size(1) > 1)
-      timer:lap('dropZeroSaliences')
-      return reducedX, reducedY, reducedS, nil
+      lapTimer:lap('dropZeroSaliences')
+      return reducedX, reducedY, reducedS, lapTimer:getTimes(), nil
    end
 end
    
--- return predicted probabilities, prediction info
--- mutate timer
-local function predictUsingLLR(X, y, s, newX, nClasses, lambda, bestInitialStepSizes, timer)
+-- predict use local linear regression
+-- RETURNS
+-- predictions    : 2D Tensor
+-- predictionInfo : table
+-- nCalls         : table with number of calls to each method in the fitting procedure
+-- IN/OUT ARGS
+-- lapTimer
+local function predictUsingLLR(X, y, s, newX, nClasses, lambda, bestInitialStepSizes, lapTimer)
 
    local function setInitialFittingOptions()
       local function nextStepSizes(currentStepSize)
@@ -627,7 +642,7 @@ local function predictUsingLLR(X, y, s, newX, nClasses, lambda, bestInitialStepS
    -- keep track of best sizes
    -- perhaps we can optimize the search
    bestInitialStepSizes[bestInitialStepSize] = (bestInitialStepSizes[bestInitialStepSize] or 0) + 1
-   timer:lap('find best initial step size')
+   lapTimer:lap('LLR find best initial step size')
 
    -- build and fit the model
    local model = ModelLogreg(X, y, s, nClasses)
@@ -637,7 +652,9 @@ local function predictUsingLLR(X, y, s, newX, nClasses, lambda, bestInitialStepS
    end
 
    local fitCpu, fitWallclock, optimalTheta, fitInfo = time('both', fit, fittingOptions)
-   timer:lap('construct and fit model')
+   lapTimer:lap('LLR construct and fit model')
+-- print('number of function calls in Objectivefunction to fit the model')
+-- printTableValue('fitInfo.nCalls', fitInfo.nCalls)
    if false then
       analyzeEvaluations(fitInfo.evaluations, fitCpu, fitWallclock)
    end
@@ -647,34 +664,20 @@ local function predictUsingLLR(X, y, s, newX, nClasses, lambda, bestInitialStepS
 
    -- fit the test sample using the model
    local predictions, predictionInfo = model:predict(newX, optimalTheta)
-   timer:lap('predict one test sample')
+   lapTimer:lap('LLR predict one test sample')
 
-   return predictions, predictionInfo
+   return predictions, predictionInfo, fitInfo.nCalls
 end
 
-torch.class('LLR')
 
-function LLR:__init()
-   self.timer = Timer()
-   self.timer:stop()
-end
-
-function LLR:run(X, y, s, newX, nClasses, lambda, bestInitialStepSizes)
-   self.timer:resume()
-   local predictions, predictionInfo = 
-      predictUsingLLR(X, y, s, newX, nClasses, lambda, bestInitialStepSizes, self.timer)
-   self.timer:stop()
-   return predictions, predictionInfo
-end
-
-function LLR:getTimer()
-   return self.timer
-end
-
--- return predicted probabilities, prediction info; maintain timer
-local function predictUsingLNB(X, y, newX, nClasses, timer)
+-- predict using local naive bayes
+-- RETURNS
+-- predictions : 2D Tensor
+-- predictInfo : table
+-- IN/OUT args
+-- mutate lapTimer
+local function predictUsingLNB(X, y, newX, nClasses, lapTimer)
    local vp, verboseLevel = makeVp(0, 'predictUsingNB')
-   vp(1, 'testIndex', testIndex)
 
    -- set the fitting options for NB = naive bayes
    local fittingOptions = {
@@ -685,11 +688,11 @@ local function predictUsingLNB(X, y, newX, nClasses, timer)
    vp(2, 'model', model)
 
    local optimalTheta, fitInfo = model:fit(fittingOptions)
-   timer:lap('construct and fit model')
+   lapTimer:lap('LNB construct and fit model')
    vp(2, 'optimalTheta', optimalTheta, 'fitInfo', fitInfo)
 
    local predictions, predictionInfo = model:predict(newX, optimalTheta)
-   timer:lap('predict one test sample')
+   lapTimer:lap('LNB predict one test sample')
    vp(2, 'predictions', predictions, 'predictionInfo', predictionInfo)
    if verboseLevel > 1 then 
       timer:write()
@@ -698,24 +701,6 @@ local function predictUsingLNB(X, y, newX, nClasses, timer)
    return predictions, predictionInfo
 end
 
-torch.class('LNB')
-function LNB:__init()
-   self.timer = Timer()
-   self.timer:stop()
-end
-
--- predict newX using Naive Bayes
--- maintain timer
-function LNB:run(X, y, newX, nClasses)
-   self.timer:resume()
-   local predictions, predictonInfo = predictUsingLNB(X, y, newX, nClasses, self.timer)
-   self.timer:stop()
-   return predictions, predictionInfo
-end
-
-function LNB:getTimer()
-   return self.timer
-end
 
 -- return true if the predictions are correct
 -- NOTE; if predictionProbabilities is all NaNs, then
@@ -732,7 +717,102 @@ local function isCorrect(actual, predictionProbabilities)
    return result
 end
 
+-- print times
+local function printTimes(nTestSamples, lapTimer, lnbLapTimes, llrLapTimes, llrNCalls)
+   local vp = makeVp(0, 'printTimes')
+   vp(1, 'nTestSamples', nTestSamples, 
+         'lapTimer', lapTimer, 
+         'lnbLapTimes', lnbLapTimes, 
+         'llrLapTimes', llrLapTimes,
+         'llrNCalls', llrNCalls)
 
+
+   -- sort lapnames
+   local lapnames = {}
+   for lapname, _ in pairs(lapTimer:getTimes()) do
+      table.insert(lapnames, lapname)
+   end
+   table.sort(lapnames)
+   
+   print()
+   if jit then
+      print('timings using JIT')
+   else
+      print('timings without JIT')
+   end
+
+   local format = '%-35s cpu %15.6f wallclock %15.6f'
+   
+   if false then
+      print()
+      print(string.format('cumulative timings across all %d test samples', nTestSamples))
+      for _, lapname in ipairs(lapnames) do
+         local times = lapTimer:getTimes()[lapname]
+         print(string.format(format, lapname, times.cpu, times.wallclock))
+      end
+   end
+
+   print()
+   print('average per-test sample timings')
+   local llrCpu, llrWallclock = 0, 0
+   local lnbCpu, lnbWallclock = 0, 0
+   for _, lapname in ipairs(lapnames) do
+      local times = lapTimer:getTimes()[lapname]
+      print(string.format(format, 
+                          lapname, times.cpu / nTestSamples, times.wallclock / nTestSamples))
+      if string.sub(lapname, 1, 3) == 'LLR' then
+         llrCpu = llrCpu + times.cpu
+         llrWallclock = llrWallclock + times.wallclock
+      elseif string.sub(lapname, 1, 3) == 'LNB' then
+         lnbCpu = lnbCpu + times.cpu
+         lnbWallclock = lnbWallclock + times.wallclock
+      end
+   end
+   local prefix = 'total per-sample times for '
+   print()
+   print(string.format(format, prefix .. 'LLR', 
+                       llrCpu / nTestSamples, llrWallclock / nTestSamples))
+   print(string.format(format, prefix .. 'LNB', 
+                       lnbCpu / nTestSamples, lnbWallclock / nTestSamples))
+
+   
+   print()
+   print('LLR time estimate for average lossGradient call')
+   print('nTestSamples', nTestSamples)
+   local nLossGradient = llrNCalls:getTable()['lossGradient']
+   print('number of calls to lossGradient', nLossGradient)
+
+   -- average time for lossGradient
+   local cfTimes = lapTimer:getTimes()['LLR construct and fit model'] 
+   local cfCpu, cfWallclock = cfTimes.cpu, cfTimes.wallclock
+   print(string.format('elapsed time to construct and fit: cpu %15.6f wallclock %15.6f', cfCpu, cfWallclock))
+   print(string.format('average time for lossGradient    : cpu %15.6f wallclock %15.6f', 
+                       cfCpu/nLossGradient, cfWallclock / nLossGradient))
+   
+end
+
+-- return new table that sums up cpu and wallclock times for lap in both tables
+local function sumLapTimes(table1, table2)
+   assert(type(table1) == 'table')
+   assert(type(table2) == 'table')
+   local result = {}
+
+   for lapname, value1 in pairs(table1) do
+      local value2 = table2[k]
+      if value2 == nil then
+         value2 = {cpu = 0, wallclock = 0}
+      end
+      result[lapname] = {cpu = value1.cpu + value2.cpu, wallclock = value1.wallclock + value2.wallclock}
+   end
+
+   printTableValue('table1', table1)
+   printTableValue('table2', table2)
+   printTableValue('result', result)
+   stop()
+   return result
+end
+
+      
 -------------------------------------------------------------------------------
 -- MAIN PROGRAM
 -------------------------------------------------------------------------------
@@ -788,22 +868,22 @@ local nFeatures = data.train.X:size(2)
 local nTestSamples = data.test.y:size(1)
 vp(2, 'nClasses', nClasses, 'nFeatures', nFeatures, 'nTestSamples', nTestSamples)
 
-local timerLLR = Timer('program_impute main loop timings for LLR', io.stdout)
-local timerLNB = Timer('program_impute main loop timings for LNB', io.stdout)
-local timer= Timer('program_impute main loop cumulative timings', io.stdout)
+local lapTimer= LapTimer()
+
+local llrNCalls = Accumulators()
+
 local debug = true
 local bestInitialStepSizes = {}
 
 local nCorrectLLR = 0
 local nCorrectLNB = 0
 
-local llr = LLR()
-local lnb = LNB()
+
 
 for testIndex = 1, nTestSamples do
    -- extract standardized X subset of samples
-   local reducedX, reducedY, reducedS, err = reduceToKTrainingSamples(data, testIndex, timerOverall)
-   timer:lap('reduce to k samples')
+   local reducedX, reducedY, reducedS, reductionLapTime, err = reduceToKTrainingSamples(data, testIndex)
+   lapTimer:lap('reduce to k samples')
 
    if err then
       print(string.format('unable to reduce number of samples for testIndex %d reason %s', testIndex, err))
@@ -812,14 +892,13 @@ for testIndex = 1, nTestSamples do
       local newX = data.test.XStandardized:sub(testIndex, testIndex)
       --vp(2, 'newX', newX)
       
-      local predictionsLLR, predictInfoLLR = 
-         llr:run(reducedX, reducedY, reducedS, newX, nClasses, data.hp.lambda, bestInitialStepSizes)
-      --predictUsingLLR(reducedX, reducedY, reducedS, newX, nClasses, data.hp.lambda, timerLLR, bestInitialStepSizes)
+      local predictionsLLR, predictInfoLLR, nCalls = 
+         predictUsingLLR(reducedX, reducedY, reducedS, newX, nClasses, data.hp.lambda, bestInitialStepSizes, lapTimer)
       assert(not hasNaN(predictionsLLR))
-      timer:lap('predict using LLR')
 
-      local predictionsLNB, predictInfoNB = lnb:run(reducedX, reducedY, newX, nClasses)
-      --predictUsingLNB(reducedX, reducedY, newX, nClasses, timerLNB)
+      llrNCalls:addTable(nCalls)
+
+      local predictionsLNB, predictInfoNB = predictUsingLNB(reducedX, reducedY, newX, nClasses, lapTimer)
       if hasNaN(predictionsLNB) then
          -- verify that either class C is not present or class C has exactly one training sample
          print('found NaN in predictions LNB')
@@ -830,7 +909,6 @@ for testIndex = 1, nTestSamples do
             error('found NaN')
          end
       end
-      timer:lap('predict using LNB')
 
       if false then
          vp(2, ' ')
@@ -873,24 +951,16 @@ for testIndex = 1, nTestSamples do
          printTableValue('data.hp', data.hp)
       end
 
-      if testIndex == 100 then
-         print('stopping after testIndex', testIndex)
-         --print('NOTE: naive bayes codes has debugging output turned on (so is slower than in production)')
-
-         print('cumulative timings across all test samples')
-         timer:write         ('overall timings        ', io.stderr)
+      if testIndex % 100  == 0 then
+         print('\n************************************************************')
+         printTimes(testIndex, lapTimer, lnbLapTimes, llrLapTimes, llrNCalls)
          print()
-         lnb:getTimer():write('local naive bayes      ', io.stderr)
-         print()
-         llr:getTimer():write('local linear regression', io.stderr)
-         print()
-
          print('nCorrectLLR', nCorrectLLR)
          print('nCorrectLNB', nCorrectLNB)
-         stop() -- for now, until one iteration works
+         print('\n*************************************************************\n')
       end
 
-      timer:lap('tracking and reporting')
+      lapTimer:lap('tracking and reporting')
    end
 end
 closePredictionsFile()
