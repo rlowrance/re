@@ -97,6 +97,8 @@ end
 --                                            {'step', stepsize, loss-before-step}
 --                                            {'explore', stepsize, loss-before-step}
 --                                            The number of evaluations of the loss function is #evaluations
+--                 .nCalls                  : table returned from Objectivefunction
+--                                            number of times each Objectivefunction method was called
 function ModelLogreg:runFit(fittingOptions)
    assert(fittingOptions ~= nil, 'missing arg fittingOptions')
    assert(type(fittingOptions) == 'table', 'fittingOptions not a table')
@@ -110,6 +112,7 @@ function ModelLogreg:runFit(fittingOptions)
       if sampling == 'epoch' then
          local objectiveFunction, optimalTheta, fitInfo = self:_algoBottouEpoch(fittingOptions)
          self.objectiveFunction = objectiveFunction
+         fitInfo.nCalls = objectiveFunction:getNCalls()
          return optimalTheta, fitInfo
       else
          error(string.format('invalid sampling scheme %s for method %s', sampling, method))
