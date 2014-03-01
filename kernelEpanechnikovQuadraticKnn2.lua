@@ -20,16 +20,11 @@ require 'makeVp'
 -- h_k(q) = |q - x_[k] | = lambda
 -- x_[k] = kth closest x_i to q
 function kernelEpanechnikovQuadraticKnn2(distances, k)
-   local vp, verboseLevel = makeVp(0, 'kernelEpanechnikovQuadraticKnn2')
-   local v = verboseLevel > 0
-   if v then vp(1, 'distances', distances, 'k', k) end
-
    -- validate args
    assert(distances:dim() == 1)
    assert(type(k) == 'number' and k > 0)
 
    
-   local n = distances:size(1)
    local _, sortedIndices = torch.sort(distances)
 
    -- if the distance to the kth closest x_i to q is zero, then 
@@ -38,9 +33,8 @@ function kernelEpanechnikovQuadraticKnn2(distances, k)
    --   hence all the D() are 0
    local lambda = distances[sortedIndices[k]]
    if lambda == 0 then
-      return torch.Tensor(n):zero(), 'kth closest has zero distance'
+      return torch.Tensor(distances:size(1)):zero(), 'kth closest has zero distance'
    end
-
 
    local t = distances / lambda
 
