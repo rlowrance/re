@@ -23,6 +23,7 @@ require 'hasNaN'
 require 'ifelse'
 require 'isnan'
 require 'kernelEpanechnikovQuadraticKnn2'
+require 'kernelKnn'
 require 'ModelLogreg'
 require 'ModelNaiveBayes'
 require 'NamedMatrix'
@@ -30,6 +31,7 @@ require 'LapTimer'
 require 'printAllVariables'
 require 'printTableValue'
 require 'printTableVariable'
+require 'printVariable'
 require 'splitString'
 require 'standardize'
 require 'tableCopy'
@@ -391,13 +393,17 @@ local function readCacheOrBuildData(clArgs, config)
 end
 
 -- determine kernelized weights of training locations from a query location
+-- ARGS
+-- trainLocation : table with fields latitud, longitude, year, each a 1D tensor of same size 
+-- queryLocation : table with fields latitude, longitude, year
+-- mPerYear      : number of meters assumed to be in one year of time
+-- k             : number of samples to return
 -- RETURN
 -- weights  : 1D Tensor
 -- lapTable : table; key = lapname, value ={cpu,wallclock}
 -- err      : optional string, not nil if there was an error
-local function makeWeights(trainLocation, queryLocation, mPerYear, k, testIndex)
+local function makeWeights(trainLocation, queryLocation, mPerYear, k)
    assert(k > 1)
-   local lapTimer = LapTimer()
    
    local distances = distancesSurface2(queryLocation, trainLocation, mPerYear)
    lapTimer:lap('distances')
@@ -405,7 +411,6 @@ local function makeWeights(trainLocation, queryLocation, mPerYear, k, testIndex)
    local weights, err = kernelEpanechnikovQuadraticKnn2(distances, k)
    lapTimer:lap('weights')
 
-   local lapTimes = lapTimer:getTimes()
    return weights, lapTimes, err
 end 
 
@@ -559,45 +564,45 @@ local function findBestInitialStepSize(X, y, s, nClasses, fittingOptions)
    return bestInitialStepSize
 end
 
--- return reduced X, y, and s and possible error
--- return standardized X values
+-- return reduced standardized X, y, and s 
+-- ARGS:
+-- data      : table with data
+-- saliences : 1D Tensor, samples with zero saliences are dropped
+-- lapTimer  : LapTimer instance
 -- RETURNS
--- reducedX ; 2D Tensor
--- reducedY : 1D Tensor
--- reducedS ; 1D Tensor
--- lapTimer : LapTimer containing times
--- errorMsg : optional string
-local function reduceToKTrainingSamples(data, testIndex)
-   local vp = makeVp(2, 'reduceToKTrainingSamples')
-   local lapTimer = LapTimer()
-   local saliences, makeWeightsTimes, err = makeWeights(data.train.location, 
-                                         makeQueryLocation(data.test.location, testIndex),
-                                         data.hp.mPerYear, 
-                                         data.hp.k,
-                                         testIndex)
-   lapTimer:lap('makeWeights')
-   if err then
-      return nil, nil, nil, lapTimer:getTimes(), err
-   else
-      -- drop samples that have zero salience
-      -- this will be most of them, as about 600,000 samples and 60 with zero salience
-      local reducedX, reducedY, reducedS = dropZeroSaliences(data.train.XStandardized,
-                                                             data.train.y,
-                                                             saliences)
-      assert(reducedS:size(1) > 1)
-      lapTimer:lap('dropZeroSaliences')
-      return reducedX, reducedY, reducedS, lapTimer:getTimes(), nil
-   end
+-- reduced   : table with fields .X .y and .s; X field is standardized
+-- MUTATES
+-- lapTimer  : updates laptime
+local function reduceToKStandardizedTrainingSamples(data, saliences, lapTimer)
+   local reducedX, reducedY, reducedS = dropZeroSaliences(data.train.XStandardized,
+                                                          data.train.y,
+                                                          saliences)
+   local reduced = {
+      X = reducedX,
+      y = reducedY,
+      s = reducedS,
+   }
+   lapTimer:lap('reduce to K training samples')
+   return reduced
 end
    
 -- predict use local linear regression
+-- ARGS:
+-- X              : 2D Tensor of training features
+-- y              : 1D Tensor of target values
+-- s              : 1D Tensor of saliences
+-- newX           : 2D Tensor of features to predict, one row per sample
+-- nClasses       : number, nClasses in target values
+-- lambda         : number, L2 regularizer
+-- lapTimer       : LapTimer instance
 -- RETURNS
 -- predictions    : 2D Tensor
 -- predictionInfo : table
 -- nCalls         : table with number of calls to each method in the fitting procedure
--- IN/OUT ARGS
--- lapTimer
-local function predictUsingLLR(X, y, s, newX, nClasses, lambda, bestInitialStepSizes, lapTimer)
+-- initStepSize   : number, best initial steps size found
+-- MUTATES
+-- lapTimer       : updated with timing
+local function predictUsingLLR(X, y, s, newX, nClasses, lambda, lapTimer)
 
    local function setInitialFittingOptions()
       local function nextStepSizes(currentStepSize)
@@ -628,45 +633,28 @@ local function predictUsingLLR(X, y, s, newX, nClasses, lambda, bestInitialStepS
 
    local vp, verboseLevel = makeVp(0, 'predictUsingLLR')
    local debug = verboseLevel > 0
-     
 
-   -- set the fitting options
+   -- set the fitting options including the initial step size
    -- grid search for best initial step size
    local fittingOptions = setInitialFittingOptions()
    local bestInitialStepSize = findBestInitialStepSize(X, y, s, nClasses, fittingOptions)
    fittingOptions.methodOptions.initialStepSize = bestInitialStepSize -- finalize fitting options
    if verboseLevel > 0 then 
-      printTableValue('fittingOptionsLLR', fittingOptionsLLR)
+      printTableValue('fittingOptions', fittingOptions)
    end
 
-   -- keep track of best sizes
-   -- perhaps we can optimize the search
-   bestInitialStepSizes[bestInitialStepSize] = (bestInitialStepSizes[bestInitialStepSize] or 0) + 1
    lapTimer:lap('LLR find best initial step size')
 
    -- build and fit the model
    local model = ModelLogreg(X, y, s, nClasses)
-
-   local function fit(fittingOptions)
-      return model:fit(fittingOptions)
-   end
-
-   local fitCpu, fitWallclock, optimalTheta, fitInfo = time('both', fit, fittingOptions)
+   local optimalTheta, fitInfo = model:fit(fittingOptions)
    lapTimer:lap('LLR construct and fit model')
--- print('number of function calls in Objectivefunction to fit the model')
--- printTableValue('fitInfo.nCalls', fitInfo.nCalls)
-   if false then
-      analyzeEvaluations(fitInfo.evaluations, fitCpu, fitWallclock)
-   end
-   if debug then 
-      vp(2, 'testIndex', testIndex, 'fitInfo', fitInfo) 
-   end
 
    -- fit the test sample using the model
    local predictions, predictionInfo = model:predict(newX, optimalTheta)
    lapTimer:lap('LLR predict one test sample')
 
-   return predictions, predictionInfo, fitInfo.nCalls
+   return predictions, predictionInfo, fitInfo.nCalls, bestInitialStepSize
 end
 
 
@@ -674,8 +662,8 @@ end
 -- RETURNS
 -- predictions : 2D Tensor
 -- predictInfo : table
--- IN/OUT args
--- mutate lapTimer
+-- MUTATES
+-- lapTimer    : updates lap time
 local function predictUsingLNB(X, y, newX, nClasses, lapTimer)
    local vp, verboseLevel = makeVp(0, 'predictUsingNB')
 
@@ -784,11 +772,11 @@ local function printTimes(nTestSamples, lapTimer, lnbLapTimes, llrLapTimes, llrN
 
    -- average time for lossGradient
    local cfTimes = lapTimer:getTimes()['LLR construct and fit model'] 
-   local cfCpu, cfWallclock = cfTimes.cpu, cfTimes.wallclock
-   print(string.format('elapsed time to construct and fit: cpu %15.6f wallclock %15.6f', cfCpu, cfWallclock))
-   print(string.format('average time for lossGradient    : cpu %15.6f wallclock %15.6f', 
-                       cfCpu/nLossGradient, cfWallclock / nLossGradient))
-   
+   if cfTimes then
+      local cfCpu, cfWallclock = cfTimes.cpu, cfTimes.wallclock
+      print(string.format(format, 'elapsed time to construct and fit', cfCpu, cfWallclock))
+      print(string.format(format, 'average time for lossGradient', cfCpu/nLossGradient, cfWallclock / nLossGradient)) 
+   end 
 end
 
 -- return new table that sums up cpu and wallclock times for lap in both tables
@@ -812,7 +800,101 @@ local function sumLapTimes(table1, table2)
    return result
 end
 
+-- return 1D Tensor of saliences in [0,1]
+-- ARGS
+-- data      : table with all the data
+-- algos     : set of algos for which the saliences must be appropriate
+-- testIndex : number of test sample in data
+-- lapTimer  : LapTimer instance
+-- RETURNS
+-- saliences : 1D Tensor of importance weights in [0,1], Many will be zero.
+-- err       : nil or string
+-- MUTATES
+-- lapTimer  : update lap times
+local function getSaliences(data, algos, testIndex, lapTimer)
+   local queryLocation = makeQueryLocation(data.test.location, testIndex)
+   
+   -- we also need the distances
+   local distances = distancesSurface2(queryLocation, data.train.location, data.hp.mPerYear)
+   lapTimer:lap('distances')
+   
+   -- amount of work to determine saliences depends on the algo
+   local saliences, err = nil, nil
+   if algos.llr then
+      saliences, err = kernelEpanechnikovQuadraticKnn2(distances, data.hp.k)  -- saliences in [0,1]
+      lapTimer:lap('saliences quadratic kernel')
+   elseif algos.lnb then
+      saliences, err = kernelKnn(distances, data.hp.k)  -- saliences are either 0 or 1
+      lapTimer:lap('saliences knn kernel')
+   else
+      error('bad algos')
+   end
+
+   return saliences, err
+end
+
       
+-- make predictions for all algos that we are running
+-- ARGS
+-- training         : table with training data X, y , and s
+--                    every sample is used to fit the algos
+-- newX             : 2D tensor of test samples, one sample per row
+-- nClasses         : number of classes
+-- hp               : table of hyperparameters
+-- algos            : set of algorithms to run
+-- lapTimer         : timer
+-- RETURNS
+-- predictions      : table with one element for each algo in algos
+--                    .ALGO.probabilities  : 2D Tensor with one row
+--                    .ALGO.predictInfo    : table, depends on algo
+--                    .ALGO.<other fields> : dependent on algo
+-- MUTATES
+-- lapTimer         : updates timings for each algo
+local function makePredictions(training, newX, nClasses, hp, algos, lapTimer)
+   assert(training)
+   assert(training.X)
+   assert(training.y)
+   assert(training.s)
+   
+   assert(newX)
+   assert(nClasses)
+   assert(hp)
+   
+   
+   local predictions = {}
+   if algos.llr then
+      local probabilities, predictInfo, nCalls, bestInitialStepSize = predictUsingLLR(training.X,
+                                                                                      training.y,
+                                                                                      training.s,
+                                                                                      newX,
+                                                                                      nClasses,
+                                                                                      hp.lambda,
+                                                                                      lapTimer)
+      assert(not hasNaN(probabilities))
+      predictions.llr = {
+         probabilities = probabilities,
+         predictInfo = predictInfo,
+         nCalls = nCalls,
+         bestInitialStepSize = bestInitialStepSize,
+      }
+   end
+         
+   if algos.lnb then
+      local probabilities, info = predictUsingLNB(training.X,
+                                                  training.y,
+                                                  newX,
+                                                  nClasses,
+                                                  lapTimer)
+      predictions.lnb = {
+         probabilities = probabilities,
+         predictInfo = predictInfo,
+      }
+   end
+
+   printTableValue('predictions', predictions)
+   return predictions
+end
+
 -------------------------------------------------------------------------------
 -- MAIN PROGRAM
 -------------------------------------------------------------------------------
@@ -869,21 +951,71 @@ local nTestSamples = data.test.y:size(1)
 vp(2, 'nClasses', nClasses, 'nFeatures', nFeatures, 'nTestSamples', nTestSamples)
 
 local lapTimer= LapTimer()
-
-local llrNCalls = Accumulators()
+local llrInfo = { -- info from running the LLR algo is accumulated into this table
+   nCalls = Accumulators(),
+   bestInitialStepSizes = {},
+}
 
 local debug = true
-local bestInitialStepSizes = {}
 
 local nCorrectLLR = 0
 local nCorrectLNB = 0
 
+local algos = {
+   llr = true,
+   --llr = false,
+   lnb = true,
+}
 
+local predictionStates = {}  -- ex: accumulate best initial step size for SGD
 
 for testIndex = 1, nTestSamples do
+   local saliences, err = getSaliences(data, algos, testIndex, lapTimer)
+   if err then error('getSaliences: ' .. err) end
+   local reduced = reduceToKStandardizedTrainingSamples(data, saliences, lapTimer)
+   local newX = data.test.XStandardized:sub(testIndex, testIndex)
+   local predictions = makePredictions(reduced, newX, nClasses, data.hp, algos, lapTimer)
+   printTableValue('predictions', predictions)
+   if algos.llr then
+      -- accumulate info from running the LLR algo
+      llrInfo.nCalls:addTable(predictions.llr.nCalls)
+      table.insert(llrInfo.bestInitialStepSizes, predictions.llr.bestInitialStepSize)
+   end
+   stop()
+
    -- extract standardized X subset of samples
-   local reducedX, reducedY, reducedS, reductionLapTime, err = reduceToKTrainingSamples(data, testIndex)
-   lapTimer:lap('reduce to k samples')
+   local queryLocation = makeQueryLocation(data.test.location, testIndex)
+   local distances = distancesSurface2(queryLocation, data.train.location, data.hp.mPerYear)
+   lapTimer:lap('distances')
+   
+   local saliences, err = (function ()
+      if algos.llr then
+         local saliences, err = kernelEpanechnikovQuadraticKnn2(distances, data.hp.k)
+         lapTimer:lap('saliences quadratic kernel')
+         return saliences, err  -- saliences are in [0,1]
+      elseif algos.lnb then
+         local saliences, err = kernelKnn(distances, data.hp.k)
+         lapTimer:lap('salience knn kernel')
+         return saliences, err  -- saliences are 0,1 indicators
+      else
+         error('bad algos')
+      end
+   end) ()
+   if err then
+      print(string.format('error from getSaliences: %s', err))
+      error(err) -- for now, later continue
+   end
+
+   local reducedX, reducedY, reducedS, reductionLapTime, err = dropZeroSaliences(data.train.XStandardized,
+                                                                                 data.train.y,
+                                                                                 saliences)
+   lapTimer:lap('drop zero saliences')
+   
+   if false then
+      -- code code
+      local reducedX, reducedY, reducedS, reductionLapTime, err = reduceToKTrainingSamples(data, testIndex)
+      lapTimer:lap('reduce to k samples')
+   end
 
    if err then
       print(string.format('unable to reduce number of samples for testIndex %d reason %s', testIndex, err))
@@ -892,23 +1024,42 @@ for testIndex = 1, nTestSamples do
       local newX = data.test.XStandardized:sub(testIndex, testIndex)
       --vp(2, 'newX', newX)
       
-      local predictionsLLR, predictInfoLLR, nCalls = 
-         predictUsingLLR(reducedX, reducedY, reducedS, newX, nClasses, data.hp.lambda, bestInitialStepSizes, lapTimer)
-      assert(not hasNaN(predictionsLLR))
-
-      llrNCalls:addTable(nCalls)
-
-      local predictionsLNB, predictInfoNB = predictUsingLNB(reducedX, reducedY, newX, nClasses, lapTimer)
-      if hasNaN(predictionsLNB) then
-         -- verify that either class C is not present or class C has exactly one training sample
-         print('found NaN in predictions LNB')
-         if true then
-            for i = 1, reducedX:size(1) do
-               print(string.format('sample index %d sample class %d', i, reducedY[i]))
-            end
-            error('found NaN')
+      local predictionsLLR, predictInfoLLR, nCalls = (function()
+         if algos.llr then
+            local predictionsLLR, predictInfoLLR, nCalls =  predictUsingLLR(reducedX, 
+                                                                            reducedY, 
+                                                                            reducedS, 
+                                                                            newX, 
+                                                                            nClasses, 
+                                                                            data.hp.lambda, 
+                                                                            bestInitialStepSizes, 
+                                                                            lapTimer)
+            assert(not hasNaN(predictionsLLR))
+            llrNCalls:addTable(nCalls)
+            return predictionsLLR, predictInfoLLR, nCalls
+         else
+            return nil, nil, nil
          end
-      end
+      end) ()
+
+      local predictionsLNB, predictInfoLNB = (function ()
+         if algos.lnb then
+            local predictionsLNB, predictInfoLNB = predictUsingLNB(reducedX, reducedY, newX, nClasses, lapTimer)
+            if hasNaN(predictionsLNB) then
+               -- verify that either class C is not present or class C has exactly one training sample
+               print('found NaN in predictions LNB')
+               if true then
+                  for i = 1, reducedX:size(1) do
+                     print(string.format('sample index %d sample class %d', i, reducedY[i]))
+                  end
+                  error('found NaN')
+               end
+            end
+            return predictionsLNB, predictInfoLNB
+         else
+            return nil, nil
+         end
+      end) ()
 
       if false then
          vp(2, ' ')
@@ -931,8 +1082,12 @@ for testIndex = 1, nTestSamples do
       -- keep track of accuracy
       -- NOTE: could also use the precomputed maximum likelihood values in predictInfoXXX
       local actual = data.test.y[testIndex]
-      nCorrectLLR = nCorrectLLR + ifelse(isCorrect(actual, predictionsLLR[1]), 1, 0)
-      nCorrectLNB = nCorrectLNB + ifelse(isCorrect(actual, predictionsLNB[1]), 1, 0)
+      if algos.llr then
+         nCorrectLLR = nCorrectLLR + ifelse(isCorrect(actual, predictionsLLR[1]), 1, 0)
+      end
+      if algos.lnb then
+         nCorrectLNB = nCorrectLNB + ifelse(isCorrect(actual, predictionsLNB[1]), 1, 0)
+      end
 
       -- periodically write status
       if testIndex % 1 == 0 then
@@ -951,8 +1106,9 @@ for testIndex = 1, nTestSamples do
          printTableValue('data.hp', data.hp)
       end
 
-      if testIndex % 100  == 0 then
+      if testIndex % 10  == 0 then
          print('\n************************************************************')
+         print('testIndex', testIndex)
          printTimes(testIndex, lapTimer, lnbLapTimes, llrLapTimes, llrNCalls)
          print()
          print('nCorrectLLR', nCorrectLLR)
