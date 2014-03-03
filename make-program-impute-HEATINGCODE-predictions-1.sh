@@ -6,5 +6,5 @@ lua program_impute.lua \
     --test hasHEATING.CODE isTest \
     --target HEATING.CODE \
     --hpset 1 \
-    --output ../data/v6/output/program_impute_HEATINGCODE_predictions_1.sh
+    --output ../data/v6/output/program_impute_HEATINGCODE_predictions_1.csv
 
