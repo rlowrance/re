@@ -32,6 +32,7 @@ require 'printAllVariables'
 require 'printTableValue'
 require 'printTableVariable'
 require 'printVariable'
+require 'splitFilepath'
 require 'splitString'
 require 'standardize'
 require 'tableCopy'
@@ -371,6 +372,11 @@ local function readCacheOrBuildData(clArgs, config)
    end
 
    -- main body of readCacheOrBuildData()
+   -- read from the cache if all the following are true:
+   -- - the cache file exists on disk
+   -- - the cache file on disk has the same command line arguments as the present command line
+   -- - the cache file version on disk is the same as the config version
+   -- otherwise read the files and create the cache
    local vp = makeVp(0, 'readCacheOrBuildData')
    vp(1, 'clArgs', clArgs, 'programName', programName)
    if clArgs.cache then
@@ -451,18 +457,20 @@ local function makeWritePredictions(outputPath)
       for n = 1, nPredictions do
          outFile:write(',prediction_' .. tostring(n)) -- use underscore to make parsing column names easier
       end
+      outFile:write(',actualClass')
       outFile:write('\n')
    end
 
    local headerWritten = false
 
    -- write data record
-   local function writePredictions(predictions, parcelsFileNumber, parcelsRecordNumber, testIndex)
+   local function writePredictions(predictions, parcelsFileNumber, parcelsRecordNumber, testIndex, actual)
       local vp = makeVp(2, 'writePredictions')
       vp(1, 'predictions', predictions,  
             'parcelsFileNumber', parcelsFileNumber, 
             'parcelsRecordNumber', parcelsRecordNumber, 
-            'testIndex', testIndex)
+            'testIndex', testIndex,
+            'actual', actual)
       if not headerWritten then
          writeHeader(predictions:size(1))
          headerWritten = true
@@ -473,6 +481,7 @@ local function makeWritePredictions(outputPath)
       for i = 1, predictions:size(1) do
          outFile:write(string.format(',%f', predictions[i]))
       end
+      outFile:write(string.format(',%d', actual))
       outFile:write('\n')
    end
    
@@ -756,8 +765,10 @@ local function printTimes(nTestSamples, lapTimer, lnbLapTimes, llrLapTimes, llrN
          lnbWallclock = lnbWallclock + times.wallclock
       end
    end
-   local prefix = 'total per-sample times for '
+
    print()
+   print('times for fitting and predicting (excluding finding distances and saliences)')
+   local prefix = 'total per-sample times for '
    print(string.format(format, prefix .. 'LLR', 
                        llrCpu / nTestSamples, llrWallclock / nTestSamples))
    print(string.format(format, prefix .. 'LNB', 
@@ -885,15 +896,104 @@ local function makePredictions(training, newX, nClasses, hp, algos, lapTimer)
                                                   newX,
                                                   nClasses,
                                                   lapTimer)
+      assert(not hasNaN(probabilities))
       predictions.lnb = {
          probabilities = probabilities,
          predictInfo = predictInfo,
       }
    end
 
-   printTableValue('predictions', predictions)
    return predictions
 end
+
+-- write predictions from one of the algos
+-- ARGS
+-- testIndex           : number 
+-- algos               : set of algos being run
+-- parcelsFileNumber   : number, locaiton of test record in input data
+-- parcelsRecordNumber : number, location of test record in input data
+-- data                : table with all the data:w
+-- predictions         : table created by makePredictions
+-- writePredictions    : function to write the record
+-- actual              : number of actual class
+-- RETURNS nil
+local function writeAlgoPredictions(testIndex,
+                                    algos, 
+                                    parcelsFileNumber, 
+                                    parcelsRecordNumber, 
+                                    predictions, 
+                                    writePredictions, 
+                                    actual)
+   print('writeAlgoPredictions', 
+         algos, parcelsFileNumber, parcelsRecordNumber, predictions, writePredictions, actual)
+   printTableValue('predictions', predictions)
+   local probabilities = nil
+   if algos.llr then
+      probabilities = predictions.llr.probabilities
+   elseif algos.lnb then
+      if algos.llr then 
+         print('WARNING: predicted both and only wrote LLR')
+      end
+      probabilities = predictions.lnb.probabilities
+   end
+
+   if probabilities then
+      writePredictions(probabilities[1],
+                       parcelsFileNumber,
+                       parcelsRecordNumber,
+                       testIndex,
+                       actual)
+   end
+end
+
+-- write status
+-- ARGS:
+-- testIndex : number of test sample
+-- lapTimer  : LapTimer for entire computation
+-- lnbLapTimes : ?
+-- llrLapTimes : ?
+-- llrNCalls   ; table containing cumulative number of times each LLR method was called
+-- nCorrect    : table containing number of times each algo had a correct prediction
+-- RETURNS nil
+local function writeStatus(testIndex, lapTimer, lnbLapTimes, llrLapTimes, llrInfo, nCorrect)
+   print('\n************************************************************')
+   print('testIndex', testIndex)
+   printTimes(testIndex, lapTimer, lnbLapTimes, llrLapTimes, llrInfo.nCalls)
+
+   print()
+   for algo, correct in pairs(nCorrect) do
+      print(string.format('algo %s was correct %d times', algo, correct))
+   end
+
+   count = {}
+   for i, best in pairs(llrInfo.bestInitialStepSizes) do
+      count[best] = (count[best] or 0) + 1
+   end
+   print('\nnumber of times each initial step size for LLR was best')
+   for stepsize, num in pairs(count) do
+      print(string.format('stepsize %f was best %d times', stepsize, num))
+   end
+
+   print('\n*************************************************************\n')
+end
+
+-- write the configuration file to config.output-base-name.config and to stdout
+local function writeConfigurationFile(config)
+   local outfileName = config.output .. '.config'
+   local outFile, err = io.open(outfileName, 'w')
+   if err ~= nil then
+      error(err)
+   end
+   local date= os.date('*t', os.time())
+   printTableValue('date', date, outFile)
+   printTableValue('config', config, outFile)
+   io.close(outFile)
+
+   print('wrote date and config tables to the configuration file ' .. outfileName)
+   printTableValue('date', date)
+   printTableValue('config', config)
+end
+
 
 -------------------------------------------------------------------------------
 -- MAIN PROGRAM
@@ -929,11 +1029,26 @@ local config = {
    },
    columnNameParcelFileNumber = 'parcel.file.number',
    columnNameParcelRecordNumber = 'parcel.record.number',
-   }
+   algos = {  -- which algorithms to run
+      llr = true, 
+      --llr = false, 
+      lnb = true,
+      lnb = false,
+   },
+   writePredictions = true,
+}
+
 printTableValue('config', config)
 
 local clArgs = parseAndCheckArg(arg)
 printTableValue('clArgs', clArgs)
+
+-- move the command line args into the configuration table
+for k, v in pairs(clArgs) do
+   config[k] = v
+end
+
+writeConfigurationFile(config)
 
 -- make sure we can write the predictions
 local writePredictions, closePredictionsFile = makeWritePredictions(clArgs.output)
@@ -951,6 +1066,7 @@ local nTestSamples = data.test.y:size(1)
 vp(2, 'nClasses', nClasses, 'nFeatures', nFeatures, 'nTestSamples', nTestSamples)
 
 local lapTimer= LapTimer()
+
 local llrInfo = { -- info from running the LLR algo is accumulated into this table
    nCalls = Accumulators(),
    bestInitialStepSizes = {},
@@ -958,170 +1074,67 @@ local llrInfo = { -- info from running the LLR algo is accumulated into this tab
 
 local debug = true
 
-local nCorrectLLR = 0
-local nCorrectLNB = 0
-
-local algos = {
-   llr = true,
-   --llr = false,
-   lnb = true,
-}
-
-local predictionStates = {}  -- ex: accumulate best initial step size for SGD
+local nCorrect = {}
 
 for testIndex = 1, nTestSamples do
-   local saliences, err = getSaliences(data, algos, testIndex, lapTimer)
-   if err then error('getSaliences: ' .. err) end
-   local reduced = reduceToKStandardizedTrainingSamples(data, saliences, lapTimer)
-   local newX = data.test.XStandardized:sub(testIndex, testIndex)
-   local predictions = makePredictions(reduced, newX, nClasses, data.hp, algos, lapTimer)
-   printTableValue('predictions', predictions)
-   if algos.llr then
-      -- accumulate info from running the LLR algo
-      llrInfo.nCalls:addTable(predictions.llr.nCalls)
-      table.insert(llrInfo.bestInitialStepSizes, predictions.llr.bestInitialStepSize)
-   end
-   stop()
-
-   -- extract standardized X subset of samples
-   local queryLocation = makeQueryLocation(data.test.location, testIndex)
-   local distances = distancesSurface2(queryLocation, data.train.location, data.hp.mPerYear)
-   lapTimer:lap('distances')
-   
-   local saliences, err = (function ()
-      if algos.llr then
-         local saliences, err = kernelEpanechnikovQuadraticKnn2(distances, data.hp.k)
-         lapTimer:lap('saliences quadratic kernel')
-         return saliences, err  -- saliences are in [0,1]
-      elseif algos.lnb then
-         local saliences, err = kernelKnn(distances, data.hp.k)
-         lapTimer:lap('salience knn kernel')
-         return saliences, err  -- saliences are 0,1 indicators
-      else
-         error('bad algos')
-      end
-   end) ()
-   if err then
-      print(string.format('error from getSaliences: %s', err))
-      error(err) -- for now, later continue
-   end
-
-   local reducedX, reducedY, reducedS, reductionLapTime, err = dropZeroSaliences(data.train.XStandardized,
-                                                                                 data.train.y,
-                                                                                 saliences)
-   lapTimer:lap('drop zero saliences')
-   
-   if false then
-      -- code code
-      local reducedX, reducedY, reducedS, reductionLapTime, err = reduceToKTrainingSamples(data, testIndex)
-      lapTimer:lap('reduce to k samples')
-   end
-
-   if err then
-      print(string.format('unable to reduce number of samples for testIndex %d reason %s', testIndex, err))
-      error(err)  -- for now, later continue
+   local saliences, err = getSaliences(data, config.algos, testIndex, lapTimer)
+   if err then 
+      error('getSaliences: ' .. err) -- for now, later may want to continue
    else
+      -- have good saliences, so fit model to training data with non-zero saliences
+      local reduced = reduceToKStandardizedTrainingSamples(data, saliences, lapTimer)
       local newX = data.test.XStandardized:sub(testIndex, testIndex)
-      --vp(2, 'newX', newX)
-      
-      local predictionsLLR, predictInfoLLR, nCalls = (function()
-         if algos.llr then
-            local predictionsLLR, predictInfoLLR, nCalls =  predictUsingLLR(reducedX, 
-                                                                            reducedY, 
-                                                                            reducedS, 
-                                                                            newX, 
-                                                                            nClasses, 
-                                                                            data.hp.lambda, 
-                                                                            bestInitialStepSizes, 
-                                                                            lapTimer)
-            assert(not hasNaN(predictionsLLR))
-            llrNCalls:addTable(nCalls)
-            return predictionsLLR, predictInfoLLR, nCalls
-         else
-            return nil, nil, nil
-         end
-      end) ()
+      local predictions = makePredictions(reduced, newX, nClasses, data.hp, config.algos, lapTimer)
 
-      local predictionsLNB, predictInfoLNB = (function ()
-         if algos.lnb then
-            local predictionsLNB, predictInfoLNB = predictUsingLNB(reducedX, reducedY, newX, nClasses, lapTimer)
-            if hasNaN(predictionsLNB) then
-               -- verify that either class C is not present or class C has exactly one training sample
-               print('found NaN in predictions LNB')
-               if true then
-                  for i = 1, reducedX:size(1) do
-                     print(string.format('sample index %d sample class %d', i, reducedY[i]))
-                  end
-                  error('found NaN')
-               end
-            end
-            return predictionsLNB, predictInfoLNB
-         else
-            return nil, nil
-         end
-      end) ()
-
-      if false then
-         vp(2, ' ')
-         vp(2, '****')
-         vp(2, 'predictionsLLR', predictionsLLR,
-               'predictionsLNB', predictionsLNB,
-               'actual', data.test.y[testIndex])
-      end
-
-      if false then
-         -- TODO: fix this code 
-         -- write predictions for test sample
-         writePredictions(predictions[1],   -- convert 1 x N to just N, dropping first dimension
-         data.test.parcelsFileNumber[testIndex], 
-         data.test.parcelsRecordNumber[testIndex], 
-         testIndex)
-         timer:lap('write predictions')
+      -- accumulate info from running the LLR algo
+      if config.algos.llr then
+         llrInfo.nCalls:addTable(predictions.llr.nCalls)
+         table.insert(llrInfo.bestInitialStepSizes, predictions.llr.bestInitialStepSize)
       end
 
       -- keep track of accuracy
-      -- NOTE: could also use the precomputed maximum likelihood values in predictInfoXXX
       local actual = data.test.y[testIndex]
-      if algos.llr then
-         nCorrectLLR = nCorrectLLR + ifelse(isCorrect(actual, predictionsLLR[1]), 1, 0)
-      end
-      if algos.lnb then
-         nCorrectLNB = nCorrectLNB + ifelse(isCorrect(actual, predictionsLNB[1]), 1, 0)
-      end
-
-      -- periodically write status
-      if testIndex % 1 == 0 then
-         print(string.format('testIndex %d nCorrectLLR %d nCorrectLNB %d', testIndex, nCorrectLLR, nCorrectLNB))
-         --timerLLR:write()
-         --timerLNB:write()
-      end
-
-      --   periodically write best initial step sizes and other info
-      if testIndex % 1 == 0 and false then
-         print('best initial step sizes at testIndex', testIndex)
-         for k, v in pairs(bestInitialStepSizes) do
-            print(string.format(' %f was used %d times', k, v))
+      for algo, isRunning in pairs(config.algos) do
+         print('actual', actual, 'algo', algo)
+         if isRunning then
+         nCorrect[algo] = 
+            (nCorrect[algo] or 0) + ifelse(isCorrect(actual, predictions[algo].probabilities[1]),
+                                           1,
+                                           0)
          end
-         print('toleranceLoss', fittingOptions.convergence.toleranceLoss, 'accuracy', nAccurate / testIndex)
-         printTableValue('data.hp', data.hp)
+      end
+      lapTimer:lap('track accuracy')
+
+      -- write one of the predictions
+      if config.writePredictions then
+         printTableVariable('predictions', predictions)
+         writeAlgoPredictions(testIndex,
+                              config.algos, 
+                              data.test.parcelsFileNumber[testIndex],
+                              data.test.parcelsRecordNumber[testIndex], 
+                              predictions, 
+                              writePredictions, 
+                              actual)
+         lapTimer:lap('write predictions')
       end
 
-      if testIndex % 10  == 0 then
-         print('\n************************************************************')
-         print('testIndex', testIndex)
-         printTimes(testIndex, lapTimer, lnbLapTimes, llrLapTimes, llrNCalls)
-         print()
-         print('nCorrectLLR', nCorrectLLR)
-         print('nCorrectLNB', nCorrectLNB)
-         print('\n*************************************************************\n')
+      -- report status
+      if testIndex % 10 == 0 then
+         writeStatus(testIndex, lapTimer, lnbLapTimes, llrLapTimes, llrInfo, nCorrect)
       end
+      
+      -- keep-alive message
+      print(string.format('testIndex %d nCorrect LLR %s LNB %s', 
+                          testIndex, 
+                          tostring(nCorrect.llr), 
+                          tostring(nCorrect.lnb)))
+      lapTimer:lap('report timing and accuracy')
 
-      lapTimer:lap('tracking and reporting')
+      -- stop prematurely if debugging
+      if testIndex == 2 then
+         break
+      end
    end
 end
 closePredictionsFile()
-   
-
-error('write more')
-
-stop()
+print('done')
