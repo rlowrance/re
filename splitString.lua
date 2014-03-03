@@ -11,6 +11,7 @@
 -- Returns sequence containing values between the divider string
 function splitString(str, divider)
    assert(type(str) == 'string')
+   assert(type(divider) == 'string')
    local t = {}
    local lastStart = 1
    local lastEnd = 0
