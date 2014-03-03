@@ -76,6 +76,9 @@ end
 --                                    .nEpochsBeforeAdjustingStepSize : integer > 0
 --                                    .nEpochsToAdjustStepSize        : integer > 0
 --                                    .nextStepSizes                  ; function(currentSize) --> seq of new sizes
+--                                    if method == 'cg' the fields are these:
+--                                    .maxEval : number, max number of function evaluations
+--                                    .maxIter : number, max number of iterations
 --                  .samplingOptions : table, fields depend on sampling value
 --                                     if sampling == 'epoch' the table has no fields
 --                  .convergence     : table with at least one of these fields
@@ -89,16 +92,18 @@ end
 -- optimalTheta   : 1D Tensor of flat parameters
 -- fitInfo        : table, dependent on method and sampling
 --                  if method == 'bottou' and sampling == 'epoch', the fields are these:
---                 .convergedReason         : string
---                 .finalLoss               : number, loss before the last step taken
---                 .nEpochsUntilConvergence : number
---                 .optimalTheta            : 1D Tensor
---                 .evaluations             : sequence with each evalution, each element is another sequence
---                                            {'step', stepsize, loss-before-step}
---                                            {'explore', stepsize, loss-before-step}
---                                            The number of evaluations of the loss function is #evaluations
+--                  .convergedReason         : string
+--                  .finalLoss               : number, loss before the last step taken
+--                  .nEpochsUntilConvergence : number
+--                  .optimalTheta            : 1D Tensor
+--                  .evaluations             : sequence with each evalution, each element is another sequence
+--                                             {'step', stepsize, loss-before-step}
+--                                             {'explore', stepsize, loss-before-step}
+--                                             The number of evaluations of the loss function is #evaluations
 --                 .nCalls                  : table returned from Objectivefunction
 --                                            number of times each Objectivefunction method was called
+--                 if method == 'cg' and sampling == 'epoch' the fields are these:
+--                 .functionEvals : table of function values f[#f] is value at optimalTheta
 function ModelLogreg:runFit(fittingOptions)
    assert(fittingOptions ~= nil, 'missing arg fittingOptions')
    assert(type(fittingOptions) == 'table', 'fittingOptions not a table')
@@ -108,7 +113,7 @@ function ModelLogreg:runFit(fittingOptions)
 
    local method = fittingOptions.method
    local sampling = fittingOptions.sampling
-   if fittingOptions.method == 'bottou' then
+   if method == 'bottou' then
       if sampling == 'epoch' then
          local objectiveFunction, optimalTheta, fitInfo = self:_algoBottouEpoch(fittingOptions)
          self.objectiveFunction = objectiveFunction
@@ -117,6 +122,12 @@ function ModelLogreg:runFit(fittingOptions)
       else
          error(string.format('invalid sampling scheme %s for method %s', sampling, method))
       end
+   elseif method == 'cg' then
+      if sampling == 'epoch' then
+         local objectiveFunction, optimalTheta, fitInfo = self:_algoCgEpoch(fittingOptions)
+         self.objectiveFunction = objectiveFunction
+         fitInfo.nCalls = objectiveFunction:getNCalls()
+         return optimalTheta, fitInfo
    else
       error('impossible')
    end
@@ -206,6 +217,37 @@ function ModelLogreg:_adjustStepSizeAndStep(feval, methodOptions, currentStepSiz
    vp(1, 'nextTheta', vectorToString(nextTheta))
    vp(1, 'lossBeforeStep', lossBeforeStep)
    return bestStepSize, nextTheta, lossBeforeStep
+end
+
+-- fit using Conjugate gradient method on full epochs
+-- RETURNS:
+-- objectiveFunction
+-- optimalTheta
+-- fitInfo
+function ModelLogreg:_algoCgEpoch(fittingOptions)
+   local vp, verboseLevel = makeVp(0, '_algoCgEpoch')
+   local vp2 = verboseLevel >= 2
+
+   local of = ObjectiveFunctionLogregNnbatch(self.X, self.y, self.s, self.nClasses, fittingOptions.regularizer.L2)
+   local function feval(flatParameters)
+      return of:lossGradient(flatParameters)
+   end
+   
+   local initialTheta = of:initialTheta()
+
+   local state = {
+      maxEval = fittingOptions.methodOptions.maxEval,
+      maxIter = fittingOptions.methodOptions.maxIter,
+   }
+
+   local optimalTheta, functionEvals = optim.cg(feval, initialTheta, state)
+
+   local fitInfo = {
+      functionEvals = functionEvals,
+   }
+   
+   return of, optimalTheta, fitInfo
+
 end
 
 -- fit using Bottou's stepsize adjustment on full epochs
