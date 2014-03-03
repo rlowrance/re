@@ -978,19 +978,21 @@ local function writeStatus(testIndex, lapTimer, lnbLapTimes, llrLapTimes, llrInf
 end
 
 -- write the configuration file to config.output-base-name.config and to stdout
-local function writeConfigurationFile(config)
-   local outfileName = config.output .. '.config'
+local function writeConfigurationFile(clArgs, config)
+   local outfileName = clArgs.output .. '.config'
    local outFile, err = io.open(outfileName, 'w')
    if err ~= nil then
       error(err)
    end
    local date= os.date('*t', os.time())
    printTableValue('date', date, outFile)
+   printTableValue('clArgs', clArgs, outFile)
    printTableValue('config', config, outFile)
    io.close(outFile)
 
    print('wrote date and config tables to the configuration file ' .. outfileName)
    printTableValue('date', date)
+   printTableValue('clArgs', clArgs)
    printTableValue('config', config)
 end
 
@@ -1038,17 +1040,9 @@ local config = {
    writePredictions = true,
 }
 
-printTableValue('config', config)
-
 local clArgs = parseAndCheckArg(arg)
-printTableValue('clArgs', clArgs)
 
--- move the command line args into the configuration table
-for k, v in pairs(clArgs) do
-   config[k] = v
-end
-
-writeConfigurationFile(config)
+writeConfigurationFile(clArgs, config)
 
 -- make sure we can write the predictions
 local writePredictions, closePredictionsFile = makeWritePredictions(clArgs.output)
