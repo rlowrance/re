@@ -1034,9 +1034,9 @@ local config = {
    columnNameParcelRecordNumber = 'parcel.record.number',
    algos = {  -- which algorithms to run
       llr = true, 
-      --llr = false, 
+      llr = false, 
       lnb = true,
-      lnb = false,
+      --lnb = false,
    },
    writePredictions = true,
 }
