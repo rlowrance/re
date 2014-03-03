@@ -465,7 +465,7 @@ local function makeWritePredictions(outputPath)
 
    -- write data record
    local function writePredictions(predictions, parcelsFileNumber, parcelsRecordNumber, testIndex, actual)
-      local vp = makeVp(2, 'writePredictions')
+      local vp = makeVp(0, 'writePredictions')
       vp(1, 'predictions', predictions,  
             'parcelsFileNumber', parcelsFileNumber, 
             'parcelsRecordNumber', parcelsRecordNumber, 
@@ -753,6 +753,7 @@ local function printTimes(nTestSamples, lapTimer, lnbLapTimes, llrLapTimes, llrN
    print('average per-test sample timings')
    local llrCpu, llrWallclock = 0, 0
    local lnbCpu, lnbWallclock = 0, 0
+   local totalCpu, totalWallclock = 0, 0
    for _, lapname in ipairs(lapnames) do
       local times = lapTimer:getTimes()[lapname]
       print(string.format(format, 
@@ -764,7 +765,10 @@ local function printTimes(nTestSamples, lapTimer, lnbLapTimes, llrLapTimes, llrN
          lnbCpu = lnbCpu + times.cpu
          lnbWallclock = lnbWallclock + times.wallclock
       end
+      totalCpu = totalCpu + times.cpu
+      totalWallclock = totalWallclock + times.wallclock
    end
+   print(string.format(format, 'TOTAL', totalCpu / nTestSamples, totalWallclock / nTestSamples))
 
    print()
    print('times for fitting and predicting (excluding finding distances and saliences)')
@@ -924,9 +928,6 @@ local function writeAlgoPredictions(testIndex,
                                     predictions, 
                                     writePredictions, 
                                     actual)
-   print('writeAlgoPredictions', 
-         algos, parcelsFileNumber, parcelsRecordNumber, predictions, writePredictions, actual)
-   printTableValue('predictions', predictions)
    local probabilities = nil
    if algos.llr then
       probabilities = predictions.llr.probabilities
@@ -1089,7 +1090,6 @@ for testIndex = 1, nTestSamples do
       -- keep track of accuracy
       local actual = data.test.y[testIndex]
       for algo, isRunning in pairs(config.algos) do
-         print('actual', actual, 'algo', algo)
          if isRunning then
          nCorrect[algo] = 
             (nCorrect[algo] or 0) + ifelse(isCorrect(actual, predictions[algo].probabilities[1]),
@@ -1101,7 +1101,6 @@ for testIndex = 1, nTestSamples do
 
       -- write one of the predictions
       if config.writePredictions then
-         printTableVariable('predictions', predictions)
          writeAlgoPredictions(testIndex,
                               config.algos, 
                               data.test.parcelsFileNumber[testIndex],
@@ -1113,7 +1112,7 @@ for testIndex = 1, nTestSamples do
       end
 
       -- report status
-      if testIndex % 10 == 0 then
+      if testIndex % 100 == 0 then
          writeStatus(testIndex, lapTimer, lnbLapTimes, llrLapTimes, llrInfo, nCorrect)
       end
       
@@ -1125,7 +1124,7 @@ for testIndex = 1, nTestSamples do
       lapTimer:lap('report timing and accuracy')
 
       -- stop prematurely if debugging
-      if testIndex == 2 then
+      if testIndex == 100 then
          break
       end
    end
