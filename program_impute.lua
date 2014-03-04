@@ -400,7 +400,6 @@ local function readCacheOrBuildData(clArgs, config)
    end
 end
 
-
 local function makeQueryLocation(locations, index)
    return {
       latitude = locations.latitude[index],
@@ -688,7 +687,6 @@ local function predictUsingLLR(X, y, s, newX, nClasses, lambda, lapTimer, method
    return predictions, predictionInfo, fitInfo.nCalls, bestInitialStepSize
 end
 
-
 -- predict using local naive bayes
 -- RETURNS
 -- predictions   : 2D Tensor
@@ -723,7 +721,6 @@ local function predictUsingLNB(X, y, newX, nClasses, lapTimer, methodOptions)
 
    return predictions, predictionInfo
 end
-
 
 -- return true if the predictions are correct
 -- NOTE; if predictionProbabilities is all NaNs, then
@@ -826,26 +823,6 @@ local function printTimes(nTestSamples, lapTimer, lnbLapTimes, llrLapTimes, llrN
    end 
 end
 
--- return new table that sums up cpu and wallclock times for lap in both tables
-local function sumLapTimes(table1, table2)
-   assert(type(table1) == 'table')
-   assert(type(table2) == 'table')
-   local result = {}
-
-   for lapname, value1 in pairs(table1) do
-      local value2 = table2[k]
-      if value2 == nil then
-         value2 = {cpu = 0, wallclock = 0}
-      end
-      result[lapname] = {cpu = value1.cpu + value2.cpu, wallclock = value1.wallclock + value2.wallclock}
-   end
-
-   printTableValue('table1', table1)
-   printTableValue('table2', table2)
-   printTableValue('result', result)
-   stop()
-   return result
-end
 
 -- return 1D Tensor of saliences in [0,1]
 -- ARGS
