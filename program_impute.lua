@@ -7,12 +7,14 @@
 -- --hpset  INTEGER
 -- --output FILE_PATH
 -- INPUT FILES:
--- ../output/v6/parcels-sfr-geocoded.serialized-NamedMatrix
--- ../output/v6/parcels-sfr-geocoded-info.serialized-NamedMatrix
--- ../output/v6/hpsets-impute.csv
+-- ../data/v6/output/program_impute-cache.serialized
+-- ../data//output/v6/parcels-sfr-geocoded.serialized-NamedMatrix
+-- ../data/output/v6/parcels-sfr-geocoded-info.serialized-NamedMatrix
+-- ../data/output/v6/hpsets-impute.csv
 -- OUTPUT FILES: <specified by --output command line parameter>, a CSV file with these columns
 --   dataRowIndex : integer, row in parcels_nm.t for the observation
 --   predicted    : string, predicted value
+-- ../data/v6/output/program_impute-cache.serialized
 
 require 'argmax'
 require 'Accumulators'
@@ -398,27 +400,6 @@ local function readCacheOrBuildData(clArgs, config)
    end
 end
 
--- determine kernelized weights of training locations from a query location
--- ARGS
--- trainLocation : table with fields latitud, longitude, year, each a 1D tensor of same size 
--- queryLocation : table with fields latitude, longitude, year
--- mPerYear      : number of meters assumed to be in one year of time
--- k             : number of samples to return
--- RETURN
--- weights  : 1D Tensor
--- lapTable : table; key = lapname, value ={cpu,wallclock}
--- err      : optional string, not nil if there was an error
-local function makeWeights(trainLocation, queryLocation, mPerYear, k)
-   assert(k > 1)
-   
-   local distances = distancesSurface2(queryLocation, trainLocation, mPerYear)
-   lapTimer:lap('distances')
-
-   local weights, err = kernelEpanechnikovQuadraticKnn2(distances, k)
-   lapTimer:lap('weights')
-
-   return weights, lapTimes, err
-end 
 
 local function makeQueryLocation(locations, index)
    return {
@@ -1058,7 +1039,7 @@ local function writeStatus(testIndex, lapTimer, lnbLapTimes, llrLapTimes, llrInf
 end
 
 -- write the configuration file to config.output-base-name.config and to stdout
-local function writeConfigurationFile(clArgs, config)
+local function writeClargsConfig(clArgs, config)
    local outfileName = clArgs.output .. '.config'
    local outFile, err = io.open(outfileName, 'w')
    if err ~= nil then
@@ -1138,7 +1119,7 @@ local config = {
 
 local clArgs = parseAndCheckArg(arg)
 
-writeConfigurationFile(clArgs, config)
+writeClargsConfig(clArgs, config)
 
 -- make sure we can write the predictions
 local writePredictions, closePredictionsFile = makeWritePredictions(clArgs.output)
