@@ -1121,8 +1121,8 @@ local config = {
    },
    methodOptions = {
       cg = {   -- 25 and 20 are the defaults for optim.cg
-         maxEval = 4,
-         maxIter = 4,
+         maxEval = 3,
+         maxIter = 3,
       },
       llr = {
          printLoss = false,
