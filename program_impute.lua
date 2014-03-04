@@ -595,7 +595,7 @@ local function reduceToKStandardizedTrainingSamples(data, saliences, lapTimer)
    return reduced
 end
    
--- predict use local linear regression
+-- predict use local linear regression and the conjugate gradient method
 -- ARGS:
 -- X              : 2D Tensor of training features
 -- y              : 1D Tensor of target values
@@ -604,6 +604,7 @@ end
 -- nClasses       : number, nClasses in target values
 -- lambda         : number, L2 regularizer
 -- lapTimer       : LapTimer instance
+-- methodOptions  : table
 -- RETURNS
 -- predictions    : 2D Tensor
 -- predictionInfo : table
@@ -611,22 +612,62 @@ end
 -- initStepSize   : number, best initial steps size found
 -- MUTATES
 -- lapTimer       : updated with timing
-local function predictUsingLLR(X, y, s, newX, nClasses, lambda, lapTimer)
+local function predictUsingCG(X, y, s, newX, nClasses, lambda, lapTimer, methodOptions)
+
+   local vp, verboseLevel = makeVp(0, 'predictUsingCG')
+   local debug = verboseLevel > 0
+
+   local fittingOptions = {
+      method = 'cg',
+      sampling = 'epoch',
+      methodOptions = methodOptions,
+      samplingOptions = {},  -- no sampling options when sampling == 'epoch'
+      convergence = {},      -- convergence controlled by maxEvals
+      regularizer = {
+         L2 = lambda,
+      },
+   }
+
+   -- build and fit the model
+   local model = ModelLogreg(X, y, s, nClasses)
+   local optimalTheta, fitInfo = model:fit(fittingOptions)
+   lapTimer:lap('CG construct and fit model')
+
+   -- fit the test sample using the model
+   local predictions, predictionInfo = model:predict(newX, optimalTheta)
+   lapTimer:lap('CG predict one test sample')
+
+   return predictions, predictionInfo, fitInfo.nCalls
+end
+
+-- predict use local linear regression and the bottou epoch method
+-- ARGS:
+-- X              : 2D Tensor of training features
+-- y              : 1D Tensor of target values
+-- s              : 1D Tensor of saliences
+-- newX           : 2D Tensor of features to predict, one row per sample
+-- nClasses       : number, nClasses in target values
+-- lambda         : number, L2 regularizer
+-- lapTimer       : LapTimer instance
+-- methodOptions  : table
+-- RETURNS
+-- predictions    : 2D Tensor
+-- predictionInfo : table
+-- nCalls         : table with number of calls to each method in the fitting procedure
+-- initStepSize   : number, best initial steps size found
+-- MUTATES
+-- lapTimer       : updated with timing
+local function predictUsingLLR(X, y, s, newX, nClasses, lambda, lapTimer, methodOptions)
 
    local function setInitialFittingOptions()
       local function nextStepSizes(currentStepSize)
          return {currentStepSize, .5 * currentStepSize, 1.5 * currentStepSize}
       end
+      methodOptions.nextStepSizes = nextStepSizes
       local fittingOptions = {
          method = 'bottou',
          sampling = 'epoch',
-         methodOptions = {
-            printLoss = false,
-            initialStepSize = 1,
-            nEpochsBeforeAdjustingStepSize = 10,
-            nEpochsToAdjustStepSize = 1,
-            nextStepSizes = nextStepSizes,
-         },
+         methodOptions = methodOptions,
          samplingOptions = {},  -- no sampling options when sampling == 'epoch'
          convergence = {  -- these will need to be tuned
          maxEpochs = 1000,
@@ -669,14 +710,18 @@ end
 
 -- predict using local naive bayes
 -- RETURNS
--- predictions : 2D Tensor
--- predictInfo : table
+-- predictions   : 2D Tensor
+-- predictInfo   : table
+-- nClasses      : number
+-- lapTimer      : table
+-- methodOptions : table (not used, but in API for symmetry)
 -- MUTATES
--- lapTimer    : updates lap time
-local function predictUsingLNB(X, y, newX, nClasses, lapTimer)
-   local vp, verboseLevel = makeVp(0, 'predictUsingNB')
+-- lapTimer      : updates lap time
+local function predictUsingLNB(X, y, newX, nClasses, lapTimer, methodOptions)
+   local vp, verboseLevel = makeVp(0, 'predictUsingLNB')
 
    -- set the fitting options for NB = naive bayes
+   assert(type(methodOptions) == 'table')  -- not used by Naive Bayes
    local fittingOptions = {
       method = 'gaussian',
    }
@@ -751,6 +796,7 @@ local function printTimes(nTestSamples, lapTimer, lnbLapTimes, llrLapTimes, llrN
 
    print()
    print('average per-test sample timings')
+   local cgCpu, cgWallclock = 0, 0
    local llrCpu, llrWallclock = 0, 0
    local lnbCpu, lnbWallclock = 0, 0
    local totalCpu, totalWallclock = 0, 0
@@ -758,7 +804,10 @@ local function printTimes(nTestSamples, lapTimer, lnbLapTimes, llrLapTimes, llrN
       local times = lapTimer:getTimes()[lapname]
       print(string.format(format, 
                           lapname, times.cpu / nTestSamples, times.wallclock / nTestSamples))
-      if string.sub(lapname, 1, 3) == 'LLR' then
+      if string.sub(lapname, 1, 2) == 'CG' then
+         cgCpu = cgCpu + times.cpu
+         cgWallclock = cgWallclock + times.wallclock
+      elseif string.sub(lapname, 1, 3) == 'LLR' then
          llrCpu = llrCpu + times.cpu
          llrWallclock = llrWallclock + times.wallclock
       elseif string.sub(lapname, 1, 3) == 'LNB' then
@@ -773,6 +822,8 @@ local function printTimes(nTestSamples, lapTimer, lnbLapTimes, llrLapTimes, llrN
    print()
    print('times for fitting and predicting (excluding finding distances and saliences)')
    local prefix = 'total per-sample times for '
+   print(string.format(format, prefix .. 'CG', 
+                       cgCpu / nTestSamples, cgWallclock / nTestSamples))
    print(string.format(format, prefix .. 'LLR', 
                        llrCpu / nTestSamples, llrWallclock / nTestSamples))
    print(string.format(format, prefix .. 'LNB', 
@@ -835,14 +886,12 @@ local function getSaliences(data, algos, testIndex, lapTimer)
    
    -- amount of work to determine saliences depends on the algo
    local saliences, err = nil, nil
-   if algos.llr then
-      saliences, err = kernelEpanechnikovQuadraticKnn2(distances, data.hp.k)  -- saliences in [0,1]
-      lapTimer:lap('saliences quadratic kernel')
-   elseif algos.lnb then
+   if algos.lnb then
       saliences, err = kernelKnn(distances, data.hp.k)  -- saliences are either 0 or 1
       lapTimer:lap('saliences knn kernel')
    else
-      error('bad algos')
+      saliences, err = kernelEpanechnikovQuadraticKnn2(distances, data.hp.k)  -- saliences in [0,1]
+      lapTimer:lap('saliences quadratic kernel')
    end
 
    return saliences, err
@@ -858,6 +907,7 @@ end
 -- hp               : table of hyperparameters
 -- algos            : set of algorithms to run
 -- lapTimer         : timer
+-- methodOptions    : table
 -- RETURNS
 -- predictions      : table with one element for each algo in algos
 --                    .ALGO.probabilities  : 2D Tensor with one row
@@ -865,7 +915,7 @@ end
 --                    .ALGO.<other fields> : dependent on algo
 -- MUTATES
 -- lapTimer         : updates timings for each algo
-local function makePredictions(training, newX, nClasses, hp, algos, lapTimer)
+local function makePredictions(training, newX, nClasses, hp, algos, lapTimer, methodOptions)
    assert(training)
    assert(training.X)
    assert(training.y)
@@ -877,6 +927,24 @@ local function makePredictions(training, newX, nClasses, hp, algos, lapTimer)
    
    
    local predictions = {}
+
+   if algos.cg then
+      local probabilities, predictInfo, nCalls= predictUsingCG(training.X,
+                                                               training.y,
+                                                               training.s,
+                                                               newX,
+                                                               nClasses,
+                                                               hp.lambda,
+                                                               lapTimer,
+                                                               methodOptions.cg)
+      assert(not hasNaN(probabilities))
+      predictions.cg = {
+         probabilities = probabilities,
+         predictInfo = predictInfo,
+         nCalls = nCalls,
+      }
+   end
+         
    if algos.llr then
       local probabilities, predictInfo, nCalls, bestInitialStepSize = predictUsingLLR(training.X,
                                                                                       training.y,
@@ -884,7 +952,8 @@ local function makePredictions(training, newX, nClasses, hp, algos, lapTimer)
                                                                                       newX,
                                                                                       nClasses,
                                                                                       hp.lambda,
-                                                                                      lapTimer)
+                                                                                      lapTimer,
+                                                                                      methodOptions.llr)
       assert(not hasNaN(probabilities))
       predictions.llr = {
          probabilities = probabilities,
@@ -899,7 +968,8 @@ local function makePredictions(training, newX, nClasses, hp, algos, lapTimer)
                                                   training.y,
                                                   newX,
                                                   nClasses,
-                                                  lapTimer)
+                                                  lapTimer,
+                                                  methodOptions.lnb)
       assert(not hasNaN(probabilities))
       predictions.lnb = {
          probabilities = probabilities,
@@ -929,13 +999,18 @@ local function writeAlgoPredictions(testIndex,
                                     writePredictions, 
                                     actual)
    local probabilities = nil
-   if algos.llr then
-      probabilities = predictions.llr.probabilities
-   elseif algos.lnb then
-      if algos.llr then 
-         print('WARNING: predicted both and only wrote LLR')
+   local nAlgos = 0  
+   for algo, inSet in pairs(algos) do
+      if inSet then
+         nAlgos = nAlgos + 1
+         probabilities = predictions[algo].probabilities
       end
-      probabilities = predictions.lnb.probabilities
+   end
+
+   if nAlgos == 0 then
+      print('WARNING: did not predict using any algo')
+   elseif nAlgos > 1 then
+      print('WARNING: predicted using several algos, but wrote only one')
    end
 
    if probabilities then
@@ -955,8 +1030,9 @@ end
 -- llrLapTimes : ?
 -- llrNCalls   ; table containing cumulative number of times each LLR method was called
 -- nCorrect    : table containing number of times each algo had a correct prediction
+-- methodOptions : table 
 -- RETURNS nil
-local function writeStatus(testIndex, lapTimer, lnbLapTimes, llrLapTimes, llrInfo, nCorrect)
+local function writeStatus(testIndex, lapTimer, lnbLapTimes, llrLapTimes, llrInfo, nCorrect, methodOptions)
    print('\n************************************************************')
    print('testIndex', testIndex)
    printTimes(testIndex, lapTimer, lnbLapTimes, llrLapTimes, llrInfo.nCalls)
@@ -974,6 +1050,9 @@ local function writeStatus(testIndex, lapTimer, lnbLapTimes, llrLapTimes, llrInf
    for stepsize, num in pairs(count) do
       print(string.format('stepsize %f was best %d times', stepsize, num))
    end
+
+   print()
+   printTableValue('methodOptions', methodOptions)
 
    print('\n*************************************************************\n')
 end
@@ -1034,9 +1113,24 @@ local config = {
    columnNameParcelRecordNumber = 'parcel.record.number',
    algos = {  -- which algorithms to run
       llr = true, 
-      llr = false, 
+      --llr = false, 
       lnb = true,
       --lnb = false,
+      cg = true,
+   },
+   methodOptions = {
+      cg = {   -- 25 and 20 are the defaults for optim.cg
+         maxEval = 3,
+         maxIter = 3,
+      },
+      llr = {
+         printLoss = false,
+         initialStepSize = 1,
+         nEpochsBeforeAdjustingStepSize = 10,
+         nEpochsToAdjustStepSize = 1,
+         nextStepSizes = nextStepSizes,
+      },
+      lnb = {},
    },
    writePredictions = true,
 }
@@ -1062,10 +1156,15 @@ vp(2, 'nClasses', nClasses, 'nFeatures', nFeatures, 'nTestSamples', nTestSamples
 
 local lapTimer= LapTimer()
 
+local cgInfo = { -- info from running the CG algo is accumulated into this table
+   nCalls = Accumulators(),
+}
+
 local llrInfo = { -- info from running the LLR algo is accumulated into this table
    nCalls = Accumulators(),
    bestInitialStepSizes = {},
 }
+
 
 local debug = true
 
@@ -1079,9 +1178,14 @@ for testIndex = 1, nTestSamples do
       -- have good saliences, so fit model to training data with non-zero saliences
       local reduced = reduceToKStandardizedTrainingSamples(data, saliences, lapTimer)
       local newX = data.test.XStandardized:sub(testIndex, testIndex)
-      local predictions = makePredictions(reduced, newX, nClasses, data.hp, config.algos, lapTimer)
+      local predictions = 
+        makePredictions(reduced, newX, nClasses, data.hp, config.algos, lapTimer, config.methodOptions)
 
-      -- accumulate info from running the LLR algo
+      -- accumulate info from running the CG and LLR algo
+      if config.algos.cg then
+         cgInfo.nCalls:addTable(predictions.cg.nCalls)
+      end
+
       if config.algos.llr then
          llrInfo.nCalls:addTable(predictions.llr.nCalls)
          table.insert(llrInfo.bestInitialStepSizes, predictions.llr.bestInitialStepSize)
@@ -1113,12 +1217,13 @@ for testIndex = 1, nTestSamples do
 
       -- report status
       if testIndex % 100 == 0 then
-         writeStatus(testIndex, lapTimer, lnbLapTimes, llrLapTimes, llrInfo, nCorrect)
+         writeStatus(testIndex, lapTimer, lnbLapTimes, llrLapTimes, llrInfo, nCorrect, config.methodOptions)
       end
       
       -- keep-alive message
-      print(string.format('testIndex %d nCorrect LLR %s LNB %s', 
+      print(string.format('testIndex %d nCorrect CG %s LLR %s LNB %s', 
                           testIndex, 
+                          tostring(nCorrect.cg),
                           tostring(nCorrect.llr), 
                           tostring(nCorrect.lnb)))
       lapTimer:lap('report timing and accuracy')
