@@ -1115,13 +1115,14 @@ local config = {
       llr = true, 
       --llr = false, 
       lnb = true,
-      --lnb = false,
+      lnb = false,
       cg = true,
+      cg = false
    },
    methodOptions = {
       cg = {   -- 25 and 20 are the defaults for optim.cg
-         maxEval = 3,
-         maxIter = 3,
+         maxEval = 4,
+         maxIter = 4,
       },
       llr = {
          printLoss = false,
@@ -1229,7 +1230,7 @@ for testIndex = 1, nTestSamples do
       lapTimer:lap('report timing and accuracy')
 
       -- stop prematurely if debugging
-      if testIndex == 100 then
+      if testIndex == 1000 then
          break
       end
    end
