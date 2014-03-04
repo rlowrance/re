@@ -65,26 +65,27 @@ end
 -- return optimalTheta and perhaps statistics and convergence info
 -- ARGS
 -- fittingOptions : table with these fields
---                  .method          : string in {'bottou', ...}
+--                  .method          : string in {'bottou', 'cg', ...}
 --                  .sampling        : string in {'epoch', ...}
 --                  .methodOptions   : table, some fields depend on method value
---                                    .printLoss : optional boolean default true
---                                                 whether to print each loss value
 --                                     if method == 'bottou' the fields are these:
---                                    .callBackEndOfEpoch(lossBeforeStep, currentTheta, stepSize) : optional function
---                                    .initialStepSize                : number > 0
---                                    .nEpochsBeforeAdjustingStepSize : integer > 0
---                                    .nEpochsToAdjustStepSize        : integer > 0
---                                    .nextStepSizes                  ; function(currentSize) --> seq of new sizes
---                                    if method == 'cg' the fields are these:
---                                    .maxEval : number, max number of function evaluations
---                                    .maxIter : number, max number of iterations
+--                                     .callBackEndOfEpoch(lossBeforeStep, currentTheta, stepSize) : optional function
+--                                     .initialStepSize                : number > 0
+--                                     .nEpochsBeforeAdjustingStepSize : integer > 0
+--                                     .nEpochsToAdjustStepSize        : integer > 0
+--                                     .nextStepSizes                  ; function(currentSize) --> seq of new sizes
+--                                     .printLoss : optional boolean default true
+--                                                  whether to print each loss value
+--                                     if method == 'cg' the fields are these:
+--                                     .maxEval : number, max number of function evaluations
+--                                     .maxIter : number, max number of iterations
 --                  .samplingOptions : table, fields depend on sampling value
 --                                     if sampling == 'epoch' the table has no fields
---                  .convergence     : table with at least one of these fields
---                                    .maxEpochs      : number
---                                    .toleranceLoss  : number
---                                    .toleranceTheta : number
+--                  .convergence     : table, possibly with no elements
+--                                     if method == 'bottou' then the table contains at leat one of these fields
+--                                     .maxEpochs      : number
+--                                     .toleranceLoss  : number
+--                                     .toleranceTheta : number
 --                  .regularizer     : table with these optional fields
 --                                    .L1 : optional number default 0, strength of L1 regularizer
 --                                    .L2 : optional number default 0, strength of L2 regularizer
@@ -104,32 +105,28 @@ end
 --                                            number of times each Objectivefunction method was called
 --                 if method == 'cg' and sampling == 'epoch' the fields are these:
 --                 .functionEvals : table of function values f[#f] is value at optimalTheta
+--                 .nFunctionEvals : number 
+--
 function ModelLogreg:runFit(fittingOptions)
    assert(fittingOptions ~= nil, 'missing arg fittingOptions')
    assert(type(fittingOptions) == 'table', 'fittingOptions not a table')
 
-   self:_setDefaults(fittingOptions)
    self:_validate(fittingOptions)
 
    local method = fittingOptions.method
    local sampling = fittingOptions.sampling
-   if method == 'bottou' then
-      if sampling == 'epoch' then
-         local objectiveFunction, optimalTheta, fitInfo = self:_algoBottouEpoch(fittingOptions)
-         self.objectiveFunction = objectiveFunction
-         fitInfo.nCalls = objectiveFunction:getNCalls()
-         return optimalTheta, fitInfo
-      else
-         error(string.format('invalid sampling scheme %s for method %s', sampling, method))
-      end
-   elseif method == 'cg' then
-      if sampling == 'epoch' then
-         local objectiveFunction, optimalTheta, fitInfo = self:_algoCgEpoch(fittingOptions)
-         self.objectiveFunction = objectiveFunction
-         fitInfo.nCalls = objectiveFunction:getNCalls()
-         return optimalTheta, fitInfo
+   if method == 'bottou' and sampling == 'epoch' then
+      local objectiveFunction, optimalTheta, fitInfo = self:_algoBottouEpoch(fittingOptions)
+      self.objectiveFunction = objectiveFunction
+      fitInfo.nCalls = objectiveFunction:getNCalls()
+      return optimalTheta, fitInfo
+   elseif method == 'cg' and sampling == 'epoch' then
+      local objectiveFunction, optimalTheta, fitInfo = self:_algoCgEpoch(fittingOptions)
+      self.objectiveFunction = objectiveFunction
+      fitInfo.nCalls = objectiveFunction:getNCalls()
+      return optimalTheta, fitInfo
    else
-      error('impossible')
+      error(string.format('invalid sampling scheme %s for method %s', sampling, method))
    end
 end
 
@@ -228,7 +225,7 @@ function ModelLogreg:_algoCgEpoch(fittingOptions)
    local vp, verboseLevel = makeVp(0, '_algoCgEpoch')
    local vp2 = verboseLevel >= 2
 
-   local of = ObjectiveFunctionLogregNnbatch(self.X, self.y, self.s, self.nClasses, fittingOptions.regularizer.L2)
+   local of = ObjectivefunctionLogregNnbatch(self.X, self.y, self.s, self.nClasses, fittingOptions.regularizer.L2)
    local function feval(flatParameters)
       return of:lossGradient(flatParameters)
    end
@@ -240,11 +237,14 @@ function ModelLogreg:_algoCgEpoch(fittingOptions)
       maxIter = fittingOptions.methodOptions.maxIter,
    }
 
-   local optimalTheta, functionEvals = optim.cg(feval, initialTheta, state)
+   local optimalTheta, functionEvals, nFunctionEvals = optim.cg(feval, initialTheta, state)
 
    local fitInfo = {
       functionEvals = functionEvals,
+      nFunctionEvals = nFunctionEvals,
+      --convergedReason = ifelse(#functionEvals == maxEval + 1, 'maxIter', 'maxEval'),
    }
+   self.fitInfo = fitInfo -- save a copy
    
    return of, optimalTheta, fitInfo
 
@@ -408,9 +408,9 @@ function ModelLogreg:_lossAfterNSteps(feval, stepSize, startingTheta, nSteps)
    return nextTheta, lossAfterSteps, lossBeforeLastStep
 end
 
-function ModelLogreg:_setDefaults(fittingOptions)
-   if fittingOptions.methodOptions.printLoss == nil then
-      fittingOptions.methodOptions.printLoss = true
+function ModelLogreg:_setDefaultsBottou(methodOptions)
+   if methodOptions.printLoss == nil then
+      methodOptions.printLoss = true
    end
 end
 
@@ -440,57 +440,6 @@ end
 -- adjustP : boolean, true if nEpochsCompleted >= nEpochsBeforeAdjustingStepSize
 function ModelLogreg:_timeToAdjustStepSize(nEpochsCompleted, methodOptions)
    return (nEpochsCompleted % methodOptions.nEpochsBeforeAdjustingStepSize) == 0
-end
-
-function ModelLogreg:_validate(fittingOptions)
-   self:_validateMethod(fittingOptions.method)
-   self:_validateSampling(fittingOptions.sampling)
-   self:_validateMethodOptions(fittingOptions.method, fittingOptions.methodOptions)
-   self:_validateSamplingOptions(fittingOptions.sampling, fittingOptions.samplingOptions)
-   self:_validateConvergence(fittingOptions.convergence)
-   self:_validateRegularizer(fittingOptions.regularizer)
-end
-
-function ModelLogreg:_validateConvergence(convergence)
-   assert(convergence ~= nil, 'convergence table not supplied')
-
-   if convergence.maxEpochs ~= nil then
-      validateAttributes(convergence.maxEpochs, 'number', 'integer', 'positive')
-   end
-
-   if convergence.toleranceLoss ~= nil then
-      validateAttributes(convergence.toleranceLoss, 'number', 'positive')
-   end
-
-   if convergence.toleranceTheta ~= nil then
-      validateAttributes(convergence.toleranceTheta, 'number', 'positive')
-   end
-
-   assert(convergence.maxEpochs ~= nil or
-          convergence.toleranceLoss ~= nil or
-          convergence.toleranceTheta ~= nil,
-          'at least one convergence options must be specified')
-end
-
-
-function ModelLogreg:_validateMethod(method)
-   assert(method ~= nil, 'fittingOptions.method missing')
-   assert(type(method) == 'string', '.method not a string')
-   assert(method == 'bottou', string.format('method %s is invalid', method))
-end
-
-function ModelLogreg:_validateMethodOptions(method, methodOptions)
-   assert(methodOptions ~= nil, 'fittingOptions.methodOptions missing')
-
-   -- validate fields common to all methods
-   assert(type(methodOptions.printLoss) == 'boolean', 'fittingOptions.methodOptions.printLoss not boolean')
-
-   -- validate fields specific to a method
-   if method == 'bottou' then
-      self:_validateMethodOptionsBottou(methodOptions)
-   else
-      error('impossible')
-   end
 end
 
 function ModelLogreg:_hasOnlyFields(table, expectedFields)
@@ -535,8 +484,66 @@ function ModelLogreg:_hasOnlyFields(table, expectedFields)
    end
 end
 
+function ModelLogreg:_validate(fittingOptions)
+   self:_validateMethod(fittingOptions.method)
+   self:_validateSampling(fittingOptions.sampling)
+   self:_validateMethodOptions(fittingOptions.method, fittingOptions.methodOptions)
+   self:_validateSamplingOptions(fittingOptions.sampling, fittingOptions.samplingOptions)
+   self:_validateConvergence(fittingOptions.method, fittingOptions.convergence)
+   self:_validateRegularizer(fittingOptions.regularizer)
+end
+
+function ModelLogreg:_validateConvergence(method, convergence)
+   assert(convergence ~= nil, 'convergence table not supplied')
+
+   if method ~= 'bottou' then
+      return  -- no convergence options are needed unless the method is bottou
+   end
+
+   -- check options when method == 'bottou'
+   if convergence.maxEpochs ~= nil then
+      validateAttributes(convergence.maxEpochs, 'number', 'integer', 'positive')
+   end
+
+   if convergence.toleranceLoss ~= nil then
+      validateAttributes(convergence.toleranceLoss, 'number', 'positive')
+   end
+
+   if convergence.toleranceTheta ~= nil then
+      validateAttributes(convergence.toleranceTheta, 'number', 'positive')
+   end
+
+   assert(convergence.maxEpochs ~= nil or
+          convergence.toleranceLoss ~= nil or
+          convergence.toleranceTheta ~= nil,
+          'at least one convergence options must be specified')
+end
+
+
+function ModelLogreg:_validateMethod(method)
+   assert(method ~= nil, 'fittingOptions.method missing')
+   assert(type(method) == 'string', '.method not a string')
+   if method == 'bottou' or method == 'cg' then
+      return
+   else
+      error(string.format('method %s is invalid', method))
+   end
+end
+
+function ModelLogreg:_validateMethodOptions(method, methodOptions)
+   assert(methodOptions ~= nil, 'fittingOptions.methodOptions missing')
+   if method == 'bottou' then
+      self:_setDefaultsBottou(methodOptions)  -- mutate methodOptions
+      self:_validateMethodOptionsBottou(methodOptions)
+   elseif method == 'cg' then
+      self:_validateMethodOptionsCg(methodOptions)
+   else
+      error('cannot happend; method = ' .. method)
+   end
+end
+
 function ModelLogreg:_validateMethodOptionsBottou(methodOptions)
-   assert(methodOptions ~= nil, 'missing bottouEpoch methodOptions table')
+   assert(type(methodOptions.printLoss) == 'boolean', 'fittingOptions.methodOptions.printLoss not boolean')
    self:_hasOnlyFields(methodOptions, 
                        {'printLoss', 
                         'initialStepSize', 
@@ -555,6 +562,15 @@ function ModelLogreg:_validateMethodOptionsBottou(methodOptions)
       assert(type(methodOptions.callBackEndOfEpoch == 'function',
                   'callBackEndOfEpoch not a function of (lossBeforeStep, nextTheta)'))
    end
+end
+
+function ModelLogreg:_validateMethodOptionsCg(methodOptions)
+   self:_hasOnlyFields(methodOptions, 
+                       {'maxEval',
+                        'maxIter'})
+
+   validateAttributes(methodOptions.maxEval, 'number', 'nonnegative')
+   validateAttributes(methodOptions.maxIter, 'number', 'nonnegative')
 end
 
 function ModelLogreg:_validateRegularizer(regularizer)
