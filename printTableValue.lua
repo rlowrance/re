@@ -66,6 +66,11 @@ function printTableValue(variableName, tableValue, file)
          table.insert(keysSorted, {tostring(key), key})
       end
 
+      if #keysSorted == 0 then
+         print(tableName .. ' = {}')
+         return
+      end
+      
       local function compare(a, b)
          return a[1] < b[1]  -- sort on string version of key
       end
