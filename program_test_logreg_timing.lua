@@ -4,6 +4,7 @@
 --   k = 70
 --   nClasses = 14
 
+require 'assertEq'
 require 'ifelse'
 require 'makeVp'
 require 'nn'
@@ -530,6 +531,404 @@ local function makeLossGradient7(data)
    return lossGradient, (data.nFeatures + 1) * data.nClasses
 end
 
+-- implementation 8: Yann's LogregFprobBrpbo with 1 sample
+local function makeLossGradient8(data)
+   local vp = makeVp(1, 'makeLossGradient8')
+
+   -- Yann's logistic regression training
+
+   -- softmax of a vector
+   local function softmax(x)
+      local largest = torch.max(x)
+      local e = torch.exp(x-largest)
+      local z1 = 1/torch.sum(e)
+      return e * z1
+   end
+
+   -- run logistic regression model on sample
+   local function LogregFprop(x,theta)
+      local s = torch.mv(theta,x)
+      return softmax(s)
+   end
+
+   -- original code except commented lines are replaced with lines below them
+   local function LogregFpropBprop(x,y,theta,L2) -- original used L3 instead of L2
+      local s = torch.mv(theta,x)
+      local p = softmax(s)
+      --local objective = -log(p[y])
+      local objective = -math.log(p[y])
+      local target = torch.Tensor(theta:size(1)):zero()
+      target[y] = 1
+      --local gradient = torch.ger( (p[y] - target), x) - theta*L2
+      local gradient = torch.ger( - (target - p[y]), x) - theta*L2  -- get == outer product
+      return objective, gradient
+   end
+
+   -- original code except where commented out and possibly replaced
+   local function LogregTrainSGD(X,Y,theta,L2,n,eta)
+      local nsamples = X:size(1)
+      local totalObjective = 0  -- added
+      for i = 1, n do
+         --sample = i % nsamples
+         --local objective, gradient = LogregFpropBprop(X[sample],Y[sample],theta,L2)
+         local objective, gradient = LogregFpropBprop(X[i],Y[i],theta,L2)
+         torch.add(theta,-eta,gradient)
+         totalObjective = totalObjective + objective
+      end
+      --return totalObjective/n, theta  
+      return totalObjective/n, theta, gradient  -- NOTE: should return the averaged gradient, not the last gradient
+   end
+
+   -- return loss and gradient wrt parameters
+   -- using all the data as a mini batch
+   -- also compute theta after the SGD step
+   local fakeTheta = torch.rand(14, 8)
+   local L2 = 0
+   local x = data.X[1]
+   local y = data.y[1]
+   local function lossGradient(theta)
+      return LogregFpropBprop(x, y, fakeTheta, L2)
+   end
+
+   return lossGradient, (data.nFeatures + 1) * data.nClasses
+end
+
+-- implementation 9: Yann's LogregFprobBrpbo with 70 samples
+-- Other incrmemental functionality that could be added
+-- - take logs, because that's what package nn does
+-- - ravel and unravel the theta argument. It should be flat, but its structured in Yann's code.
+-- - compute average loss and average gradient for the sample. My implementation does this.
+local function makeLossGradient9(data)
+   local vp = makeVp(1, 'makeLossGradient8')
+
+   -- Yann's logistic regression training
+
+   -- softmax of a vector
+   local function softmax(x)
+      local largest = torch.max(x)
+      local e = torch.exp(x-largest)
+      local z1 = 1/torch.sum(e)
+      return e * z1
+   end
+
+   -- run logistic regression model on sample
+   local function LogregFprop(x,theta)
+      local s = torch.mv(theta,x)
+      return softmax(s)
+   end
+
+   -- original code except commented lines are replaced with lines below them
+   local function LogregFpropBprop(x,y,theta,L2) -- original used L3 instead of L2
+      local s = torch.mv(theta,x)
+      local p = softmax(s)
+      --local objective = -log(p[y])
+      local objective = -math.log(p[y])
+      local target = torch.Tensor(theta:size(1)):zero()
+      target[y] = 1
+      --local gradient = torch.ger( (p[y] - target), x) - theta*L2
+      local gradient = torch.ger( - (target - p[y]), x) - theta*L2
+      return objective, gradient
+   end
+
+   -- original code except where commented out and possibly replaced
+   local function LogregTrainSGD(X,Y,theta,L2,n,eta)
+      local nsamples = X:size(1)
+      local totalObjective = 0  -- added
+      for i = 1, n do
+         --sample = i % nsamples
+         --local objective, gradient = LogregFpropBprop(X[sample],Y[sample],theta,L2)
+         local objective, gradient = LogregFpropBprop(X[i],Y[i],theta,L2)
+         torch.add(theta,-eta,gradient)
+         totalObjective = totalObjective + objective
+      end
+      --return totalObjective/n, theta  
+      return totalObjective/n, theta, gradient  -- NOTE: should return the averaged gradient, not the last gradient
+   end
+
+   -- return loss and gradient wrt parameters
+   -- using all the data as a mini batch
+   -- also compute theta after the SGD step
+   local fakeTheta = torch.rand(14, 8)
+   local L2 = 0
+   local x = data.X[1]
+   local y = data.y[1]
+   local nSamples = data.X:size(1)
+   print('nSamples', nSamples)
+   local function lossGradient(theta)
+      local loss, gradient
+      for sampleIndex = 1, nSamples do
+         loss, gradient =  LogregFpropBprop(x, y, fakeTheta, L2)
+      end
+      return loss, gradient
+   end
+
+   return lossGradient, (data.nFeatures + 1) * data.nClasses
+end
+
+-- implementation 10: Yann's LogregFprobBrpbo with 70 sample and logs
+local function makeLossGradient10(data)
+   local vp = makeVp(1, 'makeLossGradient8')
+
+   -- Yann's logistic regression training
+
+   -- softmax of a vector
+   local function softmax(x)
+      local largest = torch.max(x)
+      local e = torch.exp(x-largest)
+      local z1 = 1/torch.sum(e)
+      return e * z1
+   end
+
+   -- run logistic regression model on sample
+   local function LogregFprop(x,theta)
+      local s = torch.mv(theta,x)
+      return softmax(s)
+   end
+
+   -- original code except commented lines are replaced with lines below them
+   local function LogregFpropBprop(x,y,theta,L2) -- original used L3 instead of L2
+      local s = torch.mv(theta,x)
+      local p = softmax(s)
+      local pLog = torch.log(p) -- simulate NLL instead of softmax
+      local pExpLog = torch.exp(pLog)
+      --local objective = -log(p[y])
+      local objective = -math.log(p[y])
+      local target = torch.Tensor(theta:size(1)):zero()
+      target[y] = 1
+      --local gradient = torch.ger( (p[y] - target), x) - theta*L2
+      local gradient = torch.ger( - (target - p[y]), x) - theta*L2
+      return objective, gradient
+   end
+
+   -- original code except where commented out and possibly replaced
+   local function LogregTrainSGD(X,Y,theta,L2,n,eta)
+      local nsamples = X:size(1)
+      local totalObjective = 0  -- added
+      for i = 1, n do
+         --sample = i % nsamples
+         --local objective, gradient = LogregFpropBprop(X[sample],Y[sample],theta,L2)
+         local objective, gradient = LogregFpropBprop(X[i],Y[i],theta,L2)
+         torch.add(theta,-eta,gradient)
+         totalObjective = totalObjective + objective
+      end
+      --return totalObjective/n, theta  
+      return totalObjective/n, theta, gradient  -- NOTE: should return the averaged gradient, not the last gradient
+   end
+
+   -- return loss and gradient wrt parameters
+   -- using all the data as a mini batch
+   -- also compute theta after the SGD step
+   local fakeTheta = torch.rand(14, 8)
+   local L2 = 0
+   local x = data.X[1]
+   local y = data.y[1]
+   local nSamples = data.X:size(1)
+   local function lossGradient(theta)
+      local loss, gradient
+      for sampleIndex = 1, nSamples do
+         loss, gradient =  LogregFpropBprop(x, y, fakeTheta, L2)
+      end
+      return loss, gradient
+   end
+
+   return lossGradient, (data.nFeatures + 1) * data.nClasses
+end
+
+-- implementation 11: Yann's LogregFprobBrpbo add: ravel and deravel theta
+local function makeLossGradient11(data)
+   local vp = makeVp(1, 'makeLossGradient11')
+
+   -- Yann's logistic regression training
+
+   -- softmax of a vector
+   local function softmax(x)
+      local largest = torch.max(x)
+      local e = torch.exp(x-largest)
+      local z1 = 1/torch.sum(e)
+      return e * z1
+   end
+
+   -- run logistic regression model on sample
+   local function LogregFprop(x,theta)
+      local s = torch.mv(theta,x)
+      return softmax(s)
+   end
+
+   -- original code except commented lines are replaced with lines below them
+   local function LogregFpropBprop(x,y,theta,L2) -- original used L3 instead of L2
+      local s = torch.mv(theta,x)
+      local p = softmax(s)
+      local pLog = torch.log(p) -- simulate NLL instead of softmax
+      local pExpLog = torch.exp(pLog)
+      --local objective = -log(p[y])
+      local objective = -math.log(p[y])
+      local target = torch.Tensor(theta:size(1)):zero()
+      target[y] = 1
+      --local gradient = torch.ger( (p[y] - target), x) - theta*L2
+      local gradient = torch.ger( - (target - p[y]), x) - theta*L2
+      return objective, gradient -- NOTE: should ravel the gradient
+   end
+
+   -- original code except where commented out and possibly replaced
+   local function LogregTrainSGD(X,Y,theta,L2,n,eta)
+      local nsamples = X:size(1)
+      local totalObjective = 0  -- added
+      for i = 1, n do
+         --sample = i % nsamples
+         --local objective, gradient = LogregFpropBprop(X[sample],Y[sample],theta,L2)
+         local objective, gradient = LogregFpropBprop(X[i],Y[i],theta,L2)
+         torch.add(theta,-eta,gradient)
+         totalObjective = totalObjective + objective
+      end
+      --return totalObjective/n, theta  
+      return totalObjective/n, theta, gradient  -- NOTE: should return the averaged gradient, not the last gradient
+   end
+
+   -- return loss and gradient wrt parameters
+   -- using all the data as a mini batch
+   -- also compute theta after the SGD step
+   local nClasses = data.nClasses
+   local nSamples = data.X:size(1)
+   local nFeatures = data.X:size(2)
+
+   local fakeTheta = torch.rand(nClasses, nFeatures)
+   local L2 = 0
+   local x = data.X[1]
+   local y = data.y[1]
+   local bias = torch.Tensor(nClasses)
+   local weight = torch.Tensor(nClasses, nFeatures)
+   local flatGradient = torch.Tensor(nClasses * nFeatures)
+
+   local function lossGradient(theta)
+      --assert(theta:nDimension() == 1)
+      -- theta is 2D
+      -- fake de-raveling of theta
+      for c = 1, nClasses do
+         local first = 1 + (c - 1) * nFeatures
+         bias[c] = theta[c] -- bias isn't handled in the LogregFpropBprop, so fake it
+         weight[c] = theta:sub(first, first + nFeatures - 1)
+      end
+      -- a real LogregFpropBprop would use bias and weights
+      --local sumLosses = 0
+      --local sumGradients = torch.Tensor(nClasses, nFeatures):zero()
+      local loss, gradient
+      for sampleIndex = 1, nSamples do
+         loss, gradient =  LogregFpropBprop(x, y, fakeTheta, L2)
+         --sumLosses = sumLosses + loss
+         --sumGradient = sumGradient + gradient
+      end
+      -- ravel (flatten) the gradient
+      --local flatGradient = torch.Tensor(gradient)
+      local flatGradient = torch.Tensor(gradient:storage(), 1, gradient:nElement(), 1)
+      --return sumLosses, flatGradient  -- no need to average
+      return loss, flatGradient
+   end
+
+   return lossGradient, (data.nFeatures + 1) * data.nClasses
+end
+
+
+-- implementation 12: Yann's idea in batch mode
+local function makeLossGradient12(data)
+   local vp = makeVp(1, 'makeLossGradient11')
+
+   local nClasses = data.nClasses
+   local nSamples = data.X:size(1)
+   local nFeatures = data.X:size(2)
+
+   local oneNClasses = torch.Tensor(nClasses):fill(1)
+
+   -- Yann's logistic regression training updated to handle X (matrix) instead of x (vector)
+
+   -- softmax of a matrix considered row by row
+   local function softmax(X)
+      -- original code for when x is a vector
+--    local largest = torch.max(x)
+--    local e = torch.exp(x-largest)
+--    local z1 = 1/torch.sum(e)
+--    return e * z1
+
+      assert(X:size(1) == nClasses and X:size(2) == nSamples)
+
+      -- local largest = torch.max(x)
+      local largestVector = torch.max(X,2)  -- size nClasses x 1
+      if false then
+         assert(largestVector:nDimension() == 2 and largestVector:size(1) == nClasses and largestVector:size(2) == 1)
+         local largestVector2 = largestVector:select(2, 1) -- drop the last dimension and copy storage
+         local largestMatrix2 = torch.Tensor(largestVector2:storage(), 1, nClasses, 1, nSamples, 0)
+      end
+      if true then
+         local largestMatrix = torch.Tensor(largestVector:storage(), 1, nClasses, 1, nSamples, 0)
+         assert(largestMatrix:nDimension() == 2 and
+                largestMatrix:size(1) == nClasses and 
+                largestMatrix:size(2) == nSamples)
+         local temp = X - largestMatrix -- throws with 'inconsistent tensor size'
+      end
+      local largestMatrix = torch.Tensor(largestVector:storage(), 1, nClasses, 1, nSamples, 0)
+      assert(largestMatrix:nDimension() == 2 and
+             largestMatrix:size(1) == nClasses and 
+             largestMatrix:size(2) == nSamples)
+      local temp = X - largestMatrix -- throws with 'inconsistent tensor size'
+
+      -- local e = torch.exp(x - largest)
+      local e = torch.exp(X-largestMatrix) -- of size nClasses x nSamples
+
+      --local z1 = 1/torch.sum(e)
+      --z1 is the normalizer for the probabilities
+      local sum = torch.sum(e,2)  -- sum is size nClasses x 1
+      local sumVector = torch.Tensor(sum:storage(), 1, nClasses, 1)
+      local z1Vector = torch.cdiv(oneNClasses, sumVector) -- z1 is size nClasses
+      local z1Matrix = torch.Tensor(z1Vector:storage(), 1, nClasses, 1, nSamples, 0)
+
+      -- return e * z1
+      return torch.cmul(e, z1Matrix)
+   end
+
+   
+
+   -- original code except commented lines are replaced with lines below them
+   local function LogregFpropBprop(X,y,theta,L2) -- original used L3 instead of L2
+      assert(X:nDimension() == 2)
+      -- local s = torch.mv(theta, x)
+      local s = torch.mm(theta, X:t()) -- s is nClasses x nSamples
+      local p = softmax(s)             -- p is nClasses x nSamples
+      if true then 
+         local sum = 0
+         for rowIndex = 1, p:size(1) do 
+            local sum = 0
+            for colIndex = 1, p:size(2) do
+               sum = sum + p[rowIndex][colIndex]
+            end
+            assertEq(sum, 1, .0001)
+         end
+      end
+      if true then return end
+      --local objective = -log(p[y])
+      local objective = -math.log(p[y])
+      local target = torch.Tensor(theta:size(1)):zero()
+      target[y] = 1
+      --local gradient = torch.ger( (p[y] - target), x) - theta*L2
+      local gradient = torch.ger( - (target - p[y]), x) - theta*L2
+      return objective, gradient -- NOTE: should ravel the gradient
+   end
+
+
+   -- return loss and gradient wrt parameters
+   -- using all the data as a mini batch
+
+   local fakeTheta = torch.rand(nClasses, nFeatures)
+   local L2 = 0
+   local X = data.X
+   local y = data.y
+
+   local function lossGradient(theta)
+      return  LogregFpropBprop(X, y, fakeTheta, L2)
+   end
+
+   return lossGradient, (data.nFeatures + 1) * data.nClasses
+end
+
+
 -- compare timings of implementations
 local function compareImplementations(config, data, implementations)
    -- return cpu seconds and wallclock seconds to run
@@ -561,6 +960,7 @@ local function compareImplementations(config, data, implementations)
    for i, implementation in pairs(implementations) do
       if which == i or which == 'all' then
          collectgarbage()
+         print('starting implementation', i)
          local cpu, wallclock = timeCalls(data, implementation.maker, config.nIterations)
          times[i] = {cpu = cpu, wallclock = wallclock}
       end
@@ -571,13 +971,13 @@ local function compareImplementations(config, data, implementations)
    print()
    print(ifelse(jit, '', 'not ') .. 'using luajit')
    print(string.format('timings in seconds per iterations over %d iterations', config.nIterations))
-   print(string.format('   implemenation %25s %8s       %%1 %8s %%1', ' ', 'cpu', 'wallclock'))
+   print(string.format('   implementation %25s %8s       %%1 %8s %%1', ' ', 'cpu', 'wallclock'))
    local cpu1 = times[1].cpu
    local wallclock1 = times[1].wallclock
    cpu1 = ifelse(cpu1 == nil, 0, cpu1)
    wallclock1 = ifelse(wallclock1 == nil, 0, wallclock1)
    for i, time in pairs(times) do
-      print(string.format('%1d %45s %8.6f %3.0f %8.6f %3.0f', 
+      print(string.format('%2d %45s %8.6f %3.0f %8.6f %3.0f', 
                            i, 
                            implementations[i].description, 
                            time.cpu / config.nIterations, 
@@ -585,6 +985,30 @@ local function compareImplementations(config, data, implementations)
                            time.wallclock / config.nIterations,
                            time.wallclock / wallclock1 * 100))
    end
+end
+
+-- build table of all the implementations
+local function makeImplementations()
+   local result = {}
+
+   local function implementation(index, maker, description)
+      result[index] = {maker = maker, description = description}
+   end
+
+   implementation(1, makeLossGradient1, 'original')
+   implementation(2, makeLossGradient2, 'remove makeVp')
+   implementation(3, makeLossGradient3, 'move getParameters out of function call')
+   implementation(4, makeLossGradient4, 'require theta == parameters')
+   implementation(5, makeLossGradient5, 'unroll + only gradOutput')
+   implementation(6, makeLossGradient6, 'just gradParameters')
+   implementation(7, makeLossGradient7, '2 + 3 + 6')
+   implementation(8, makeLossGradient8, 'Yann original-1 sample')
+   implementation(9, makeLossGradient9, 'Yann add 70 samples')
+   implementation(10, makeLossGradient10, 'Yann add logs')
+   implementation(11, makeLossGradient11, 'Yann add theta raveling, unraveling')
+   implementation(12, makeLossGradient12, 'Yann batch just softmax')
+
+   return result
 end
 
 -- MAIN PROGRAM
@@ -600,6 +1024,10 @@ torch.manualSeed(123)
 
 local config = {
    nIterations = 100000,
+   nIterations = 100,
+   nIterations = 1000,
+   --nIterations = 1, 
+   --nIterations = 1000,
    compareImplementations = true,
    nSamples = 70,
    nFeatures = 8,
@@ -608,25 +1036,16 @@ local config = {
 
 printTableValue('config', config)
 
--- build table of all the implementations
-local implementations = {}
-local function implementation(index, maker, description)
-   implementations[index] = {maker = maker, description = description}
-end
 
-implementation(1, makeLossGradient1, 'original')
-implementation(2, makeLossGradient2, 'remove makeVp')
-implementation(3, makeLossGradient3, 'move getParameters out of function call')
-implementation(4, makeLossGradient4, 'require theta == parameters')
-implementation(5, makeLossGradient5, 'unroll + only gradOutput')
-implementation(6, makeLossGradient6, 'just gradParameters')
-implementation(7, makeLossGradient7, '2 + 3 + 6')
+-- define implementatins
+local implementations = makeImplementations()
 printTableValue('implementations', implementations)
 
-      
+-- create data
 local data = makeData(config.nClasses, config.nFeatures, config.nSamples)
 printTableValue('data', data)
 
+-- compare timings
 if config.compareImplementations then
    print('comparing implementations')
    compareImplementations(config, data, implementations)
