@@ -11,6 +11,8 @@ require 'nn'
 require 'optim'
 require 'printTableValue'
 require 'printTensorValue'
+require 'printVariable'
+require 'printVariables'
 require 'Random'
 require 'Timer'
 require 'torch'
@@ -837,10 +839,16 @@ local function makeLossGradient12(data)
    local nFeatures = data.X:size(2)
 
    local oneNClasses = torch.Tensor(nClasses):fill(1)
+   local one_nClasses_1  = torch.Tensor(nClasses, 1):fill(1)
 
    -- Yann's logistic regression training updated to handle X (matrix) instead of x (vector)
 
    -- softmax of a matrix considered row by row
+   -- ARGS
+   -- X             : 2D Tensor of scores size nClasses x nSamples
+   -- RETURNS
+   -- probabilities : 2D Tensor of probabilities for each sample of size nClasses x nSamples
+   --                 each row sums to 1
    local function softmax(X)
       -- original code for when x is a vector
 --    local largest = torch.max(x)
@@ -848,65 +856,93 @@ local function makeLossGradient12(data)
 --    local z1 = 1/torch.sum(e)
 --    return e * z1
 
-      assert(X:size(1) == nClasses and X:size(2) == nSamples)
+      -- X is the scores matrix, 
+      local largest_nClasses_1 = torch.max(X,2)  -- size nClasses x 1
+      local largest_nClasses_nSamples = torch.Tensor(largest_nClasses_1:storage(), 1, nClasses, 1, nSamples, 0)
 
-      -- local largest = torch.max(x)
-      local largestVector = torch.max(X,2)  -- size nClasses x 1
-      if false then
-         assert(largestVector:nDimension() == 2 and largestVector:size(1) == nClasses and largestVector:size(2) == 1)
-         local largestVector2 = largestVector:select(2, 1) -- drop the last dimension and copy storage
-         local largestMatrix2 = torch.Tensor(largestVector2:storage(), 1, nClasses, 1, nSamples, 0)
-      end
-      if true then
-         local largestMatrix = torch.Tensor(largestVector:storage(), 1, nClasses, 1, nSamples, 0)
-         assert(largestMatrix:nDimension() == 2 and
-                largestMatrix:size(1) == nClasses and 
-                largestMatrix:size(2) == nSamples)
-         local temp = X - largestMatrix -- throws with 'inconsistent tensor size'
-      end
-      local largestMatrix = torch.Tensor(largestVector:storage(), 1, nClasses, 1, nSamples, 0)
-      assert(largestMatrix:nDimension() == 2 and
-             largestMatrix:size(1) == nClasses and 
-             largestMatrix:size(2) == nSamples)
-      local temp = X - largestMatrix -- throws with 'inconsistent tensor size'
+      local e_nClasses_nSamples = torch.exp(X-largest_nClasses_nSamples) -- of size nClasses x nSamples
 
-      -- local e = torch.exp(x - largest)
-      local e = torch.exp(X-largestMatrix) -- of size nClasses x nSamples
-
-      --local z1 = 1/torch.sum(e)
       --z1 is the normalizer for the probabilities
-      local sum = torch.sum(e,2)  -- sum is size nClasses x 1
-      local sumVector = torch.Tensor(sum:storage(), 1, nClasses, 1)
-      local z1Vector = torch.cdiv(oneNClasses, sumVector) -- z1 is size nClasses
-      local z1Matrix = torch.Tensor(z1Vector:storage(), 1, nClasses, 1, nSamples, 0)
+      local sum_nClasses_1  = torch.sum(e_nClasses_nSamples, 2)
+      local z1_nClasses_1 = torch.cdiv(one_nClasses_1, sum_nClasses_1)
+      local z1_nClasses_nSamples = torch.Tensor(z1_nClasses_1:storage(), 1, nClasses, 1, nSamples, 0)
+      --printVariables('X', 'z1_nClasses_nSamples')
+      if false then
+         local result = torch.cmul(e_nClasses_nSamples, z1_nClasses_nSamples)
+         printVariables('result')
+      end
 
-      -- return e * z1
-      return torch.cmul(e, z1Matrix)
+      return torch.cmul(e_nClasses_nSamples, z1_nClasses_nSamples)
    end
 
    
 
-   -- original code except commented lines are replaced with lines below them
-   local function LogregFpropBprop(X,y,theta,L2) -- original used L3 instead of L2
-      assert(X:nDimension() == 2)
-      -- local s = torch.mv(theta, x)
+   -- forward and backward for multinomial logistic regression
+   -- ARGS
+   -- X         : 2D Tensor of samples size nSamples x nFeatures
+   -- y         : 1D Tensof of classes size nFeatures
+   -- theta     : 2D Tensor of parameters size nClasses x nFeatures
+   -- L2        : number, importance of L2 regularizer
+   -- RETURNS
+   -- objective : number, total (not average) loss for all X and y using theta parameters
+   -- gradient  : 2D Tensor of same size as theta, gradient
+   local function LogregFpropBprop(X,y,theta,L2) 
+--    original code (corrected) from Yann
+--    local s = torch.mv(theta,x)
+--    local p = softmax(s)
+--    --local objective = -log(p[y])
+--    local objective = -math.log(p[y])
+--    local target = torch.Tensor(theta:size(1)):zero()
+--    target[y] = 1
+--    --local gradient = torch.ger( (p[y] - target), x) - theta*L2
+--    local gradient = torch.ger( - (target - p[y]), x) - theta*L2  -- get == outer product
+--    return objective, gradient
+
+      assert(X:nDimension() == 2)      -- X is nSamples x nFeatures
+      assert(y:nDimension() == 1)      -- y is nSamples
       local s = torch.mm(theta, X:t()) -- s is nClasses x nSamples
-      local p = softmax(s)             -- p is nClasses x nSamples
-      if true then 
-         local sum = 0
-         for rowIndex = 1, p:size(1) do 
-            local sum = 0
-            for colIndex = 1, p:size(2) do
-               sum = sum + p[rowIndex][colIndex]
-            end
-            assertEq(sum, 1, .0001)
-         end
+      local p = softmax(s)             -- p is nClasses x nSamples, each row sums to 1
+      --printVariables('s', 'p', 'X', 'y')
+
+      local objective = 0
+      local sumGradient = torch.Tensor(nClasses, nFeatures):zero()
+      for sampleIndex = 1, nSamples do
+         objective = objective - math.log(p[y[sampleIndex]][sampleIndex])
+
+         local targetForSample = torch.Tensor(nClasses):zero()
+         targetForSample[y[sampleIndex]] = 1
+
+         local pForSample = p:select(2, sampleIndex)  -- select column
+
+         local xForSample = X:select(1, sampleIndex)  -- select row
+
+         --printVariables('targetForSample', 'pForSample', 'xForSample')
+
+         sumGradient = sumGradient + torch.ger(pForSample - targetForSample, xForSample)
       end
+      local objectiveRegularized = objective + L2 * torch.sum(theta)
+      sumGradient = sumGradient + theta * L2  -- add in regularizer
+      if true then
+         return objectiveRegularized, sumGradient
+      end
+         
+      printVariables('sumGradient')
+      stop()
+      printVariables('objective')
+
+      local target = torch.Tensor(theta:size(1)):zero()
+      printVariables('target', 'y')
+      target[y] = 1
+      printVariable('target')
+
+      local gradient = torch.ger(p - target, x) - theta*L2
+
+
+      printVariable('gradient')
+      stop()
       if true then return end
       --local objective = -log(p[y])
       local objective = -math.log(p[y])
-      local target = torch.Tensor(theta:size(1)):zero()
-      target[y] = 1
       --local gradient = torch.ger( (p[y] - target), x) - theta*L2
       local gradient = torch.ger( - (target - p[y]), x) - theta*L2
       return objective, gradient -- NOTE: should ravel the gradient
@@ -923,6 +959,7 @@ local function makeLossGradient12(data)
 
    local function lossGradient(theta)
       return  LogregFpropBprop(X, y, fakeTheta, L2)
+      --return  LogregFpropBprop(X, yAsLongTensor, fakeTheta, L2)
    end
 
    return lossGradient, (data.nFeatures + 1) * data.nClasses
@@ -1006,7 +1043,7 @@ local function makeImplementations()
    implementation(9, makeLossGradient9, 'Yann add 70 samples')
    implementation(10, makeLossGradient10, 'Yann add logs')
    implementation(11, makeLossGradient11, 'Yann add theta raveling, unraveling')
-   implementation(12, makeLossGradient12, 'Yann batch just softmax')
+   implementation(12, makeLossGradient12, 'Yann batch')
 
    return result
 end
@@ -1020,22 +1057,23 @@ print()
 
 -- configure
 
-torch.manualSeed(123)
-
 local config = {
    nIterations = 100000,
-   nIterations = 100,
-   nIterations = 1000,
+   --nIterations = 100,
+   --nIterations = 1000,
    --nIterations = 1, 
    --nIterations = 1000,
    compareImplementations = true,
    nSamples = 70,
+   --nSamples = 5,   -- for testing
    nFeatures = 8,
    nClasses = 14, 
+   manualSeedValue = 123,
 }
 
 printTableValue('config', config)
 
+torch.manualSeed(123)  -- force same sequence of pseudo-random numbers
 
 -- define implementatins
 local implementations = makeImplementations()
@@ -1049,6 +1087,10 @@ printTableValue('data', data)
 if config.compareImplementations then
    print('comparing implementations')
    compareImplementations(config, data, implementations)
+   if config.nSamples ~= 70 then
+      print(string.format('DISCARD RESULTS AS USING %d SAMPLES', config.nSamples))
+   end
 end
+
 
 print('done')
