@@ -6,7 +6,9 @@ if false then
    ht:put(key1, key2, key3, value)
    value = ht:get(key1, key2, key)
    f = function (value) end
-   ht:eachValue(f)
+   ht:each(f)  -- f(key1, key2, key3, value)
+   ht:eachValue(f)  -- f(value)
+   ht:print(file)
 end
 
 require 'makeVp'
@@ -34,6 +36,19 @@ end
 -------------------------------------------------------------------------------
 -- PUBLIC METHODS
 -------------------------------------------------------------------------------
+
+function HierarchialTable:each(f)
+   --printTableValue('self.table', self.table)
+   for key1, table1 in pairs(self.table) do
+      --print('key1', key1) printTableValue('table1', table1)
+      for key2, table2 in pairs(table1) do
+         --print('key2', key2) printTableValue('table2', table2)
+         for key3, value in pairs(table2) do
+            f(key1, key2, key3, value)
+         end
+      end
+   end
+end
 
 function HierarchialTable:eachValue(f)
    local function apply(t)
@@ -64,6 +79,19 @@ function HierarchialTable:get(key1, key2, key3)
       end
    end
    return nil
+end
+
+function HierarchialTable:print(file)
+   local function print1(key1, key2, key3, value)
+      io.write(string.format('[%s][%s][%s] = %s',
+                             tostring(key1),
+                             tostring(key2),
+                             tostring(key3),
+                             tostring(value)))
+      io.write('\n')
+   end
+   
+   self:each(print1)
 end
 
 function HierarchialTable:put(key1, key2, key3, value)
