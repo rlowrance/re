@@ -301,6 +301,22 @@ local function makeModuleOutput12(data)--{{{
       return softmaxc(scores)
    end
 
+   local function prob()
+      -- input is the scores
+      --printTensorValue('scores', scores)
+      local nSamples = scores:size(1)
+      local nClasses = scores:size(2)
+      local smallestVector = torch.min(scores, 2)
+      local smallestMatrix = torch.Tensor(smallestVector:storage(), 1, nSamples, 1, nClasses, 0)
+      local diff = scores - smallestMatrix
+      --printTensorValue('smallestMatrix', smallestMatrix)
+      --printTensorValue('diff', diff)
+      local sumVector = torch.sum(diff, 2)
+      local sumMatrix = torch.Tensor(sumVector:storage(), 1, nSamples, 1, nClasses, 0)
+      local result = torch.cdiv(diff, sumMatrix)
+      return result
+   end
+
    return {
       component= 'output',
       architecture='direct',
@@ -308,6 +324,7 @@ local function makeModuleOutput12(data)--{{{
          {description='divide then multiply', f=fa},
          {description='only divide', f=fb},
          {description='ignore overflow potential', f=fc},
+         {description='not softmax', f=prob},
       },
    }
 end--}}}
@@ -328,6 +345,8 @@ local function makeModuleLoss12(data)--{{{
    end
 
    local function f2() -- neg sum prob[c]
+      -- NOTE: requires a different gradient function, which needs to
+      -- be designed and implemented
       local objective = 0
       for sampleIndex = 1, nSamples do
          objective = objective - p[sampleIndex][y[sampleIndex]]
@@ -339,8 +358,9 @@ local function makeModuleLoss12(data)--{{{
       component='loss',
       architecture='direct',
       implementations = {
-         {description='neg log likelihood', f = f1},
-         {description='neg sum prob[c]', f=f2},
+         {description='', f=f1},
+         --{description='neg log likelihood', f = f1},
+         --{description='neg sum prob[c]', f=f2},
       }
    }
 end--}}}
@@ -408,20 +428,22 @@ local function makeModuleGradient12(data)--{{{
    }
 end--}}}
 
-local function timeIterations(nCalls, fn)--{{{--{{{
+-- return total CPU time for nClass of fn()--{{{
+local function timeIterations(nCalls, fn)
    local timer = Timer()
    for i = 1, nCalls do 
       fn()
    end
    return timer:cpu()
-end--}}}--}}}
+end--}}}
 
 local function timeComponents(data, modules, cpuTimes)--{{{
    for componentName, table1 in pairs(modules.table) do 
       for architectureName, table2 in pairs(table1) do
          for description, f in pairs(table2) do
-            local cpu = timeIterations(data.nIterations, f)
-            print(string.format('component %10s arch %10s %25s cpu sec %f',
+            local totalcpu = timeIterations(data.nIterations, f)
+            local cpu = totalcpu / data.nIterations
+            print(string.format('component %10s arch %10s %25s cpu sec %10.6f',
                   componentName,
                   architectureName,
                   description,
@@ -469,12 +491,14 @@ print('**************************************************************')
 torch.manualSeed(123)
 
 local data = makeData('small')
---local data = makeData('large')
+local data = makeData('large')
 data.nIterations = 1000
 --data.nIterations = 10000
+data.nIterations = 100000
 local m = makeModuleScore7(data)
 printTableValue('m', m)
 data.theta = makeTheta(m.bias, m.weight)
+printTableValue('data', data)
 
 -- create all modules
 local modules = HierarchialTable(3)
@@ -510,6 +534,7 @@ save(makeModuleGradient12(data))
 --modules:print(io.stdout)
 
 local cpuTimes = HierarchialTable(3)
+print(string.format('per iteration CPU times on average for %d iterations', data.nIterations))
 timeComponents(data, modules, cpuTimes)
 --print('cpuTimes')
 --cpuTimes:print()
