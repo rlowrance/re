@@ -899,6 +899,7 @@ local function makeLossGradient12(data)
 --    return objective, gradient
 
       assert(X:nDimension() == 2)      -- X is nSamples x nFeatures
+      assert(X:size(1) == 70)
       assert(y:nDimension() == 1)      -- y is nSamples
       local s = torch.mm(theta, X:t()) -- s is nClasses x nSamples
       local p = softmax(s)             -- p is nClasses x nSamples, each row sums to 1
@@ -1059,7 +1060,7 @@ print()
 
 local config = {
    nIterations = 100000,
-   --nIterations = 100,
+   nIterations = 100,
    --nIterations = 1000,
    --nIterations = 1, 
    --nIterations = 1000,
