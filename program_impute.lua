@@ -16,7 +16,7 @@
 --   predicted    : string, predicted value
 -- ../data/v6/output/program_impute-cache.serialized
 
-require 'argmax'
+require 'argmax'--{{{
 require 'Accumulators'
 require 'distancesSurface2'
 require 'dropZeroSaliences'
@@ -41,9 +41,9 @@ require 'tableCopy'
 require 'time'
 require 'Timer'
 require 'torch'
--- require 'view1DAS2D'
+-- require 'view1DAS2D'--}}}
 
--- return table containing checked values from parsed command line
+-- return table containing checked values from parsed command line--{{{
 -- make sure output file is writable
 local function parseAndCheckArg(arg)
 
@@ -122,9 +122,9 @@ local function parseAndCheckArg(arg)
    convertTypes(clArgs)
 
    return clArgs
-end
+end--}}}
 
--- return input files as NamedMatric: hpSets, info, parcels
+-- return input files as NamedMatric: hpSets, info, parcels--{{{
 local function readInput()
    -- specify input files
    local fileParcels = '../data/v6/output/parcels-sfr-geocoded.serialized-NamedMatrix'
@@ -144,9 +144,9 @@ local function readInput()
    }
 
    return hpSetsNm, infoNm, parcelsNm
-end
+end--}}}
 
--- return 1D or 2D Tensor with specified columns and rows
+-- return 1D or 2D Tensor with specified columns and rows--{{{
 -- ARGS
 -- fromNm     : NamedMatrix
 -- columnsSeq : sequence of strings or a single string, names of columns in fromNm
@@ -283,9 +283,9 @@ local function extract(fromNm, columnsSeq, infoNm, rows)
    examine(buildResult)  -- add each selected row and column to the result
 
    return result
-end
+end--}}}
 
--- return data table
+-- return data table--{{{
 -- the cache is a table containing two fields: clArgs and data
 -- data is a table containing the training and testing data, both X and y components
 local function readCacheOrBuildData(clArgs, config)
@@ -398,34 +398,34 @@ local function readCacheOrBuildData(clArgs, config)
    else
       return readAndExtractData(clArgs, config)
    end
-end
+end--}}}
 
-local function makeQueryLocation(locations, index)
+local function makeQueryLocation(locations, index)--{{{
    return {
       latitude = locations.latitude[index],
       longitude = locations.longitude[index],
       year = locations.year[index],
    }
-end
+end--}}}
 
-local function writeNonZeroSaliences(saliences)
+local function writeNonZeroSaliences(saliences)--{{{
    print('nonzero saliences;')
    for i = 1, saliences:size(1) do
       if saliences[i] ~= 0 then
          print(string.format(' %d->%f', i, saliences[i]))
       end
    end
-end
+end--}}}
 
--- create Model and fit it, returning model, optimalTheta, fitInfo
+-- create Model and fit it, returning model, optimalTheta, fitInfo--{{{
 -- reduce size of model by eliminating training samples with 0 salience
 local function fitModelLogreg(X, y, s, nClasses, fittingOptions)
    local hasNonZeroSalience = torch.ne(s, 0)
    local nReducedSample = torch.sum(hasNonZeroSalience)
    
-end
+end--}}}
 
-local function makeWritePredictions(outputPath)
+local function makeWritePredictions(outputPath)--{{{
    local outFile, err = io.open(outputPath, 'w')
    if err ~= nil then
       error(err)
@@ -470,9 +470,9 @@ local function makeWritePredictions(outputPath)
    end
 
    return writePredictions, closePredictionsFile
-end
+end--}}}
 
-local function analyzeEvaluations(evaluations, fitCpu, fitWallclock)
+local function analyzeEvaluations(evaluations, fitCpu, fitWallclock)--{{{
    local nEpochs = #evaluations
 
    -- display loss at end of each epoch
@@ -502,9 +502,9 @@ local function analyzeEvaluations(evaluations, fitCpu, fitWallclock)
    print('fraction of epochs progressing the computation = ', epochsWithProgress / nEpochs)
    print(string.format('per epoch cpu       = %17.15f', fitCpu / nEpochs))
    print(string.format('per epoch wallclock = %17.15f', fitWallclock / nEpochs))
-end
+end--}}}
 
--- return best step size based on grid search for initial step size
+-- return best step size based on grid search for initial step size--{{{
 local function findBestInitialStepSize(X, y, s, nClasses, fittingOptions)
    local vp = makeVp(0, 'findBestInitialStepSize')
    
@@ -551,9 +551,9 @@ local function findBestInitialStepSize(X, y, s, nClasses, fittingOptions)
 
    vp(1, 'bestInitialStepSize', bestInitialStepSize)
    return bestInitialStepSize
-end
+end--}}}
 
--- return reduced standardized X, y, and s 
+-- return reduced standardized X, y, and s --{{{
 -- ARGS:
 -- data      : table with data
 -- saliences : 1D Tensor, samples with zero saliences are dropped
@@ -573,9 +573,9 @@ local function reduceToKStandardizedTrainingSamples(data, saliences, lapTimer)
    }
    lapTimer:lap('reduce to K training samples')
    return reduced
-end
+end--}}}
    
--- predict use local linear regression and the conjugate gradient method
+-- predict use local linear regression and the conjugate gradient method--{{{
 -- ARGS:
 -- X              : 2D Tensor of training features
 -- y              : 1D Tensor of target values
@@ -618,9 +618,9 @@ local function predictUsingCG(X, y, s, newX, nClasses, lambda, lapTimer, methodO
    lapTimer:lap('CG predict one test sample')
 
    return predictions, predictionInfo, fitInfo.nCalls
-end
+end--}}}
 
--- predict use local linear regression and the bottou epoch method
+-- predict use local linear regression and the bottou epoch method--{{{
 -- ARGS:
 -- X              : 2D Tensor of training features
 -- y              : 1D Tensor of target values
@@ -685,9 +685,9 @@ local function predictUsingLLR(X, y, s, newX, nClasses, lambda, lapTimer, method
    lapTimer:lap('LLR predict one test sample')
 
    return predictions, predictionInfo, fitInfo.nCalls, bestInitialStepSize
-end
+end--}}}
 
--- predict using local naive bayes
+-- predict using local naive bayes--{{{
 -- RETURNS
 -- predictions   : 2D Tensor
 -- predictInfo   : table
@@ -720,9 +720,9 @@ local function predictUsingLNB(X, y, newX, nClasses, lapTimer, methodOptions)
    end
 
    return predictions, predictionInfo
-end
+end--}}}
 
--- return true if the predictions are correct
+-- return true if the predictions are correct--{{{
 -- NOTE; if predictionProbabilities is all NaNs, then
 --   - c was not in the training data for some class C; and
 --   - every other training sample had just one occurrence of class C:w
@@ -735,9 +735,9 @@ local function isCorrect(actual, predictionProbabilities)
    local result = actual == predicted
    vp(1, 'result', result)
    return result
-end
+end--}}}
 
--- print times
+-- print times--{{{
 local function printTimes(nTestSamples, lapTimer, lnbLapTimes, llrLapTimes, llrNCalls)
    local vp = makeVp(0, 'printTimes')
    vp(1, 'nTestSamples', nTestSamples, 
@@ -821,10 +821,9 @@ local function printTimes(nTestSamples, lapTimer, lnbLapTimes, llrLapTimes, llrN
       print(string.format(format, 'elapsed time to construct and fit', cfCpu, cfWallclock))
       print(string.format(format, 'average time for lossGradient', cfCpu/nLossGradient, cfWallclock / nLossGradient)) 
    end 
-end
+end--}}}
 
-
--- return 1D Tensor of saliences in [0,1]
+-- return 1D Tensor of saliences in [0,1]--{{{
 -- ARGS
 -- data      : table with all the data
 -- algos     : set of algos for which the saliences must be appropriate
@@ -853,10 +852,9 @@ local function getSaliences(data, algos, testIndex, lapTimer)
    end
 
    return saliences, err
-end
+end--}}}
 
-      
--- make predictions for all algos that we are running
+-- make predictions for all algos that we are running--{{{
 -- ARGS
 -- training         : table with training data X, y , and s
 --                    every sample is used to fit the algos
@@ -936,9 +934,9 @@ local function makePredictions(training, newX, nClasses, hp, algos, lapTimer, me
    end
 
    return predictions
-end
+end--}}}
 
--- write predictions from one of the algos
+-- write predictions from one of the algos--{{{
 -- ARGS
 -- testIndex           : number 
 -- algos               : set of algos being run
@@ -978,9 +976,9 @@ local function writeAlgoPredictions(testIndex,
                        testIndex,
                        actual)
    end
-end
+end--}}}
 
--- write status
+-- write status--{{{
 -- ARGS:
 -- testIndex : number of test sample
 -- lapTimer  : LapTimer for entire computation
@@ -1013,9 +1011,9 @@ local function writeStatus(testIndex, lapTimer, lnbLapTimes, llrLapTimes, llrInf
    printTableValue('methodOptions', methodOptions)
 
    print('\n*************************************************************\n')
-end
+end--}}}
 
--- write the configuration file to config.output-base-name.config and to stdout
+-- write the configuration file to config.output-base-name.config and to stdout--{{{
 local function writeClargsConfig(clArgs, config)
    local outfileName = clArgs.output .. '.config'
    local outFile, err = io.open(outfileName, 'w')
@@ -1032,7 +1030,7 @@ local function writeClargsConfig(clArgs, config)
    printTableValue('date', date)
    printTableValue('clArgs', clArgs)
    printTableValue('config', config)
-end
+end--}}}
 
 
 -------------------------------------------------------------------------------
@@ -1073,9 +1071,9 @@ local config = {
       llr = true, 
       --llr = false, 
       lnb = true,
-      lnb = false,
+      --lnb = false,
       cg = true,
-      cg = false
+      --cg = false
    },
    methodOptions = {
       cg = {   -- 25 and 20 are the defaults for optim.cg
