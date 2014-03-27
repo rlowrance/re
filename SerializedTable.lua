@@ -63,6 +63,7 @@ end
 -- return value in table
 -- ARGS:
 -- key : object, key in table
+-- Note: in lua, the value of a key not in the table is nil
 function SerializedTable:get(key)
    return self.table[key]
 end
@@ -71,6 +72,9 @@ end
 -- ARGS:
 -- key   : object, the key
 -- value : object, the value
+-- NOTES:
+-- - lua table keys may not be nil nor NaN.
+-- - lua table values may not be nil
 function SerializedTable:set(key, value)
    self.table[key] = value
 end
