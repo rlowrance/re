@@ -6,6 +6,8 @@
 -- RETURNS
 -- view : view of the first len elements of t
 function tensorViewPrefix(t, len)
+   local nDim = t:nDimension()
+   assert(nDim == 1, 'not yet implemented for nDimension = ' .. tostring(nDim))
    local typename = torch.typename(t)
    if typename == 'torch.DoubleTensor' then
       return torch.DoubleTensor(t:storage(), 1, len, 1)
