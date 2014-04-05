@@ -8,6 +8,6 @@
 --               CHANGING THE VIEW ALSO CHANGES tensor
 function tensorViewColumn(tensor, columnIndex)
    assert(columnIndex > 0)
-   assert(columnIndex < tensor:size(2))
+   assert(columnIndex <= tensor:size(2))
    return tensor:select(2, columnIndex)
 end
