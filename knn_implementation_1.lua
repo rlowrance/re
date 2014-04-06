@@ -1,9 +1,11 @@
--- knn.lua
--- compute nearest neighbors with known features and varying mPerYear
+-- knn_implementation_1.lua
+-- compute nearest neighbors with known features and varying mPerYear via table of knn functions
+-- 
+-- this implementation tries to balance space needs with computation time in the nearestKnown function
 --
--- knn.nearestMaxK(queryIndex, features, maxK) 
---   --> nearestMaxK table
--- knn.nearestKnown(queryIndex, features, nearestMaxK, k, mPerYear, featureName) 
+-- knn.knnInfo(queryIndex, features, maxK) 
+--   --> knnInfo table
+-- knn.nearestKnown(queryIndex, features, knnInfo, k, mPerYear, featureName) 
 --   --> n, indices (in features), distances
 --
 -- with types
@@ -12,10 +14,10 @@
 --   maxK                 : positive integer
 --   k                    : positive integer <= maxK
 --   mPerYear             : number of meters in one year of distance
---   nearestMaxK         : opaque table with info on the maxK neighbors of a specific queryIndex in features
+--   knnInfo              : opaque table with info on the maxK neighbors of a specific queryIndex in features
 --   n                    : 0 <= integer <= k, number of neighbors with known feature values found
 --
--- In this implementation, nearestMaxK contains these fields with distances along the specified dimensions
+-- In this implementation, knnInfo contains these fields with distances along the specified dimensions
 -- .queryIndex            : number
 -- .maxK                  : number
 -- .latitude              : table with key = index of neighbor, value = squared distance from queryIndex
@@ -36,16 +38,16 @@ local function ppDimension(dimensionName, table)
 end
 
 local function ppDimensionDistances(name, value)
-   print('nearestMaxK', name)
+   print('knnInfo', name)
    ppDimension('latitude', value.latitude)
    ppDimension('longitude', value.longitude)
    ppDimension('year', value.year)
    stop()
 end
 
--- return nearestMaxK table
-function knn.nearestMaxK(queryIndex, features, maxK)
-   local vp, verboseLevel = makeVp(0, 'knn.nearestMaxK')
+-- return knnInfo table
+function knn.knnInfo(queryIndex, features, maxK)
+   local vp, verboseLevel = makeVp(0, 'knn.knnInfo')
 
    vp(1, 'queryIndex', queryIndex, 'features', features, 'maxK', maxK)
    if verboseLevel > 0 then pp.tensor('features.t', features.t) end
@@ -96,7 +98,7 @@ function knn.nearestMaxK(queryIndex, features, maxK)
       year       = makeInfoDimension('year'),
    }
 
-   if verboseLevel > 0 then ppDimensionDistances('result from nearestMaxK', result) end
+   if verboseLevel > 0 then ppDimensionDistances('result from knnInfo', result) end
    return result
 end
 
@@ -115,13 +117,13 @@ end
 
 -- return up to k indices (in features), distances (corresponding to indices)
 -- NOTE: may return less than k nearest neighbors
-function knn.nearestKnown(queryIndex, features, nearestMaxK, k, mPerYear, featureName)
+function knn.nearestKnown(queryIndex, features, knnInfo, k, mPerYear, featureName)
    local vp, verboseLevel = makeVp(2, 'knn.nearestKnown')
-   vp(1, 'queryIndex', queryIndex, 'features', features, 'nearestMaxK', nearestMaxK)
+   vp(1, 'queryIndex', queryIndex, 'features', features, 'knnInfo', knnInfo)
    vp(1, 'k', k, 'mPerYear', mPerYear)
 
-   assert(queryIndex == nearestMaxK.queryIndex)
-   assert(k <= nearestMaxK.maxK)
+   assert(queryIndex == knnInfo.queryIndex)
+   assert(k <= knnInfo.maxK)
 
    local nSamples = features.t:size(1)
 
@@ -130,7 +132,7 @@ function knn.nearestKnown(queryIndex, features, nearestMaxK, k, mPerYear, featur
       local vp, verboseLevel = makeVp(1, 'distancesDimension')
       vp(1, 'dimensionName', dimensionName)
       local distancesDimension = torch.Tensor(nSamples):fill(math.huge)
-      for index, squaredDistance in pairs(nearestMaxK[dimensionName]) do
+      for index, squaredDistance in pairs(knnInfo[dimensionName]) do
          vp(2, 'index', index, 'squaredDistance', squaredDistance)
          distancesDimension[index] = squaredDistance
       end

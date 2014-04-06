@@ -1,7 +1,7 @@
 -- knn_test.lua
 -- unit test
 
-require 'knn'
+require 'knn_implementation_1'
 require 'makeVp'
 require 'NamedMatrix'
 require 'pp'
@@ -11,10 +11,15 @@ local vp = makeVp(2, 'tester')
 torch.manualSeed(123)
 
 -- test harness
+local implementation = 1
 local function kNearestNeighbors(queryIndex, features, featureName, k, maxK, mPerYear)
-   local nearestMaxK = knn.nearestMaxK(queryIndex, features, maxK)
-   local n, indices, distances = knn.nearestKnown(queryIndex, features, nearestMaxK, k, mPerYear, featureName)
-   return n, indices, distances, nearestMaxK
+   if implementation == 1 then
+      local knnInfo = knn.knnInfo(queryIndex, features, maxK)
+      local n, indices, distances = knn.nearestKnown(queryIndex, features, knnInfo, k, mPerYear, featureName)
+      return n, indices, distances, knnInfo
+   else
+      error(string.format('implementation = %s', tostring(implementation)))
+   end
 end
 
 -- test small example with known results
@@ -163,13 +168,12 @@ local function test4()
    local queryIndex = 1
    local features = makeData100Points(nSamples)
    local maxK = nSamples - 3
-   local info = knn.nearestMaxK(queryIndex, features, maxK)
-   pp.table('info', info)
-
    local k = 3
    local mPerYear = 0
    local featureName = 'HEATING.CODE'
-   local n, indices, distances = knn.nearestKnown(queryIndex, features, info, k, mPerYear, featureName)
+
+   local n, indices, distances, info = kNearestNeighbors(queryIndex, features, featureName, k, maxK, mPerYear)
+   pp.table('info', info)
 
    vp(1, 'n', n, 'indices', indices, 'distances', distance)
 
