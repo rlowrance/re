@@ -1,4 +1,5 @@
 -- tensorViewPrefix.lua
+-- DEPRECATED: use tensor.viewPrefix instead
 -- view a prefix of a tensor
 -- ARGS
 -- t    : tensor of any underlying storage

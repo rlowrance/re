@@ -1,4 +1,5 @@
 -- tensorViewColumn.lua
+-- DEPRECATED: use tensor.viewColumn instead
 -- view the underlying storage of a column in a 2D Tensor
 -- ARGS
 -- tensor : 2D Tensor
