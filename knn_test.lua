@@ -10,92 +10,188 @@ require 'Random'
 local vp = makeVp(2, 'tester')
 torch.manualSeed(123)
 
-local function distancesTest(dimensionName, queryIndex, features)
-   local vp = makeVp(2, 'distancesTest')
-   vp(1, 'dimensionName', dimensionName, 'queryIndex', queryIndex, 'features', features)
-   print('distancesTest stub: should determine and use average latitude')
-   local columnIndex = features:columnIndex(dimensionName)
-   local v = tensorViewColumn(features.t, columnIndex)
-   local nSamples = v:size(1)
-   local result = torch.Tensor(nSamples)
-   for i = 1, nSamples do
-      local diff = v[i] - v[queryIndex]
-      v[i] = diff * diff
-   end
-   return v
+-- test harness
+local function kNearestNeighbors(queryIndex, features, featureName, k, maxK, mPerYear)
+   local nearestMaxK = knn.nearestMaxK(queryIndex, features, maxK)
+   local n, indices, distances = knn.nearestKnown(queryIndex, features, nearestMaxK, k, mPerYear, featureName)
+   return n, indices, distances, nearestMaxK
 end
 
-local function distanceEuclideanOLD(featureName, queryTable, othersTable)
-   local vp = makeVp(1, 'distanceEuclidean')
-   local nSamples = othersTable[featureName]:size(1)
-   local query = torch.Tensor{query[featureName]}
-   local queryVector = torch.Tensor(query:storage(), 1, nSamples, 0)
-   local othersVector = othersTable[featureName]
-   local diffs = queryVector - othersVector
-   local squaredDiffs = torch.cmul(diffs, diffs)
-   vp(2, 'nSamples', nSamples, 'queryVector', queryVector, 'othersVector', othersVector)
-   vp(2, 'diffs', diffs, 'squaredDiffs', squaredDiffs)
-   stop()
-   return squaredDiffs
-end
-
-
+-- test small example with known results
    
-local config = {
-   nSamples = 10,
-   nSlices = 2,
-   maxK = 6,
-   imputedFeatureNames = {'imputeA', 'imputeB'},
-   distances = distancesTest,
-   --distances = distancesSurface,
-}
+-- see lab notes for 2014-04-02 for the derivation of these points
+local function makeData4Points()
+   local result = NamedMatrix{
+      tensor = torch.Tensor(4,4):zero(),
+      names={'latitude', 'longitude', 'year', 'HEATING.CODE'},
+      levels={},
+   }
+   pp.table('result', result)
 
--- test knn.emptySlice
-local nSamples = 3
-local kMax = 2
-local empty = knn.emptySlice(nSamples, kMax)
---knn.printSlice('empty', empty)
+   local nextPointIndex = 0
+   local function addPoint(longitude, latitude)
+      -- add point at <latitude,longitude,0> to result
+      nextPointIndex = nextPointIndex + 1
+      result.t[nextPointIndex][result:columnIndex('latitude')] = latitude
+      result.t[nextPointIndex][result:columnIndex('longitude')] = longitude
+      result.t[nextPointIndex][result:columnIndex('year')] = 2014
+      result.t[nextPointIndex][result:columnIndex('HEATING.CODE')] = 14  -- arbitrary non-zero value 
+   end
 
-local function verifySize(tensor)
-   assert(tensor:size(1) == nSamples)
-   assert(tensor:size(2) == kMax)
+   addPoint(0, 0) -- A
+   addPoint(1, 5) -- B
+   addPoint(2, 2) -- C
+   addPoint(3, 1) -- D
+
+   return result
 end
 
-verifySize(empty.distances.latitude)
-verifySize(empty.distances.longitude)
-verifySize(empty.distances.year)
-verifySize(empty.indices.latitude)
-verifySize(empty.indices.longitude)
-verifySize(empty.indices.year)
-
--- test knn.mergeSlices
-local nSamples = 3
-local kMax = 2
-local slice1 = knn.emptySlice(nSamples, kMax)
-local slice2 = knn.emptySlice(nSamples, kMax)
-
-local function set(slice, rowIndex, key)
-   knn.printSlice('set slice', slice)
-   slice.indices.latitude[rowIndex] = torch.LongTensor(kMax):fill(key)
-   slice.indices.longitude[rowIndex] = torch.LongTensor(kMax):fill(key)
-   slice.indices.year[rowIndex] = torch.LongTensor(kMax):fill(key)
-   slice.distances.latitude[rowIndex] = torch.rand(kMax)
-   slice.distances.longitude[rowIndex] = torch.rand(kMax)
-   slice.distances.year[rowIndex] = torch.rand(kMax)
+local function equalDimension(d, seq, tolerance)
+   for index, distance in pairs(d) do
+      assertEq(distance, seq[index], tolerance)
+   end
 end
 
-set(slice1, 1, 1)
-set(slice1, 3, 1)
-set(slice2, 2, 2)
+-- test1: 4 points with maxK == 4
+local function test1(maxK, expectedIndices, expectedDistances)
+   print('\n*********************')
+   local vp = makeVp(2, 'test4good')
+   vp(1, 'expectedIndices', expectedIndices, 'expectedDistances', expectedDistances)
+   local queryIndex = 1
+   local features = makeData4Points()
+   local featureName = 'HEATING.CODE'
+   local mPerYear = .1
+   for k = 2, maxK do
+      local n, indices, distances, nearestMaxK = kNearestNeighbors(queryIndex, features, featureName, k, maxK, mPerYear)
+      vp(1, '************** k', k, 'maxK', maxK)
+      vp(1, 'indices', indices, 'distances', distances, 'nearestMaxK', nearestMaxK)
+      vp(1, 'prefix of expectedIndices', tensorViewPrefix(expectedIndices, k))
+      assertEq(indices, tensorViewPrefix(expectedIndices, k), 0)
+      assertEq(distances, tensorViewPrefix(expectedDistances, k), 0.001)
+   end
+end
 
-knn.printSlice('slice1', slice1)
-knn.printSlice('slice2', slice2)
-local merged = knn.mergeSlices(slice1, slice2)
-knn.printSlice('merged', merged)
-pp.tensor('merged.indices.latitude', merged.indices.latitude)
-assert(merged.indices.latitude[1][1] == 1)
-assert(merged.indices.latitude[2][1] == 2)
-assert(merged.indices.latitude[3][1] == 1)
+if true then
+   test1(4, torch.Tensor({1,3,4,2}),torch.Tensor({0,8,10,26}):sqrt())
+end
+
+-- test2: 4 points with maxK == 3
+local function test2(maxK, expectedIndices, expectedDistances)
+   print('\n*********************')
+   local vp = makeVp(2, 'test4good')
+   vp(1, 'expectedIndices', expectedIndices, 'expectedDistances', expectedDistances)
+   local queryIndex = 1
+   local features = makeData4Points()
+   local featureName = 'HEATING.CODE'
+   local mPerYear = .1
+   for k = 2, maxK do
+      local n, indices, distances, nearestMaxK = kNearestNeighbors(queryIndex, features, featureName, k, maxK, mPerYear)
+      vp(1, '************** k', k, 'maxK', maxK)
+      vp(1, 'indices', indices, 'distances', distances, 'nearestMaxK', nearestMaxK)
+      vp(1, 'prefix of expectedIndices', tensorViewPrefix(expectedIndices, k))
+      assert(n == 1)
+      assert(indices:size(1) == 1)
+      assert(distances:size(1) == 1)
+      assert(indices[1] == expectedIndices[1])
+      assertEq(distances[1], expectedDistances[1], 0.001)
+   end
+end
+
+if true then
+   test2(3, torch.Tensor({3}), torch.Tensor({8}):sqrt())
+end
+
+-- test3: 4 points with maxK == 2
+local function test3(maxK, expectedIndices, expectedDistances)
+   print('\n*********************')
+   local vp = makeVp(2, 'test4good')
+   vp(1, 'expectedIndices', expectedIndices, 'expectedDistances', expectedDistances)
+   local queryIndex = 1
+   local features = makeData4Points()
+   local featureName = 'HEATING.CODE'
+   local mPerYear = .1
+   for k = 2, maxK do
+      local n, indices, distances, nearestMaxK = kNearestNeighbors(queryIndex, features, featureName, k, maxK, mPerYear)
+      vp(1, '************** k', k, 'maxK', maxK)
+      vp(1, 'indices', indices, 'distances', distances, 'nearestMaxK', nearestMaxK)
+      vp(1, 'prefix of expectedIndices', tensorViewPrefix(expectedIndices, k))
+      assert(n == 0)
+   end
+end
+
+if true then
+   test3(2, torch.Tensor({3}), torch.Tensor({8}):sqrt())
+end
+
+local function makeData100Points(nSamples)
+   assert(nSamples >= 4)
+   local nFeatures = 4
+   local result = NamedMatrix{
+      tensor = torch.Tensor(nSamples, nFeatures):zero(),
+      names={'latitude', 'longitude', 'year', 'HEATING.CODE'},
+      levels={},
+   }
+   --pp.table('result', result)
+
+   local nextPointIndex = 0
+   local function addPoint(longitude, latitude)
+      -- add point at <latitude,longitude,0> to result
+      nextPointIndex = nextPointIndex + 1
+      result.t[nextPointIndex][result:columnIndex('latitude')] = latitude
+      result.t[nextPointIndex][result:columnIndex('longitude')] = longitude
+      result.t[nextPointIndex][result:columnIndex('year')] = 2014
+      result.t[nextPointIndex][result:columnIndex('HEATING.CODE')] = 14  -- arbitrary non-zero value 
+   end
+
+   addPoint(0, 0) -- A
+   addPoint(2, 2) -- C
+   addPoint(3, 1) -- D
+
+   -- add the B points at coordinates (1 + delta, 5 + delta)
+   for n = 1, nSamples - 3 do
+      local delta = n / nSamples
+      addPoint(1 + delta, 5 + delta)
+   end
+
+   return result
+end
+
+local function test4()
+   print('\n*************** test4 **************************')
+   local nSamples = 100
+
+   local queryIndex = 1
+   local features = makeData100Points(nSamples)
+   local maxK = nSamples - 3
+   local info = knn.nearestMaxK(queryIndex, features, maxK)
+   pp.table('info', info)
+
+   local k = 3
+   local mPerYear = 0
+   local featureName = 'HEATING.CODE'
+   local n, indices, distances = knn.nearestKnown(queryIndex, features, info, k, mPerYear, featureName)
+
+   vp(1, 'n', n, 'indices', indices, 'distances', distance)
+
+   -- test that indices 2 and 3 are not in the solution set
+   for i = 1, n do
+      local index = indices[i]
+      assert(index ~= 2)
+      assert(index ~= 3)
+   end
+end
+
+if true then
+   test4()
+end
+
+error('test missing feature in HEATING.CODE')
+
+
+
+
+-- OLD BELOW ME
+
 
 -- make the test data
 local function makeNamedMatrixInteger(nRows, lowest, highest, featureName)
@@ -141,32 +237,6 @@ local function makeDataRandom(nSamples, imputedFeatureNames)
    return result
 end
 
--- see lab notes for 2014-04-02 for the derivation of these points
-local function makeData4Points()
-   local result = NamedMatrix{
-      tensor = torch.Tensor(4,4):zero(),
-      names={'latitude', 'longitude', 'year', 'HEATING.CODE'},
-      levels={},
-   }
-   pp.table('result', result)
-
-   local nextPointIndex = 0
-   local function addPoint(latitude, longitude)
-      -- add point at <latitude,longitude,0> to result
-      nextPointIndex = nextPointIndex + 1
-      result.t[nextPointIndex][result:columnIndex('latitude')] = latitude
-      result.t[nextPointIndex][result:columnIndex('longitude')] = longitude
-      result.t[nextPointIndex][result:columnIndex('year')] = 2014
-      result.t[nextPointIndex][result:columnIndex('HEATING.CODE')] = 14  -- arbitrary non-zero value 
-   end
-
-   addPoint(0, 0) -- A
-   addPoint(1, 5) -- B
-   addPoint(2, 2) -- C
-   addPoint(3, 1) -- D
-
-   return result
-end
 
 -- return NamedMatrix
 local function makeData(name, p1, p2)
@@ -182,25 +252,27 @@ end
 
 -- test using the 4 specially chosen points and one big slice
 local features = makeData('4 points')
-pp.table('features', features)
+
 
 -- test makeSlice
-local nSamples = 4
-local maxK = 4
-local slices = knn.emptySlice(nSamples, maxK)
-config.nSlices = 1
-printTableValue('config', config)
-for sliceIndex = 1, config.nSlices do
-   local slice = knn.makeSlice(sliceIndex,
-                                     config.nSlices,
-                                     maxK,
-                                     features,
-                                     config.imputedFeatureNames,
-                                     config.distances)
-   --vp(2, 'sliceIndex', sliceIndex, 'slice[sliceIndex]', slice[sliceIndex])
-   knn.printSlice('slice', slice)
-   slices = knn.mergeSlices(slices, slice)
-   knn.printSlice('mutated slices', slices)
+if false then
+   local nSamples = 4
+   local maxK = 4
+   local slices = knn.emptySlice(nSamples, maxK)
+   config.nSlices = 1
+   printTableValue('config', config)
+   for sliceIndex = 1, config.nSlices do
+      local slice = knn.makeSlice(sliceIndex,
+      config.nSlices,
+      maxK,
+      features,
+      config.imputedFeatureNames,
+      config.distances)
+      --vp(2, 'sliceIndex', sliceIndex, 'slice[sliceIndex]', slice[sliceIndex])
+      knn.printSlice('slice', slice)
+      slices = knn.mergeSlices(slices, slice)
+      knn.printSlice('mutated slices', slices)
+   end
 end
 
 
