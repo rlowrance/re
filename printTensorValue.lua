@@ -123,7 +123,9 @@ function printTensorValue(name, value, maxRows, maxColumns, formatString)
 
       print(string.format('Tensor %s type %s size %s', name, torch.typename(value), sizes(value)))
       local nDimension = value:nDimension()
-      if nDimension == 1 then
+      if nDimension == 0 then
+         -- do nothing
+      elseif nDimension == 1 then
          printValue1D(value, actualMaxRows, actualMaxColumns, actualFormatString)
       elseif nDimension == 2 then
          printValue2D(value, actualMaxRows, actualMaxColumns, actualFormatString)
