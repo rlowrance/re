@@ -1,21 +1,35 @@
 -- knn_test.lua
 -- unit test
 
-require 'knn_implementation_1'
+-- load correct implementation
+local implementation = 2
+if implementation == 1 then
+   require 'knn_implementation_1'
+elseif implementation == 2 then
+   require 'knn_implementation_2'
+else
+   error(string.format('implementation = %s', tostring(implementation)))
+end
+
 require 'makeVp'
 require 'NamedMatrix'
 require 'pp'
 require 'Random'
+require 'tableCopy'
+require 'tensor'
 
 local vp = makeVp(2, 'tester')
 torch.manualSeed(123)
 
 -- test harness
-local implementation = 1
 local function kNearestNeighbors(queryIndex, features, featureName, k, maxK, mPerYear)
    if implementation == 1 then
       local knnInfo = knn.knnInfo(queryIndex, features, maxK)
       local n, indices, distances = knn.nearestKnown(queryIndex, features, knnInfo, k, mPerYear, featureName)
+      return n, indices, distances, knnInfo
+   elseif implementation == 2 then
+      local knnInfo = knn.knnInfo(queryIndex, features, featureName, maxK)
+      local n, indices, distances = knn.nearestKnown(knnInfo, k, mPerYear)
       return n, indices, distances, knnInfo
    else
       error(string.format('implementation = %s', tostring(implementation)))
@@ -90,10 +104,11 @@ local function test2(maxK, expectedIndices, expectedDistances)
    local featureName = 'HEATING.CODE'
    local mPerYear = .1
    for k = 2, maxK do
-      local n, indices, distances, nearestMaxK = kNearestNeighbors(queryIndex, features, featureName, k, maxK, mPerYear)
+      local n, indices, distances, knnInfo = kNearestNeighbors(queryIndex, features, featureName, k, maxK, mPerYear)
       vp(1, '************** k', k, 'maxK', maxK)
-      vp(1, 'indices', indices, 'distances', distances, 'nearestMaxK', nearestMaxK)
-      vp(1, 'prefix of expectedIndices', tensorViewPrefix(expectedIndices, k))
+      vp(1, 'indices', indices, 'distances', distances, 'knnInfo', knnInfo)
+      vp(1, 'expectedIndices', expectedIndices)
+      vp(1, 'n', n)
       assert(n == 1)
       assert(indices:size(1) == 1)
       assert(distances:size(1) == 1)
@@ -188,6 +203,179 @@ end
 if true then
    test4()
 end
+
+local function test_implementation_2_knnInfo_function()
+   local nan = 0 / 0
+   local featureName = 'HEATING.CODE'
+
+   local function makeFeatures4(allPresent)
+      local longitudes = torch.Tensor{0, 1, 2, 3}
+      local latitudes = torch.Tensor{0, 5, 2, 1}
+      local years = torch.Tensor{0, 0, 0, 0}
+      local heatingCode = torch.Tensor{1, 2, 3, 4}
+      if not allPresent then
+         heatingCode = torch.Tensor{1, nan, 3, nan}
+      end
+      local tensor = tensor.concatenateHorizontally(longitudes, latitudes, years, heatingCode)
+      local features = NamedMatrix{tensor = tensor, 
+                                   names = {'longitude', 'latitude', 'year', featureName},
+                                   levels = {}}
+      return features
+   end
+   
+   -- first test: all points present
+   local queryIndex = 1
+   local maxK = 4
+   local allPresent = true
+   local knnInfo = knn.knnInfo(queryIndex, makeFeatures4(allPresent), featureName, maxK)
+   pp.table('knnInfo', knnInfo)
+   -- check that every point is present in the maxK nearest neighbors
+   assert(knnInfo.latitude[1])
+   assert(knnInfo.latitude[2])
+   assert(knnInfo.latitude[3])
+   assert(knnInfo.latitude[4])
+
+   assert(knnInfo.longitude[1])
+   assert(knnInfo.longitude[2])
+   assert(knnInfo.longitude[3])
+   assert(knnInfo.longitude[4])
+
+   -- second tests: two point are not present
+   -- not present ponts are B and D (indices 2 and 4)
+   local queryIndex = 1
+   local maxK = 4
+   local allPresent = true
+   local knnInfo = knn.knnInfo(queryIndex, makeFeatures4(not allPresent), featureName, maxK)
+   print('************')
+   pp.table('knnInfo', knnInfo)
+   -- check that only points 1 and 3 are present in the maxK nearest neighbors
+   assert(knnInfo.latitude[1])
+   assert(not knnInfo.latitude[2])
+   assert(knnInfo.latitude[3])
+   assert(not knnInfo.latitude[4])
+   
+   assert(knnInfo.longitude[1])
+   assert(not knnInfo.longitude[2])
+   assert(knnInfo.longitude[3])
+   assert(not knnInfo.longitude[4])
+
+   -- third test: two points not present and maxK = 1
+   local queryIndex = 1
+   local maxK = 1
+   local allPresent = true
+   local knnInfo = knn.knnInfo(queryIndex, makeFeatures4(not allPresent), featureName, maxK)
+   print('************')
+   pp.table('knnInfo', knnInfo)
+   -- check that only points 1 is present in the maxK nearest neighbors
+   assert(knnInfo.latitude[1])
+   assert(not knnInfo.latitude[2])
+   assert(not knnInfo.latitude[3])
+   assert(not knnInfo.latitude[4])
+   
+   assert(knnInfo.longitude[1])
+   assert(not knnInfo.longitude[2])
+   assert(not knnInfo.longitude[3])
+   assert(not knnInfo.longitude[4])
+end
+
+local function test_implementation_2_nearestKnown_function()
+   -- build a suitable knnInfo table
+   knnInfo = {
+      maxK = 4,
+      nSamples = 4,
+      latitude = {[1] = 10, [2] = 20, [4] = 40},
+      longitude = {[2] = 20, [4] = 40},
+      year = {[4] = 40},
+   }
+   pp.table('knnInfo', knnInfo)
+   local n, indices, distances = knn.nearestKnown(knnInfo, 2, 1)
+   vp(1, 'n', n, 'indices', indices, 'distances', distances)
+   assert(n == 1)
+   assert(indices[1] == 4)
+   assertEq(distances[1], math.sqrt(3 * 40), 0.0001)
+end
+
+if implementation == 2 then
+   test_implementation_2_knnInfo_function()
+   test_implementation_2_nearestKnown_function()
+end
+
+local function test_large()
+   print('\n**************** test_large')
+   local nan = 0 / 0
+
+   local function makeImputedFeatureName(n)
+      return string.format('imputedfeature' .. tostring(i))
+   end
+
+   local function makeImputedFeature(nSamples, missingFrequency)
+      local result = Random:integer(nSamples, 1, 20) -- values are level numbers
+      for i = 1, nSamples do
+         if math.random() < missingFrequency then
+            result[i] = nan
+         end
+      end
+      return result
+   end
+
+   local function makeFeatures(nSamples, nImputedFeatures, missingFrequency)
+      assert(missingFrequency)
+
+      local function concat(a,b)
+         local vp = makeVp(1, 'concat')
+         vp(1, 'a', a, 'b', b)
+         return tensor.concatenateHorizontally(a, b)
+      end
+
+      local tensor = {}
+      local names = {}
+
+      table.insert(names, 'latitudes')
+      local latitudes = torch.rand(nSamples)
+
+      table.insert(names, 'longitudes')
+      tensor = concat(latitudes, torch.rand(nSamples))
+
+      table.insert(names, 'years')
+      tensor = concat(tensor, Random():integer(nSamples, 1, 50))
+      
+      for i = 1, nImputedFeatures do
+         table.insert(names, imputedFeatureNames(i))
+         tensor = concat(tensor, makeImputedFeatures(nSamples, missingFrequency))
+      end
+
+      vp(2, 'tensor', tensor, 'names', names)
+
+      local result = NamedMatrix{
+         tensor = tensor,
+         names = names,
+         levels = {},
+      }
+
+      return result
+   end
+
+   local nSamples = 1200000  -- 1.2 million
+   local nSamples = 5
+   local nImputedFeatures = 20
+   local nImputedFeatures = 3
+   local missingFrequency = .67
+   local features = makeFeatures(nSamples, nImputedFeatures, missingFrequency)
+   local featureName = features.names[features.t:size(2)]  -- last imputed feature name
+   
+   local queryIndex = 3
+   local maxK = 3 * 120
+   local knnInfo = knn.knnInfo(queryIndex, features, featureName, maxK)
+   pp.table('knnInfo', knnInfo)
+   
+   local k = 4
+   local mPerYear = 500
+   local n, indices, distances = knn.nearestKnown(knnInfo, k, mPerYear)
+   vp(2, 'n', n, 'indices', indices, 'distances', distances)
+   error('write tests')
+end
+
+test_large()
 
 error('test missing feature in HEATING.CODE')
 
