@@ -17,29 +17,38 @@ end
 
 -- tensor.concatenateHorizontally
 -- ARGS
--- t1       : 1D Tensor
+-- t1       : 1D Tensor or 0D Tensor
 -- ...      : additional 1D Tensors
 -- RETURNS
 -- tensor2D : 2D Tensor with each of t1, ... is column s
-function tensor.concatenateHorizontally(t1, t2, t3, t4)
-   -- TODO: allow variable number of arguments
-   -- TODO: allow any type of tensor
-   local nRows = t1:size(1)
-   assert(t2:size(1) == nRows)
-   assert(t3:size(1) == nRows)
-   assert(t4:size(1) == nRows)
-   assert(torch.typename(t1) == 'torch.DoubleTensor')
-   assert(torch.typename(t2) == 'torch.DoubleTensor')
-   assert(torch.typename(t3) == 'torch.DoubleTensor')
-   assert(torch.typename(t4) == 'torch.DoubleTensor')
+-- TODO: allow any type of tensor, this implementation works only DoubleTensors
+function tensor.concatenateHorizontally(t1, ...)
+   local vp = makeVp(0, 'tensor.concatenateHorizontally')
+   vp(1, 't1', t1)
 
-   local result = torch.DoubleTensor(nRows, 4)
-   copyToColumn(result, 1, t1)
-   copyToColumn(result, 2, t2)
-   copyToColumn(result, 3, t3)
-   copyToColumn(result, 4, t4)
+   local args = {...}
+   vp(1, 'args', args)
 
-   return result
+   if #args == 0 then
+      return t1:clone()
+   else
+      if t1:nDimension() == 0 then
+         -- t1 is a dummy, like an empty 1D Tensor (a zero value)
+         local t2 = args[1]
+         local result = torch.Tensor(t2:size(1), #args)
+         for i = 1, #args do
+            copyToColumn(result, i, args[i])
+         end
+      else
+         -- t1 is not a dummy
+         local result = torch.Tensor(t1:size(1), 1 + #args)
+         copyToColumn(result, 1, t1)
+         for i = 1, #args do
+            copyToColumn(result, 1 + i, args[i])
+         end
+         return result
+      end
+   end
 end
 
 -- tensor.viewColumn
