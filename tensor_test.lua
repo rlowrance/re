@@ -3,6 +3,7 @@
 
 require 'makeVp'
 require 'tensor'
+require 'torch'
 
 local vp = makeVp(0, 'tester')
 
@@ -21,6 +22,25 @@ local function test_concatenateHorizontally()
 end
 
 test_concatenateHorizontally()
+
+local function test_selected()
+   local t = torch.DoubleTensor({1, 2, 3})
+   local r = tensor.selected(t, torch.Tensor{2})
+   assert(r:nDimension() == 1)
+   assert(r:size(1) == 1)
+   assert(r[1] == 2)
+   assert(torch.typename(r) == 'torch.DoubleTensor')
+
+
+   local t = torch.IntTensor({1, 2, 3})
+   local r = tensor.selected(t, torch.LongTensor{2})
+   assert(r:nDimension() == 1)
+   assert(r:size(1) == 1)
+   assert(r[1] == 2)
+   assert(torch.typename(r) == 'torch.IntTensor')
+end
+
+test_selected()
 
 local function test_viewColumn()
    local nRows = 3

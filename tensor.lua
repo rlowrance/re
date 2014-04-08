@@ -3,6 +3,7 @@
 
 if false then
    t = tensor.concatenateHorizontally(t1, t2, t3)
+   t = tensor.selected(tensor1D, tensorWithIndices)  -- return new tensor
    t = tensor.viewColumn(tensor2D, columnIndex) -- return view of 1D Tensor
    t = tensor.viewPrefix(tensor1D, k)           -- return view of first k elements
 end
@@ -49,6 +50,24 @@ function tensor.concatenateHorizontally(t1, ...)
          return result
       end
    end
+end
+
+-- return selected elements in tensor
+-- ARGS
+-- input    : tensor with one dimension
+-- indices  : tensor with positive integers
+-- RETURNS
+-- result   : result[i] = tensor[indices[i]]
+function tensor.selected(input, indices)
+   assert(input:nDimension() == 1)
+   local size = indices:nElement()
+   local result = torch.Tensor(size):type(torch.typename(input))
+   
+   for i = 1, size do
+      result[i] = input[indices[i]]
+   end
+
+   return result
 end
 
 -- tensor.viewColumn
