@@ -70,31 +70,45 @@ function makeVp(verboseVar, prefix)
       end
    end
    
+   local function tableInfo(table)
+      for key, value in pairs(table) do
+         return string.format('table; type(key) includes %s, type(value) includes %s',
+                              type(key), type(value))
+      end
+   end
+
+   local function tensorInfo(tensor)
+      local nDim = tensor:nDimension()
+      local typename = torch.typename(tensor)
+
+      if nDim == 1 then
+         return string.format('%s of size %d', typename, tensor:size(1))
+      elseif nDim == 2 then
+         return string.format('%s of size %d by %d', typename, tensor:size(1), tensor:size(2))
+      else
+         return string.format('%s with %d dimensions', typename, nDim)
+      end
+   end
+
    local function vp2(name, value)
       --print('vp2()', 'name=', name, 'value=', value, 'DONE')
       name = maybeSkipLine(name)
       if type(value) == 'table' then
-         print(prefixString .. name .. '=a table')
-         printTableValue(' ' .. name, value)
+         print(prefixString .. name .. ' = ' .. tableInfo(value))
 
       elseif type(value) == 'userdata'  then
          if isTensor(value) then
-            print(prefixString .. name .. '=a torch.Tensor')
-            local maxRows = 6
-            local maxCols = 6
-            printTensorValue(' ' .. name, value, maxRows, maxCols)
+            print(prefixString .. name .. ' = ' .. tensorInfo(value))
          elseif torch.typename(value) == 'Dataframe' then
-            print(prefixString .. name .. '=a Dataframe')
-            value:print()
+            print(prefixString .. name .. ' = a Dataframe')
          elseif torch.typename(value) == 'NamedMatrix' then
-            print(prefixString .. name .. '=a NamedMatrix')
-            value:print()
+            print(prefixString .. name .. ' = a NamedMatrix')
          else
-            print(prefixString .. name .. '=', tostring(value))
+            print(prefixString .. name .. ' = userdata with value ', tostring(value))
          end
 
       else
-         print(prefixString .. name .. '=' .. tostring(value))
+         print(prefixString .. name .. ' = ' .. tostring(value))
       end
    end
 
