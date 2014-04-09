@@ -99,6 +99,10 @@ function tensor.viewPrefix(t, len)
       return torch.DoubleTensor(t:storage(), 1, len, 1)
    elseif typename == 'torch.LongTensor' then
       return torch.LongTensor(t:storage(), 1, len, 1)
+   elseif typename == 'torch.FloatTensor' then
+      return torch.FloatTensor(t:storage(), 1, len, 1)
+   elseif typename == 'torch.IntTensor' then
+      return torch.IntTensor(t:storage(), 1, len, 1)
    else
       error('not yet implemented for typename(t) = ' .. typename)
    end
