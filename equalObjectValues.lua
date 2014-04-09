@@ -8,6 +8,7 @@
 -- whynot : optional string, returned if result is false
 
 require 'equalTensors'
+require 'isnan'
 require 'isTensor'
 require 'makeVp'
 require 'printTableValue'
