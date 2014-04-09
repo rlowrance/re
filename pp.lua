@@ -3,8 +3,9 @@
 
 if false then
    -- API overview after require 'pp'
-   pp.variable('name')   -- in stack frame
-   pp.variables()     -- in stack frame
+   pp.variable('name')     -- in stack frame
+   pp.variables()          -- all in stack frame
+   pp.variables('a', 'b')  -- specific variables in stack frame
 
    pp.table('name', value)
    pp.table('name', value, openFile)
@@ -310,10 +311,17 @@ function pp.variable(variableName)
    end
 end
 
-function pp.variables()
-   local sf = StackFrame('caller')
-   print(string.format('function %s variables', sf:functionName()))
-   for k, v in pairs(sf.values) do
-      print(string.format(' %s = %s', tostring(k), tostring(v)))
+function pp.variables(...)
+   local args = {...}
+   if #args == 0 then
+      local sf = StackFrame('caller')
+      print(string.format('function %s variables', sf:functionName()))
+      for k, v in pairs(sf.values) do
+         print(string.format(' %s = %s', tostring(k), tostring(v)))
+      end
+   else
+      for i = 1, #args do
+         pp.variable(args[i])
+      end
    end
 end
