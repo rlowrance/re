@@ -299,29 +299,36 @@ function pp.tensor(name, value, maxRows, maxColumns, formatString)
       usage()
    end
 end
+
+local function printFunctionNameValue(f, name, value)
+   print(string.format('function %s::%s = %s', f, name, tostring(value)))
+end
+
 function pp.variable(variableName)
    assert(variableName ~= nil, 'missing variableName argument')
    local sf = StackFrame('caller')
    local functionName = sf:functionName()
    local value = tostring(sf:variableValue(variableName))
-   if functionName == nil then
-      print(string.format('<unknown function> %s = %s', variableName, value))
-   else
-      print(string.format('function %s %s = %s', functionName, variableName, value))
-   end
+   printFunctionNameValue(ifelse(functionName == nil, '<unknown>', functionName), variableName, value)
 end
 
 function pp.variables(...)
+   require 'printTableValue'
    local args = {...}
+   local sf = StackFrame('caller')
+   local functionName = sf:functionName()
+   local bindings = sf.values
    if #args == 0 then
-      local sf = StackFrame('caller')
-      print(string.format('function %s variables', sf:functionName()))
-      for k, v in pairs(sf.values) do
-         print(string.format(' %s = %s', tostring(k), tostring(v)))
+      -- print values of all bound variables
+      for k, v in pairs(bindings) do
+         printFunctionNameValue(functionName, k, v)
       end
    else
+      -- print values of selected variables
       for i = 1, #args do
-         pp.variable(args[i])
+         local variableName = args[i]
+         local variableValue = bindings[variableName]
+         printFunctionNameValue(functionName, variableName, variableValue)
       end
    end
 end
