@@ -4,6 +4,7 @@
 if false then
    t = tensor.concatenateHorizontally(t1, t2, t3)
    t = tensor.selected(tensor1D, tensorWithIndices)  -- return new tensor
+   t = tensor.viewAs2D(vertical1DTensor)        -- return view n x 1
    t = tensor.viewColumn(tensor2D, columnIndex) -- return view of 1D Tensor
    t = tensor.viewPrefix(tensor1D, k)           -- return view of first k elements
 end
@@ -68,6 +69,16 @@ function tensor.selected(input, indices)
    end
 
    return result
+end
+
+-- tensor.viewAs2D
+-- ARGS:
+-- tensor : 1D Tensor of size n
+-- RETURNS
+-- view   : 2D Tensor of size n x 1 viewing same storage
+function tensor.viewAs2D(tensor)
+   assert(tensor:nDimension() == 1)
+   return torch.Tensor(tensor:storage(), 1, tensor:size(1), 1, 1, 0)
 end
 
 -- tensor.viewColumn

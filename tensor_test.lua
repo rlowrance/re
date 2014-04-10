@@ -2,6 +2,7 @@
 --unit test
 
 require 'makeVp'
+require 'pp'
 require 'tensor'
 require 'torch'
 
@@ -41,6 +42,21 @@ local function test_selected()
 end
 
 test_selected()
+
+local function test_viewAs2D()
+   local debug = false
+   local t1D = torch.rand(10)
+   local t2D = tensor.viewAs2D(t1D)
+   if debug then
+      pp.tensor('t1D', t1D)
+      pp.tensor('t2D', t2D)
+   end
+   assert(t2D:nDimension() == 2)
+   assert(t2D:size(1) == t1D:size(1))
+   assert(t2D:size(2) == 1)
+end
+
+test_viewAs2D()
 
 local function test_viewColumn()
    local nRows = 3
