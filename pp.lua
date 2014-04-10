@@ -301,7 +301,7 @@ function pp.tensor(name, value, maxRows, maxColumns, formatString)
 end
 
 local function printFunctionNameValue(f, name, value)
-   print(string.format('function %s::%s = %s', f, name, tostring(value)))
+   print(string.format('%s: %s = %s', f, name, tostring(value)))
 end
 
 function pp.variable(variableName)
