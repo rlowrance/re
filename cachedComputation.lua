@@ -2,6 +2,7 @@
 
 require 'equalObjectValues'
 require 'fileExists'
+require 'printTableValue'
 require 'torch'
 
 -- compute a value using a precomputed result, which may take a long time to compute, so
@@ -20,6 +21,7 @@ require 'torch'
 --                      param is an arbitrary value
 -- RETURNS
 -- value2            : result of the compute function applied to value and param
+-- info              : table of information to be used for debugging (not part of API)
 function cachedComputation(data, param, filepath, fnGeneral, fnSpecific)
    local vp = makeVp(0, 'cachedComputation')
    assert(type(filepath) == 'string')
@@ -35,7 +37,7 @@ function cachedComputation(data, param, filepath, fnGeneral, fnSpecific)
       assert(version ~= nil)
       if version == diskfileObject.version and
          equalObjectValues(data, diskfileObject.data) then
-         return fnSpecific(diskfileObject.value, param)
+         return fnSpecific(diskfileObject.value, param), {value = diskfileObject.value, how = 'used cache'}
       end
    end
 
@@ -48,5 +50,5 @@ function cachedComputation(data, param, filepath, fnGeneral, fnSpecific)
       data = data,
    }
    torch.save(filepath, diskfileObject, format)
-   return fnSpecific(diskfileObject.value, param)
+   return fnSpecific(diskfileObject.value, param), {value = diskfileObject.value, how = 'from scratch'}
 end
