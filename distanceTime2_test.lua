@@ -22,21 +22,20 @@ local function makeFeatures(nSamples)
 end
 
 local function test(nSamples)
-   local features = makeFeatures(nSamples)
-   local queryIndex = nSamples
-   features.t[queryIndex][1] = 0  -- make debugging easier
-   local distance2 = distanceTime2(features, queryIndex)
-   if debug then 
-      print('queryIndex', queryIndex)
-      for i = 1, nSamples do
-         print(string.format('index %2d year %4d distance^2 %4d', i, features.t[i][1], distance2[i]))
-         if i >= 99 then break end
+   local years = Random:integer(nSamples, 1, 2000)
+   for queryIndex = 1, nSamples do
+      local distances = distanceTime2(years, years[queryIndex])
+      for testIndex = 1, nSamples do
+         if testIndex == queryIndex then
+            assert(distances[testIndex] == 0)
+         else
+            assert(distances[testIndex] >= 0)
+         end
       end
    end
-   assert(distance2[queryIndex] == 0)
 end
 
 test(10)  -- small test
-test(1.2e6)  -- large test
+
 
 print('ok distanceTime2')
