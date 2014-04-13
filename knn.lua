@@ -31,8 +31,8 @@
 -- knnInfo contains these fields with distances along the specified dimensions
 -- .space                 : table with 3 subtables
 --                          .index   : IntTensor of indices of maxK nearest neighbors in space dimension
---                          .dSpace2 : FloatTensor of distance^2 in space dimension for corresonding indices
---                          .dTime2  : FloatTensor of distance^2 in time dimension for corresponding indices
+--                          .dSpace2 : Tensor of distance^2 in space dimension for corresonding indices
+--                          .dTime2  : Tensor of distance^2 in time dimension for corresponding indices
 -- .time                  : table similar to space table
 --
 -- NOTE: a 32-bit int can hold a number up to about 2 billion
@@ -60,9 +60,7 @@ end
 -- return knnInfo table
 function knn.knnInfo(queryIndex, features, maxK, dSpace2Fn, dTime2Fn)
    local distanceSpace2 = dSpace2Fn(features, queryIndex)
-   assert(torch.typename(distanceSpace2) == 'torch.FloatTensor')
    local distanceTime2 = dTime2Fn(features, queryIndex)
-   assert(torch.typename(distanceTime2) == 'torch.FloatTensor')
 
    local sorted, indices = torch.sort(distanceSpace2)
    local firstIndices = tensor.viewPrefix(indices, maxK)
