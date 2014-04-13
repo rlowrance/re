@@ -19,10 +19,21 @@ function parseCommandLine(clArgs, op, tag)
    vp(1, 'clArgs', clArgs, 'op', op, 'tag', tag)
 
    -- validate args
-   assert(type(clArgs) == 'table')
-   assert(#clArgs > 0, 'no command line arguments found')
    assert(type(op) == 'string')
    assert(op == 'value' or op == 'present')
+
+   assert(type(clArgs) == 'table')
+   if #clArgs == 0 then
+      if op == 'value' then 
+         return nil
+      elseif op == 'present' then
+         return false
+      else
+         error('cannot happen')
+      end
+   end
+   assert(#clArgs > 0, 'no command line arguments found')
+
    assert(type(tag) == 'string')
 
    local i = 1  -- ignore the program name which is in position 0
