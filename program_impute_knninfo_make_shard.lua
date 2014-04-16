@@ -67,6 +67,7 @@ local config = {
    checkpointFrequency = 10,
    --checkpointFrequency = 100,  LEADS TO USING TOO MUCH MEMORY
    --checkpointFrequency = 1000,
+   cgFrequency = 10,   -- collect garbage
    readlimit = 10,
    readlimit = -1,
    inputFilePath = cl.dataDir .. 'parcels-sfr-geocoded.csv',
@@ -119,49 +120,36 @@ local function dTime2(features, queryIndex)
                         features.t[queryIndex][columnIndexYear])
 end
 
--- restart at last checkpoint
 local knnInfos = {}
-if fileExists(config.checkpointFilePath) then
-   knnInfo = torch.load(config.checkpointFilePath)
-end
-
-local nComputed = 0
+local nComputed = 1
 for sampleIndex = cl.shard, nSamples, config.nShards do
 
-   if knnInfos[sampleIndex] == nil then
-      -- have not computed knnInfo for the sampleIndex
+   local cpu, wallclock
+   cpu, wallclock, knnInfo = time('both', knn.knnInfo, sampleIndex, features, config.maxK, dSpace2, dTime2)
+   knnInfos[sampleIndex] = toShorterTensors(knnInfo)
 
-      local cpu, wallclock
-      cpu, wallclock, knnInfo = time('both', knn.knnInfo, sampleIndex, features, config.maxK, dSpace2, dTime2)
-      knnInfos[sampleIndex] = toShorterTensors(knnInfo)
+   nComputed = nComputed + 1
+   if nComputed == 1 or nComputed % config.reportFrequency == 0 then
+      print(string.format('shard %d sampleIndex %d nComputed %d of %d: cpu %f wallclock %f'
+                         ,cl.shard
+                         ,sampleIndex
+                         ,nComputed
+                         ,nSamples / config.nShards
+                         ,cpu
+                         ,wallclock
+                         )
+      )
+   end
 
-      nComputed = nComputed + 1
-      if nComputed == 1 or nComputed % config.reportFrequency == 0 then
-         print(string.format('shard %d sampleIndex %d nComputed %d of %d: cpu %f wallclock %f'
-                             ,cl.shard
-                             ,sampleIndex
-                             ,nComputed
-                             ,nSamples / config.nShards
-                             ,cpu
-                             ,wallclock
-                             )
-              )
-      end
-
-      if nComputed == 1 or nComputed % config.checkpointFrequency == 0 then
-         -- checkpoint and collect garbage
-         local memoryUsed = memoryUsed()
-         print(string.format(' using %d bytes after garbage collection', memoryUsed))
-
-         print(' writing checkpoint file')
-         torch.save(config.checkpointFilePath, knnInfos)
-         print(string.format(' wrote %d knnInfo packets to file %s', nComputed, config.outputFilePath))
-      end
+   if nComputed == 1 or nComputed % config.cgFrequency == 0 then
+      -- collect garbage
+      local memoryUsed = memoryUsed()
+      print(string.format(' using %d bytes after garbage collection', memoryUsed))
    end
    if false and sampleIndex > 100 then break end  -- while debugging
 end
 
-print('writing knnInfos for final time')
+print('writing knnInfos')
 torch.save(config.outputFilePath, knnInfos)
 print(string.format('wrote %d knnInfo packets to file %s', nComputed, config.outputFile))
 
