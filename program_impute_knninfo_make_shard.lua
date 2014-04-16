@@ -20,6 +20,7 @@ require 'readParcelsForImputation'
 require 'readViaSerializedFile'
 require 'tensor'
 require 'time'
+require 'Timer'
  
 local function parseCommandLine(args)
    assert(#args > 0, 'command line args: --shard N [--dataDir path]')
@@ -51,6 +52,7 @@ end
 -- MAIN PROGRAM
 -------------------------------------------------------------------------------
 
+local timer = Timer()
 local cl = parseCommandLine(arg)
 pp.table('cl', cl)
 
@@ -63,6 +65,7 @@ local config = {
    --reportFreuency = 100,
    checkpointFrequency = 1,
    checkpointFrequency = 10,
+   --checkpointFrequency = 100,  LEADS TO USING TOO MUCH MEMORY
    --checkpointFrequency = 1000,
    readlimit = 10,
    readlimit = -1,
@@ -161,3 +164,8 @@ end
 print('writing knnInfos for final time')
 torch.save(config.outputFilePath, knnInfos)
 print(string.format('wrote %d knnInfo packets to file %s', nComputed, config.outputFile))
+
+local cpu, wallclock = timer:cpuWallclock()
+print('execution cpu', cpu)
+print('execution wallclock seconds', wallclock)
+print('execution wallclock hours', wallclock / 60 / 60)
