@@ -68,6 +68,7 @@ local config = {
    --checkpointFrequency = 100,  LEADS TO USING TOO MUCH MEMORY
    --checkpointFrequency = 1000,
    cgFrequency = 10,   -- collect garbage
+   cgFrequency = 5,   -- collect garbage
    readlimit = 10,
    readlimit = -1,
    inputFilePath = cl.dataDir .. 'parcels-sfr-geocoded.csv',
@@ -121,7 +122,7 @@ local function dTime2(features, queryIndex)
 end
 
 local knnInfos = {}
-local nComputed = 1
+local nComputed = 0
 for sampleIndex = cl.shard, nSamples, config.nShards do
 
    local cpu, wallclock
