@@ -22,7 +22,7 @@ require 'readViaSerializedFile'
 require 'tensor'
 require 'time'
  
-local function parseCommandLine(args)
+local function parseCommandLine(args)--{{{
    assert(#args >= 0, 'command line args: [--dataDir path]')
    pp.table('args', args)
    local cl = CommandLine(args)
@@ -30,9 +30,9 @@ local function parseCommandLine(args)
       me = 'program_impute_knninfo_make_shard',  -- name of executable
       dataDir = cl:defaultable('--dataDir', '../data/v6/output/'),
    }
-end
+end--}}}
 
--- convert tensors to torch.FloatTensor
+-- convert tensors to torch.FloatTensor--{{{
 local function toShorterTensors(knnInfo)
    return {
       space = {
@@ -46,9 +46,9 @@ local function toShorterTensors(knnInfo)
          index = knnInfo.time.index:type('torch.IntTensor'),
       },
    }
-end
+end--}}}
 
--- merge shard into all, verifying no duplicates
+-- merge shard into all, verifying no duplicates--{{{
 -- return number of samples indices in the shard
 local function consolidate(shard, all)
    local debug = false
@@ -65,6 +65,12 @@ local function consolidate(shard, all)
       all[sampleIndex] = knnInfo
    end
    return count
+end--}}}
+
+-- collect garbarge and print number of bytes used
+local function collect()
+   local memoryUsed = memoryUsed()  -- also collect garbarge
+   print(string.format(' using %d x 10^6 bytes after garbage collection', memoryUsed/1e6))
 end
 
 -------------------------------------------------------------------------------
@@ -78,17 +84,22 @@ local config = {
    nShards = 1,  -- for now
    nShards = 100,
    gcFrequency = 1,
-   gcFrequency = 10,
+   --gcFrequency = 10,
    baseInputFileName = 'program_impute_knninfo_make_shard_',
-   outputFilePath = cl.dataDir .. cl.me .. '.serialized',
+   inputDir = '/media/3AD2D839D2D7F75B/nyu-thesis-project/',
+   inputDir = '/Users/rel/impute-shards/',
+   outputDir = '../data/v6/output/',
+   outputFileName = cl.me .. '.serialized',
 }
 
 pp.table('config', config)
 
+local outputPath = config.outputDir .. config.outputFileName
 local consolidated = {}
 local someMissing = false
-for shardNumber = 0, config.nShards do
-   local inPath = cl.dataDir .. config.baseInputFileName .. tostring(shardNumber) .. '.serialized'
+for shardNumber = 0, config.nShards - 1 do
+   local inPath = config.inputDir .. config.baseInputFileName .. tostring(shardNumber) .. '.serialized'
+   --print('inPath', inPath)
    if fileExists(inPath) then
       local shard = torch.load(inPath)
       local count = consolidate(shard, consolidated)
@@ -98,12 +109,12 @@ for shardNumber = 0, config.nShards do
       someMissing = true
    end
    if shardNumber == 1 or (shardNumber % config.gcFrequency == 0) then
-      local memoryUsed = memoryUsed()  -- also collect garbarge
-      print(string.format('using %d bytes after garbage collection', memoryUsed))
+      collect()
    end
 end
 
-torch.save(config.outputFilePath, consolidated)
+collect()  -- give torch.save the max memory headroom
+torch.save(outputPath, consolidated)
 print(string.format('wrote consolidated knnInfo table to %s', config.outputFilePath))
 
 if someMissing then
