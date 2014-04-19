@@ -8,6 +8,28 @@ require 'pp'
 require 'Random'
 require 'tensor'
 
+local function testIsKnnInfo()
+   local obj = {}
+   assert(not knn.isKnnInfo(obj))
+
+   local obj = {
+      space = {
+         index = torch.IntTensor{1,2,3},
+         dSpace2 = torch.FloatTensor{1,2,3},
+         dTime2 = torch.FloatTensor{1,2,3},
+      },
+      time = {
+         index = torch.IntTensor{1,2,3},
+         dSpace2 = torch.FloatTensor{1,2,3},
+         dTime2 = torch.FloatTensor{1,2,3},
+      },
+   }
+
+   assert(knn.isKnnInfo(obj))
+end
+
+testIsKnnInfo()
+
 local function euclideanSpace2(features, queryIndex)
    local vp, verboseLevel = makeVp(0, 'euclideanDistanceSpace2')
    local debug = verboseLevel > 0
@@ -193,5 +215,32 @@ local function testLargeEuclidean()
 end
 
 testLargeEuclidean()
+
+local function testTrim()
+   local knnInfo = {
+      space = {
+         index = torch.IntTensor{1,2,3},
+         dSpace2 = torch.FloatTensor{10, 20, 30},
+         dTime = torch.FloatTensor{100, 200, 300},
+      },
+      time = {
+         index = torch.IntTensor{1000, 2000, 3000},
+         dSpace2 = torch.FloatTensor{10000, 20000, 30000},
+         dTime = torch.FloatTensor{100000, 200000, 300000},
+      },
+   }
+   local newSize = 2
+   local shorter = knn.trim(knnInfo, newSize)
+   
+   local function isSizeExpected(v)
+      assert(v:size(1) == newSize)
+      return v
+   end
+    
+   tableMapValues(shorter, isSizeExpected)
+end
+
+testTrim()
+
 
 print('ok knn')

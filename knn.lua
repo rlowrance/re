@@ -11,6 +11,8 @@
 --
 -- knn.knnInfo(queryIndex, features, maxK, dSpace2Fn, dTime2Fn)   --> knnInfo table
 -- knn.nearestKnown(knnInfo, k, mPerYear, features, featureName)  --> n, indices (in features), distances
+-- knn.trim(knnInfo, newSize) --> knnInfo table with tensors of length newSize
+-- knn.isKnnInfo(obj) --> true or false
 --
 --
 -- with types
@@ -39,7 +41,9 @@
 
 knn = {}
 
+require 'isTensor'
 require 'makeVp'
+require 'tableMapValues'
 require 'tensorViewColumn'
 require 'tensorViewPrefix'
 require 'pp'
@@ -55,6 +59,19 @@ function pp.knnInfo(value)
             value.space.index[i], value.space.dSpace2[i], value.space.dTime2[i],
             value.time.index[i], value.time.dSpace2[i], value.time.dTime2[i]))
    end
+end
+
+function knn.isKnnInfo(obj)
+   return
+      type(obj) == 'table' and
+      type(obj.space) == 'table' and
+      isTensor(obj.space.index) and
+      isTensor(obj.space.dSpace2) and
+      isTensor(obj.space.dTime2) and
+      type(obj.time) == 'table' and
+      isTensor(obj.time.index) and
+      isTensor(obj.time.dSpace2) and
+      isTensor(obj.time.dTime2)
 end
 
 -- return knnInfo table
@@ -174,3 +191,18 @@ function knn.nearestKnown(knnInfo, k, mPerYear, features, featureName)
 
    return found, resultIndices, resultDistances -- NOTE: distances are squared
 end
+
+
+-- shorten the tensors in a knnInfo--{{{
+function knn.trim(knnInfo, newSize)
+   -- keep just the first newSize elements
+   local function keepPrefix(v)
+      local typename = torch.typename(v)
+      assert(typename == 'torch.FloatTensor' or typename == 'torch.IntTensor')
+      local constructor = ifelse(typename == 'torch.FloatTensor', torch.FloatTensor, torch.IntTensor)
+      local result = constructor(v:storage(), 1, newSize, 1):clone()
+      return result
+   end
+   
+   return tableMapValues(knnInfo, keepPrefix)
+end--}}}
