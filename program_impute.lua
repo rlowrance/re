@@ -1,8 +1,14 @@
 -- program_impute.lua
 -- main program to impute a missing feature
 -- COMMAND LINE ARGS
--- --train INFO_COLUMN [INFO_COLUMN]
--- --test  INFO_COLUMN
+-- --cache
+--          If present, read from disk cache file
+--          The disk cache content are used iff 
+--          - the file exists
+--          - it was built with the same command line args as used in the current program invocation
+--          - the layout version number for the disk and program cache are the same
+-- --train  INFO_COLUMN [INFO_COLUMN]
+-- --test   INFO_COLUMN
 -- --target PARCELS_COLUMN
 -- --hpset  INTEGER
 -- --output FILE_PATH
