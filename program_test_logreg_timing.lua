@@ -9,6 +9,7 @@ require 'ifelse'
 require 'makeVp'
 require 'nn'
 require 'optim'
+require 'pp'
 require 'printTableValue'
 require 'printTensorValue'
 require 'printVariable'
@@ -490,7 +491,7 @@ end
 -- lossGradient : function(theta) --> loss, gradient
 -- nParameters  : integer > 0, number of flattened parameters
 local function makeLossGradient7(data)
-   local vp = makeVp(1, 'makeLossGradient1')
+   local vp = makeVp(1, 'makeLossGradient7')
 
    local model = nn.Sequential()
    model:add(nn.Linear(data.nFeatures, data.nClasses))
@@ -533,6 +534,99 @@ local function makeLossGradient7(data)
    return lossGradient, (data.nFeatures + 1) * data.nClasses
 end
 
+-- implementation 7b: 2 + 3 + 6 + faster Linear
+-- Linear is faster because it combines the weight and bias tensors into one tensor
+-- return function that retuns loss and gradient at specified parameters theta
+-- RETURN 
+-- lossGradient : function(theta) --> loss, gradient
+-- nParameters  : integer > 0, number of flattened parameters
+
+-- conceptually local class
+do
+   local RoyLinear, parent = torch.class('RoyLinear', 'nn.Module')
+
+   function RoyLinear:__init(inputSize, outputSize) -- input is augmented (prefixed by 1)
+      print('RoyLinear:__init inputSize', inputSize, 'outputSize', outputSize)
+      parent:__init(self)
+      self.theta = torch.Tensor(outputSize, inputSize):zero() -- best for logistic regression
+      self.gradTheta = torch.Tensor(outputSize, inputSize)
+   end
+
+   function RoyLinear:updateOutput(input)
+      print('RoyLinear:updateOutput input', input)
+      stop()
+      -- input is augmented (1 in column 1)
+      self.output = torch.mm(self.theta, input:t())
+   end
+
+   function RoyLinear:accGradParameters(input, gradOutput, scale)
+      self.theta:addmm(scale, gradOutput:t(), input)
+   end
+end  -- scope for RoyLinear
+
+local function makeLossGradient7b(data)
+   print('starting makeLossGradient7b')
+   local vp = makeVp(1, 'makeLossGradient7b')
+
+   for k, v in pairs(RoyLinear) do
+      print('RoyLinear k', k, 'RoyLinear v', v)
+   end
+   
+
+   local rl = RoyLinear(3, 5) -- find the bug
+   pp.table('rl', rl)
+
+   print('data', data)
+   pp.table('data', data)
+
+
+
+
+   local model = nn.Sequential()
+   --model:add(nn.Linear(data.nFeatures, data.nClasses))
+   model:add(RoyLinear(data.nFeatures + 1, data.nClasses))
+   model:add(nn.LogSoftMax())
+
+   local criterion = nn.ClassNLLCriterion()
+
+   local input = data.X
+   local target = data.y
+   local parameters, gradientParameters = model:getParameters()
+
+   -- return loss and gradient wrt parameters
+   -- using all the data as a mini batch
+   local function lossGradient(theta)
+      print('starting lossGradient impl 7b theta', theta)
+      stop()
+      --local vp = makeVp(0, 'lossGradient')
+      --vp(1, 'theta', theta)
+
+
+      if parameters ~= theta then
+         parameters:copy(theta)
+      end
+
+      gradientParameters:zero()
+
+      local output = model:forward(input)
+      local loss = criterion:forward(output, target)
+      local df_do = criterion:backward(output, target)
+      --model:backward(input, df_do)  -- set gradientParameters
+      --printTableValue('model', model)
+      local dmodule2_do = model.modules[2]:backward(input, df_do)
+      model.modules[1]:accGradParameters(input, dmodule2_do)  -- set gradientParameters
+      
+
+      -- normalize for input size
+      local nInput = input:size(1)
+
+      return loss / nInput, gradientParameters:div(nInput)
+   end
+
+   print('exiting makeLossGradient7b lossGradient', lossGradient)
+   stop()
+   return lossGradient, (data.nFeatures + 1) * data.nClasses
+end
 -- implementation 8: Yann's LogregFprobBrpbo with 1 sample
 local function makeLossGradient8(data)
    local vp = makeVp(1, 'makeLossGradient8')
@@ -655,7 +749,6 @@ local function makeLossGradient9(data)
    local x = data.X[1]
    local y = data.y[1]
    local nSamples = data.X:size(1)
-   print('nSamples', nSamples)
    local function lossGradient(theta)
       local loss, gradient
       for sampleIndex = 1, nSamples do
@@ -829,7 +922,6 @@ local function makeLossGradient11(data)
    return lossGradient, (data.nFeatures + 1) * data.nClasses
 end
 
-
 -- implementation 12: Yann's idea in batch mode
 local function makeLossGradient12(data)
    local vp = makeVp(1, 'makeLossGradient11')
@@ -907,7 +999,7 @@ local function makeLossGradient12(data)
 
       local objective = 0
       local sumGradient = torch.Tensor(nClasses, nFeatures):zero()
-      for sampleIndex = 1, nSamples do
+      for sampleIndex = 1, nSamples do  -- this sum is slow
          objective = objective - math.log(p[y[sampleIndex]][sampleIndex])
 
          local targetForSample = torch.Tensor(nClasses):zero()
@@ -923,30 +1015,7 @@ local function makeLossGradient12(data)
       end
       local objectiveRegularized = objective + L2 * torch.sum(theta)
       sumGradient = sumGradient + theta * L2  -- add in regularizer
-      if true then
-         return objectiveRegularized, sumGradient
-      end
-         
-      printVariables('sumGradient')
-      stop()
-      printVariables('objective')
-
-      local target = torch.Tensor(theta:size(1)):zero()
-      printVariables('target', 'y')
-      target[y] = 1
-      printVariable('target')
-
-      local gradient = torch.ger(p - target, x) - theta*L2
-
-
-      printVariable('gradient')
-      stop()
-      if true then return end
-      --local objective = -log(p[y])
-      local objective = -math.log(p[y])
-      --local gradient = torch.ger( (p[y] - target), x) - theta*L2
-      local gradient = torch.ger( - (target - p[y]), x) - theta*L2
-      return objective, gradient -- NOTE: should ravel the gradient
+      return objectiveRegularized, sumGradient
    end
 
 
@@ -966,7 +1035,6 @@ local function makeLossGradient12(data)
    return lossGradient, (data.nFeatures + 1) * data.nClasses
 end
 
-
 -- compare timings of implementations
 local function compareImplementations(config, data, implementations)
    -- return cpu seconds and wallclock seconds to run
@@ -985,7 +1053,7 @@ local function compareImplementations(config, data, implementations)
       local timer = Timer()
       for iteration = 1, nIterations do
          local loss, newParameters = lossGradient(parameters)
-         parameters = newParameters
+         parameters = newParameters  -- no need to take a step for timing purposes
       end
 
       return timer:cpuWallclock() -- return cpu, wallclock
@@ -994,6 +1062,7 @@ local function compareImplementations(config, data, implementations)
    -- determine execution times for each implementation
    local times = {}  -- key == implementation number, value == table{cpu=, wallclock=}
    local which = 'all'
+   local which = '7b'
    --local which = 6
    for i, implementation in pairs(implementations) do
       if which == i or which == 'all' then
@@ -1010,8 +1079,8 @@ local function compareImplementations(config, data, implementations)
    print(ifelse(jit, '', 'not ') .. 'using luajit')
    print(string.format('timings in seconds per iterations over %d iterations', config.nIterations))
    print(string.format('   implementation %25s %8s       %%1 %8s %%1', ' ', 'cpu', 'wallclock'))
-   local cpu1 = times[1].cpu
-   local wallclock1 = times[1].wallclock
+   local cpu1 = times['1'].cpu
+   local wallclock1 = times['1'].wallclock
    cpu1 = ifelse(cpu1 == nil, 0, cpu1)
    wallclock1 = ifelse(wallclock1 == nil, 0, wallclock1)
    for i, time in pairs(times) do
@@ -1027,26 +1096,27 @@ end
 
 -- build table of all the implementations
 local function makeImplementations()
-   local result = {}
+   local implementations = {}
 
    local function implementation(index, maker, description)
-      result[index] = {maker = maker, description = description}
+      implementations[index] = {maker = maker, description = description}
    end
 
-   implementation(1, makeLossGradient1, 'original')
-   implementation(2, makeLossGradient2, 'remove makeVp')
-   implementation(3, makeLossGradient3, 'move getParameters out of function call')
-   implementation(4, makeLossGradient4, 'require theta == parameters')
-   implementation(5, makeLossGradient5, 'unroll + only gradOutput')
-   implementation(6, makeLossGradient6, 'just gradParameters')
-   implementation(7, makeLossGradient7, '2 + 3 + 6')
-   implementation(8, makeLossGradient8, 'Yann original-1 sample')
-   implementation(9, makeLossGradient9, 'Yann add 70 samples')
-   implementation(10, makeLossGradient10, 'Yann add logs')
-   implementation(11, makeLossGradient11, 'Yann add theta raveling, unraveling')
-   implementation(12, makeLossGradient12, 'Yann batch')
+   implementation('1', makeLossGradient1, 'original')
+   implementation('2', makeLossGradient2, 'remove makeVp')
+   implementation('3', makeLossGradient3, 'move getParameters out of function call')
+   implementation('4', makeLossGradient4, 'require theta == parameters')
+   implementation('5', makeLossGradient5, 'unroll + only gradOutput')
+   implementation('6', makeLossGradient6, 'just gradParameters')
+   implementation('7', makeLossGradient7, '2 + 3 + 6')
+   implementation('7b', makeLossGradient7b, '2 + 3 + 6 + RoyLinear')
+   implementation('8', makeLossGradient8, 'Yann original-1 sample')
+   implementation('9', makeLossGradient9, 'Yann add 70 samples')
+   implementation('10', makeLossGradient10, 'Yann add logs')
+   implementation('11', makeLossGradient11, 'Yann add theta raveling, unraveling')
+   implementation('12', makeLossGradient12, 'Yann batch')
 
-   return result
+   return implementations
 end
 
 -- MAIN PROGRAM
@@ -1074,7 +1144,7 @@ local config = {
 
 printTableValue('config', config)
 
-torch.manualSeed(123)  -- force same sequence of pseudo-random numbers
+torch.manualSeed(config.manualSeedValue)  -- force same sequence of pseudo-random numbers
 
 -- define implementatins
 local implementations = makeImplementations()
