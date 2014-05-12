@@ -1,0 +1,237 @@
+Program_linear_regression.R
+========================================================
+
+Create and test 3 different linear regression models:
+- predict last 10% of 2004 using just data from first 90% of 2004
+- predict last 10% of 2004 using all prior data
+- predict last 10% of 2004 using all prior and future data
+
+Run this document by opening it in RStudio and clicking the Knit HTML button 
+in the RStudio header.
+
+# Initialize
+
+Select models to run.
+
+```{r}
+models <- list("2004 only", "2004 all prior", "2004 all")
+```
+
+Control variables.
+
+```{r}
+dir.output = '../data/v6/output/'
+path.in = paste0(dir.output, "transactions-subset1.csv")
+cat(path.in, '\n')
+testing <- TRUE
+```
+
+Initialize R.
+
+```{r}
+options(warn=2)  # turn warnings into errors
+set.seed(1)      # random number generator seed
+require("compiler")
+enableJIT(3)     # 3 ==> maximum JIT level
+```
+Source files here. Nothing to source for now.
+
+# Read input file
+```{r}
+Read <- function(path.in, testing) {
+  # return data frame containing all features 
+  read.table(path.in,
+             header=TRUE,
+             sep=",",
+             quote="",
+             comment="",
+             stringsAsFactors=TRUE,
+             na.strings="NA",
+             nrows=ifelse(testing,1000,-1))
+}
+```
+# Split date YYYY-MM-DD into YYYY, MM, DD
+```{r}
+SplitDate <- function(date) {
+  # split a date into year, month, and day
+  # ARGS:
+  # date : character vector in format "YYYY-MM-DD"
+  # RETURNS:
+  # list with numeric vector elements $year, $month, $day
+  list(day=as.integer(substr(date, 9, 10)), 
+       month=as.integer(substr(date, 6, 7)), 
+       year=as.integer(substr(date, 1, 4)))
+}
+
+SplitDateTest <- function(date) {
+  split <- SplitDate(c('1111-22-33', '1929-06-02'))
+  print(split)
+  stopifnot(split$day == c(33, 2))
+  stopifnot(split$month == c(22, 6))
+  stopifnot(split$year == c(1111, 1929))
+}
+
+SplitDateTest()
+```
+# Center values in a vector
+```{r}
+Center <- function(v) {
+ (v - mean(v, na.rm=TRUE)) / sd(v, na.rm=TRUE)
+}
+
+CenterTest <- function() {
+  centered = Center(c(1,2,3))
+  stopifnot(centered[1] == -1)
+  stopifnot(centered[2] == 0)
+  stopifnot(centered[3] == 1)
+}
+
+CenterTest()
+```
+# Read and transform the data
+```{r}
+ReadAndTransform <- function(path.in, testing) {
+  # read a transactions CSV file and transform its features
+  # ARGS:
+  # path.in : string, the path to the CSV file
+  # testing : logical, if true read just first 1000 records 
+  #
+  # Chopra's description of his processing
+  # Data was transactions and tax roll for 2004. Only transactions for single 
+  # family was used. Processing steps:
+  # • remove records with one or more missing values. The reduced data set had
+  #   42,025 transactions.
+  # • transform into log space all features corresponding to price, area, and
+  #   income
+  # • tranform to 1-of-K encoding all discrete features
+  # • normalize all variables to have mean 0 and a standard deviation between
+  #   -1 and 1
+  #
+  # Chopra's features before transformations [page 87 in his thesis]
+  # PRICE
+  # LIVING.AREA
+  # YEAR.BUILT
+  # BEDROOMS
+  # BATHROOMS
+  # HAS.POOL
+  # PRIOR.PRICE  Not in the transaction file
+  # PARKING.SPACES
+  # PARKING.TYPE
+  # LOT ACERAGE Not in the transaction file
+  # LAND.VALUE
+  # IMPROVEMENT.VALUE
+  # PERCENT.IMPROVEMENT.VALUE
+  # IS.NEW.CONSTUCTION  Present, but don't know coding
+  # FOUNDATION.TYPE
+  # ROOF.TYPE
+  # HEATING.TYPE
+  # SITE.INFLUENCE  Used location influence code
+  # LATITUDE
+  # LONGITUDE
+  # MEDIAN.HOUSEHOLD.INCOME
+  # FRACTION.OWNER.OCCUPIED
+  # AVG.COMMUTE.TIME
+  # school district academic performance index (Not in our data)
+  #
+  # In addition to Chopra's features, also return these features
+  # SALE.DAY, SALE.MONTH, SALE.YEAR
+  raw <- Read(path.in, testing)
+  cat('raw input from transaction file\n')
+  str(raw)
+  splitDate <- SplitDate(raw$X.transaction.date)
+  # check pool flag
+  if (FALSE) {
+    # check pool flag computation
+    cat('checking pool flag\n')
+    str(raw$X.POOL.FLAG)
+    temp = ifelse(is.na(raw$X.POOL.FLAG), 'N', raw$X.POOL.FLAG)
+    print(head(temp == 2))
+    cat('done\n')
+  }
+  # replace NA with N
+  pool.flag.recoded <- ifelse(is.na(raw$X.POOL.FLAG), 'N', raw$X.POOL.FLAG)
+  if (FALSE) {
+    # check new construction computation
+    cat('checking new construction\n')
+    str(raw$X.RESALE.NEW.CONSTRUCTION.CODE)
+    is.new <- raw$X.RESALE.NEW.CONSTRUCTION.CODE == 'N'
+    cat('raw', raw$X.RESALE.NEW.CONSTRUCTION.CODE, '\n')
+    cat('is.new', is.new, '\n')
+    cat('done\n')
+  }
+  cat('find error\n')
+  Test <- function(s, l) {
+    print(s)
+    print(l)
+    print(log(l))
+  }
+  #Test('sale amount', raw$X.SALE.AMOUNT)
+  #Test('living area', raw$X.LIVING.SQUARE.FEET)
+  data.frame(SALE.DAY = splitDate$day,
+             sale.month = splitDate$month,
+             sale.year = splitDate$year,
+             log.price = log(raw$X.SALE.AMOUNT),
+             centerer.log.living.area = Center(log(raw$X.LIVING.SQUARE.FEET)),
+             centered.year.built = Center(raw$X.YEAR.BUILT),
+             centerer.log.bedrooms = Center(log(raw$X.BEDROOMS)),
+             centered.log.bathroom = Center(log(raw$X.TOTAL.BATHS.CALCULATED)),
+             AVG.COMMUTE.TIME = Center(raw$X.avg.commute))
+  cat('now for real\n')
+  cat('check if we need to center log living area, log bedrooms, log bathrooms\n')
+  data.frame(sale.date = splitDate$day,
+             sale.month = splitDate$month,
+             sale.year = splitDate$year,
+             log.price = log(raw$X.SALE.AMOUNT),
+             centered.log.living.area = Center(log(raw$X.LIVING.SQUARE.FEET)),
+             centered.year.built = Center(raw$X.YEAR.BUILT),
+             centerer.log.bedrooms = Center(log(raw$X.BEDROOMS)),
+             centered.log.bathroom = Center(log(raw$X.TOTAL.BATHS.CALCULATED)),
+             centered.log.parking.spaces = Center(log(raw$X.PARKING.SPACES)),
+             centered.log.land.value = Center(log(raw$X.LAND.VALUE.CALCULATED)),
+             centered.log.improvement.value = 
+               Center(log(raw$X.IMPROVEMENT.VALUE.CALCULATED)),
+             centered.fraction.improvement.value = 
+               Center(raw$X.LAND.VALUE.CALCULATED / 
+                 (raw$X.LAND.VALUE.CALCULATED + 
+                    raw$X.IMPROVEMENT.VALUE.CALCULATED)),
+             factor.parking.type = raw$X.PARKING.TYPE.CODE,
+             factor.has.pool = (pool.flag.recoded == 2),
+             factor.is.new.construction = 
+               raw$X.RESALE.NEW.CONSTRUCTION.CODE == 'N',
+             factor.foundation.type = raw$X.FOUNDATION.CODE,
+             factor.roof.type = raw$X.ROOF.TYPE.CODE,
+             factor.heating.type = raw$X.HEATING.CODE,
+             factor.site.influence = raw$X.LOCATION.INFLUENCE.CODE,
+             centered.lattitude = Center(raw$X.G.LATITUDE),
+             centered.longitude = Center(raw$X.G.LONGITUDE),
+             centered.log.median.household.income = 
+               Center(log(raw$X.median.household.income)),
+             centered.fraction.owner.occupied = 
+               Center(raw$X.fraction.owner.occupied),
+             centered.avg.commute.time = Center(raw$X.avg.commute))
+}
+```
+# Read data
+```{r}
+df <- ReadAndTransform(path.in, testing)
+str(df)
+summary(df)
+```
+# Define models
+
+Model <- function(trainDf, testDf) {
+  # return statistics on fitted linear regression model
+  # ARGS:
+  # trainDF : data.frame with training data
+  # isTrain : boolean vector identifying training samples
+  # isTest  : boolean vector identifying test samples
+  # RETURNS double vector of predictions for test samples
+}
+
+# Run models
+
+for (model <- models) {
+  if (model = "2004 only") {
+    RunModel(df, )
+  }
+}
