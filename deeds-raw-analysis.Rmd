@@ -36,7 +36,12 @@ ReadOne <- function(num) {
                 num,
                 ".txt.gz",
                 sep="")
-  df <- read.table(path, header=TRUE, sep="\t", quote="", comment.char="", na.strings="",
+  df <- read.table(path, 
+  								 header=TRUE, 
+  								 sep="\t",
+  								 quote="", 
+  								 comment.char="", 
+  								 na.strings="",
                    stringsAsFactors=FALSE,
                    encoding="UTF-8",
                    nrows=ifelse(settings$testing,1000,-1))
