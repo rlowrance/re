@@ -1,12 +1,15 @@
 -- LogisticRegression_classes_test.luya
 -- unit test
 
+require 'augment'
 require 'nn'
 require 'LogisticRegression_classes'
 
 
 local nSamples = 5
+local nFeatures = 2
 local nClasses = 3
+local X = torch.rand(nSamples, nFeatures)
 local logprob = torch.rand(nSamples, nClasses)
 local target = torch.Tensor{1,2,3,1,2,}
 local salience = torch.Tensor{0, .1, .9, .5, .25}
@@ -94,7 +97,29 @@ local function checkGradientLogisticRegressionCriterion(eps, tolerance, printCom
    return ok
 end
 
+-- test Criterion(Model)
+
+-- return true iff gradient of Criterion(Model) is approx correct
+local function checkGradientLossGradient(eps, tolerance, printComparisons)
+   local augmentedX = augment(X)
+   local l2 = 0 -- for now
+   local loss, lossGradient = LogisticRegression.makeFunctions(augmentedX, target, salience, nClasses, l2)
+
+   local function gradient(theta)
+      local lossValue, gradientValue = lossGradient(theta)
+      return gradientValue
+   end
+
+   local point0 = torch.rand(nClasses, nFeatures)  -- a theta
+   local grad = gradient(point0)
+   local fdGradient = fdGradient(point0, eps, loss)
+   local ok = matrixApproxEqual(grad, fdGrad, tolerance, printComparisons)
+   return ok
+end
+
 local printComparisons = false
 assert(checkGradientNLLCriterion(1e-6, 1e-6, printComparisons))
 assert(checkGradientLogisticRegressionCriterion(1e-6, 1e-6, printComparisons))
-print('ok')
+assert(checkGradientLossGradient(1e-6, 1e-6, printComparisons))
+
+print('ok LogistcRegression_classes')
