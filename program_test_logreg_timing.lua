@@ -18,14 +18,14 @@ require 'Random'
 require 'Timer'
 require 'torch'
 
--- return table containing all the data
+-- return table containing all the data--{{{
 local function makeData(nClasses, nFeatures, nSamples)
    local X = torch.rand(nSamples, nFeatures)
    local y = Random():integer(nSamples, 1, nClasses)
    return {X = X, y = y, nClasses = nClasses, nFeatures = nFeatures, nSamples = nSamples}
-end
+end--}}}
 
--- implementation 1: the starting point
+-- implementation 1: the starting point--{{{
 -- return function that retuns loss and gradient at specified parameters theta
 -- RETURN 
 -- lossGradient : function(theta) --> loss, gradient
@@ -69,9 +69,9 @@ local function makeLossGradient1(data)
    end
 
    return lossGradient, (data.nFeatures + 1) * data.nClasses
-end
+end--}}}
 
--- implementation 2: remove makeVp
+-- implementation 2: remove makeVp--{{{
 -- return function that retuns loss and gradient at specified parameters theta
 -- RETURN 
 -- lossGradient : function(theta) --> loss, gradient
@@ -112,9 +112,9 @@ local function makeLossGradient2(data)
    end
 
    return lossGradient, (data.nFeatures + 1) * data.nClasses
-end
+end--}}}
 
--- implementation 3: move getParameters out of function call
+-- implementation 3: move getParameters out of function call--{{{
 -- return function that retuns loss and gradient at specified parameters theta
 -- RETURN 
 -- lossGradient : function(theta) --> loss, gradient
@@ -158,9 +158,9 @@ local function makeLossGradient3(data)
    end
 
    return lossGradient, (data.nFeatures + 1) * data.nClasses
-end
+end--}}}
 
--- implementation 4: require theta == parameters
+-- implementation 4: require theta == parameters--{{{
 -- return function that retuns loss and gradient at specified parameters theta
 -- RETURN 
 -- lossGradient : function(theta) --> loss, gradient
@@ -228,9 +228,9 @@ local function makeLossGradient4(data)
    end
 
    return lossGradient, parameters
-end
+end--}}}
 
--- implementation 5: unroll function calls
+-- implementation 5: unroll function calls--{{{
 -- return function that retuns loss and gradient at specified parameters theta
 -- RETURN 
 -- lossGradient : function(theta) --> loss, gradient
@@ -433,9 +433,9 @@ local function makeLossGradient5(data)
    end
 
    return lossGradient, (data.nFeatures + 1) * data.nClasses
-end
+end--}}}
 
--- implementation 6: just compute gradParameters, not also gradOutput
+-- implementation 6: just compute gradParameters, not also gradOutput--{{{
 -- return function that retuns loss and gradient at specified parameters theta
 -- RETURN 
 -- lossGradient : function(theta) --> loss, gradient
@@ -483,9 +483,9 @@ local function makeLossGradient6(data)
    end
 
    return lossGradient, (data.nFeatures + 1) * data.nClasses
-end
+end--}}}
 
--- implementation 7: 2 + 3 + 6
+-- implementation 7: 2 + 3 + 6--{{{
 -- return function that retuns loss and gradient at specified parameters theta
 -- RETURN 
 -- lossGradient : function(theta) --> loss, gradient
@@ -532,90 +532,67 @@ local function makeLossGradient7(data)
    end
 
    return lossGradient, (data.nFeatures + 1) * data.nClasses
-end
+end--}}}
 
--- implementation 7b: 2 + 3 + 6 + faster Linear
+-- implementation 7b: 2 + 3 + 6 + faster Linear--{{{
 -- Linear is faster because it combines the weight and bias tensors into one tensor
 -- return function that retuns loss and gradient at specified parameters theta
 -- RETURN 
 -- lossGradient : function(theta) --> loss, gradient
 -- nParameters  : integer > 0, number of flattened parameters
 
--- conceptually local class
-do
-   local RoyLinear, parent = torch.class('RoyLinear', 'nn.Module')
-
-   function RoyLinear:__init(inputSize, outputSize) -- input is augmented (prefixed by 1)
-      print('RoyLinear:__init inputSize', inputSize, 'outputSize', outputSize)
-      parent:__init(self)
-      self.theta = torch.Tensor(outputSize, inputSize):zero() -- best for logistic regression
-      self.gradTheta = torch.Tensor(outputSize, inputSize)
-   end
-
-   function RoyLinear:updateOutput(input)
-      print('RoyLinear:updateOutput input', input)
-      stop()
-      -- input is augmented (1 in column 1)
-      self.output = torch.mm(self.theta, input:t())
-   end
-
-   function RoyLinear:accGradParameters(input, gradOutput, scale)
-      self.theta:addmm(scale, gradOutput:t(), input)
-   end
-end  -- scope for RoyLinear
+require 'LogisticRegression_classes'
 
 local function makeLossGradient7b(data)
    print('starting makeLossGradient7b')
    local vp = makeVp(1, 'makeLossGradient7b')
 
-   for k, v in pairs(RoyLinear) do
-      print('RoyLinear k', k, 'RoyLinear v', v)
-   end
-   
-
-   local rl = RoyLinear(3, 5) -- find the bug
-   pp.table('rl', rl)
-
    print('data', data)
    pp.table('data', data)
 
+   -- augment the input data set
+   local function augment(X)
+      local nSamples = X:size(1)
+      local nFeatures = X:size(2)
+      local result = torch.Tensor(nSamples, nFeatures + 1)
+      for s = 1, nSamples do
+         result[s][1] = 1
+         for f = 1, nFeatures do
+            result[s][f] = X[s][f]
+         end
+      end
+      return result
+   end
 
+   local XAugmented = augment(data.X)
+   local y = data.y
+   local s= torch.rand(data.nSamples)  -- draws uniformly from (0,1)
+   local target = {y = y, s = s}
 
+   local nFeatures = XAugmented:size(2)
+   local nClasses = data.nClasses
 
-   local model = nn.Sequential()
-   --model:add(nn.Linear(data.nFeatures, data.nClasses))
-   model:add(RoyLinear(data.nFeatures + 1, data.nClasses))
-   model:add(nn.LogSoftMax())
+   local model = LogisticRegressionModel(nFeatures, nClasses)
+   local criterion = LogisticRegressionCriterion()
 
-   local criterion = nn.ClassNLLCriterion()
+   pp.table('model', model)
+   pp.table('criterion', criterion)
 
-   local input = data.X
-   local target = data.y
-   local parameters, gradientParameters = model:getParameters()
+   -- local parameters, gradientParameters = model:getParameters()
+   -- don't flatten the parameters (which are just in RoyLinear)
+   --local parameters, gradientParameters = model[1].theta, model[1].gradTheta
 
    -- return loss and gradient wrt parameters
    -- using all the data as a mini batch
    local function lossGradient(theta)
-      print('starting lossGradient impl 7b theta', theta)
-      stop()
-      --local vp = makeVp(0, 'lossGradient')
-      --vp(1, 'theta', theta)
+      print('starting lossGradient impl 7b theta size', theta:size())
+      -- ignore the theta value!
 
-
-      if parameters ~= theta then
-         parameters:copy(theta)
-      end
-
-      gradientParameters:zero()
-
-      local output = model:forward(input)
-      local loss = criterion:forward(output, target)
+      local output = model:forward(XAugmented)
+      local loss = criterion:foward(output, target)
       local df_do = criterion:backward(output, target)
-      --model:backward(input, df_do)  -- set gradientParameters
-      --printTableValue('model', model)
       local dmodule2_do = model.modules[2]:backward(input, df_do)
       model.modules[1]:accGradParameters(input, dmodule2_do)  -- set gradientParameters
-      
 
       -- normalize for input size
       local nInput = input:size(1)
@@ -623,11 +600,10 @@ local function makeLossGradient7b(data)
       return loss / nInput, gradientParameters:div(nInput)
    end
 
-   print('exiting makeLossGradient7b lossGradient', lossGradient)
-   stop()
-   return lossGradient, (data.nFeatures + 1) * data.nClasses
-end
--- implementation 8: Yann's LogregFprobBrpbo with 1 sample
+   return lossGradient, {[1] = nClasses, [2] = nFeatures}
+end--}}}
+
+-- implementation 8: Yann's LogregFprobBrpbo with 1 sample--{{{
 local function makeLossGradient8(data)
    local vp = makeVp(1, 'makeLossGradient8')
 
@@ -656,7 +632,7 @@ local function makeLossGradient8(data)
       local target = torch.Tensor(theta:size(1)):zero()
       target[y] = 1
       --local gradient = torch.ger( (p[y] - target), x) - theta*L2
-      local gradient = torch.ger( - (target - p[y]), x) - theta*L2  -- get == outer product
+      local gradient = torch.ger( - (target - p[y]), x) - theta*L2  -- ger == outer product
       return objective, gradient
    end
 
@@ -687,9 +663,9 @@ local function makeLossGradient8(data)
    end
 
    return lossGradient, (data.nFeatures + 1) * data.nClasses
-end
+end--}}}
 
--- implementation 9: Yann's LogregFprobBrpbo with 70 samples
+-- implementation 9: Yann's LogregFprobBrpbo with 70 samples--{{{
 -- Other incrmemental functionality that could be added
 -- - take logs, because that's what package nn does
 -- - ravel and unravel the theta argument. It should be flat, but its structured in Yann's code.
@@ -758,9 +734,9 @@ local function makeLossGradient9(data)
    end
 
    return lossGradient, (data.nFeatures + 1) * data.nClasses
-end
+end--}}}
 
--- implementation 10: Yann's LogregFprobBrpbo with 70 sample and logs
+-- implementation 10: Yann's LogregFprobBrpbo with 70 sample and logs--{{{
 local function makeLossGradient10(data)
    local vp = makeVp(1, 'makeLossGradient8')
 
@@ -827,9 +803,9 @@ local function makeLossGradient10(data)
    end
 
    return lossGradient, (data.nFeatures + 1) * data.nClasses
-end
+end--}}}
 
--- implementation 11: Yann's LogregFprobBrpbo add: ravel and deravel theta
+-- implementation 11: Yann's LogregFprobBrpbo add: ravel and deravel theta--{{{
 local function makeLossGradient11(data)
    local vp = makeVp(1, 'makeLossGradient11')
 
@@ -920,9 +896,9 @@ local function makeLossGradient11(data)
    end
 
    return lossGradient, (data.nFeatures + 1) * data.nClasses
-end
+end--}}}
 
--- implementation 12: Yann's idea in batch mode
+-- implementation 12: Yann's idea in batch mode--{{{
 local function makeLossGradient12(data)
    local vp = makeVp(1, 'makeLossGradient11')
 
@@ -1033,9 +1009,9 @@ local function makeLossGradient12(data)
    end
 
    return lossGradient, (data.nFeatures + 1) * data.nClasses
-end
+end--}}}
 
--- compare timings of implementations
+-- compare timings of implementations--{{{
 local function compareImplementations(config, data, implementations)
    -- return cpu seconds and wallclock seconds to run
    -- the implemenation created by maker(data) for nIterations
@@ -1093,8 +1069,9 @@ local function compareImplementations(config, data, implementations)
                            time.wallclock / wallclock1 * 100))
    end
 end
+--}}}
 
--- build table of all the implementations
+-- build table of all the implementations--{{{
 local function makeImplementations()
    local implementations = {}
 
@@ -1117,7 +1094,7 @@ local function makeImplementations()
    implementation('12', makeLossGradient12, 'Yann batch')
 
    return implementations
-end
+end--}}}
 
 -- MAIN PROGRAM
 
