@@ -8,11 +8,44 @@ require 'cachedComputation2'
 require 'fileDelete'
 require 'fileExists'
 require 'ifelse'
+require 'knn'
+require 'object'
 require 'pp'
 require 'readKnnInfoConsolidated'
+require 'tableCount'
 require 'Timer'
 
-local function test()
+local function test(version)
+   local debug = true
+   local debug = function(a, b) if debug then print(a,b) end end
+   local arg = {
+      newSize = 256,
+      nShards = 100, -- read them all
+      --nShards = 2,
+      version = version,
+   }
+   local versionNumber = readKnnInfoConsolidated()
+   assert(type(versionNumber) == 'number')
+
+   local consolidated = readKnnInfoConsolidated(arg)
+   if version == 1 then
+      for queryIndex, knnInfo in pairs(consolidated) do
+         if debug then print('queryIndex', queryIndex) pp.knnInfo('knnInfo', knnInfo) end
+         assert(type(queryIndex) == 'number')
+         assert(knn.isKnnInfo(knnInfo))
+         break
+      end
+   elseif version == 2 then
+      print('type(consolidate)', type(consolidated))
+      pp.table('consolidated', consolidated)
+      assert(type(consolidated) == 'table')
+      debug('calculated bytes in consolidated', object.nBytes(consolidated))
+      if debug then pp.table('consolidated', consolidated) end
+   end
+
+end
+
+local function testViaCachedComputation2()
    local inputDir = '../data/v6/output/knninfo/impute-shards/'
    local inputFileBaseName = 'program_impute_knninfo_consolidate_shards_to_serialized_objects'
    local inputFileSuffix = '.serialized'
@@ -67,6 +100,15 @@ local function test()
    assert(info.how == 'used cache')
 end
 
-test()
+local timer = Timer()
+test(2)
+local cpu, wallclock = timer:cpuWallclock()
+if debug then 
+   print('test timing') 
+   print('cpu', cpu) 
+   print('wallclock', wallclock) 
+end
+
+--testViaCachedComputation2()
 
 print('ok readKnnInfoConsolidated')
