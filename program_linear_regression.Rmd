@@ -176,17 +176,19 @@ ReadAndTransform <- function(path.in, testing) {
              centerer.log.bedrooms = Center(log(raw$X.BEDROOMS)),
              centered.log.bathroom = Center(log(raw$X.TOTAL.BATHS.CALCULATED)),
              AVG.COMMUTE.TIME = Center(raw$X.avg.commute))
+  cat('parking spaces has zero value?', 
+      any(raw$X.PARKING.SPACES == 0),
+      '\n')
   cat('now for real\n')
-  cat('check if we need to center log living area, log bedrooms, log bathrooms\n')
   data.frame(sale.date = splitDate$day,
              sale.month = splitDate$month,
              sale.year = splitDate$year,
              log.price = log(raw$X.SALE.AMOUNT),
              centered.log.living.area = Center(log(raw$X.LIVING.SQUARE.FEET)),
              centered.year.built = Center(raw$X.YEAR.BUILT),
-             centerer.log.bedrooms = Center(log(raw$X.BEDROOMS)),
+             centered.log.bedrooms = Center(log(raw$X.BEDROOMS)),
              centered.log.bathroom = Center(log(raw$X.TOTAL.BATHS.CALCULATED)),
-             centered.log.parking.spaces = Center(log(raw$X.PARKING.SPACES)),
+             centered.log1p.parking.spaces = Center(log1p(raw$X.PARKING.SPACES)),
              centered.log.land.value = Center(log(raw$X.LAND.VALUE.CALCULATED)),
              centered.log.improvement.value = 
                Center(log(raw$X.IMPROVEMENT.VALUE.CALCULATED)),
