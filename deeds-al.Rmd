@@ -1,10 +1,18 @@
 # deeds-al.Rmd
 
-Create the output file holding the arms-length deeds. In order to cope with having only
-16 GB of RAM on my system, only features needed downstream in the pipeline are retained.
+Create the output file holding the arms-length deeds. In order to cope with having only 16 GB of RAM on my system, only features needed downstream in the pipeline are retained.
+
+Retain only features of deeds, not features of the parcels. The idea is to
+rely on the parcels file exclusive for parcels features.
+
+Drop features that are non informative (always missing or always same value).
+
+Drop deeds that are 100% duplicates of other deeds.
 
 Files read and the deeds files the Laufer directory. This directory contains
 the file Steve Laufer used in his experiments.
+
+Record layout for the input is in 1080_Record_layout.csv
 
 ```{r}
 laufer.dir="../data/raw/from-laufer-2010-05-11"
@@ -25,7 +33,7 @@ path.deeds.out <- paste(dir.output,
 Set script control variables.
 
 ```{r}
-testing <- FALSE
+testing <- TRUE
 ```
 
 Initialize R.
@@ -45,83 +53,100 @@ source("RemoveNonInformative.R")
 
 ## Define function to read a deeds file
 
-Use a global variable to keep track of bad arms length deeds.
-```{r}
-not.arms.length <- 0
-```
-
 Read one deeds file with suffix "num" in its file name.
 
 ```{r}
-  ReadDeedsFile <- function(num) {
-    # Args:
-    # num: number of input file; in {1, 2, ..., 8}
-    #
-    # Value:
-    # data frame containing selected features from the arms-length deeds
-    # Also update not.arms.length global variable
+ReadDeedsFile <- function(num) {
+  # Read the deeds file containing num in its name
+  # Args:
+  # num: number of input file; in {1, 2, ..., 8}
+  #
+  # Value: a list
+  # $df : data.frame containing selected features for arms-length deeds
+  # $num.dropped : number of non-arms-length deeds dropped from $df
 
-    # read the deeds file
-    # Note: In file 5, data record 945 has an NA value for APN.FORMATTED
-    path <- paste(laufer.dir,
-                  "/deeds/CAC06037F",
-                  num,
-                  ".txt.gz",
-                  sep="")
-    cat("\nreading deeds file", path, "\n")
-    # NOTE: Don't convert strings to factors, because the other input
+  # read the deeds file
+  # Note: In file 5, data record 945 has an NA value for APN.FORMATTED
+  path <- paste(laufer.dir,
+                "/deeds/CAC06037F",
+                num,
+                ".txt.gz",
+                sep="")
+  cat("\nreading deeds file", path, "\n")
+  # NOTE: Don't convert strings to factors, because the other input
     # files may have different values than this file
-    df <- read.table(path,
-                     header=TRUE,
-                     sep="\t",
-                     quote="",
-                     comment.char="",
-                     stringsAsFactors=FALSE,
-                     na.strings="",
-                     nrows=ifelse(testing,1000,-1))
+  df <- read.table(path,
+                   header=TRUE,
+                   sep="\t",
+                   quote="",
+                   comment.char="",
+                   stringsAsFactors=FALSE,
+                   na.strings="",
+                   nrows=ifelse(testing,1000,-1))
 
-    cat("records in", path, nrow(df), "\n")
+  cat("records in", path, nrow(df), "\n")
 
-    # keep the features we want
-    # add features to trace back to original source
-    r <- data.frame(APN.UNFORMATTED=df$APN.UNFORMATTED
-                    ,APN.FORMATTED=df$APN.FORMATTED
-                    ,SALE.DATE=df$SALE.DATE
-                    ,RECORDING.DATE=df$RECORDING.DATE
-                    ,SALE.AMOUNT=df$SALE.AMOUNT
-                    ,DOCUMENT.TYPE.CODE=df$DOCUMENT.TYPE.CODE
-                    ,TRANSACTION.TYPE.CODE=df$TRANSACTION.TYPE.CODE
-                    ,SALE.CODE=df$SALE.CODE
-                    ,MULTI.APN.FLAG.CODE=df$MULTI.APN.FLAG.CODE
-                    ,MULTI.APN.COUNT=df$MULTI.APN.COUNT
-                    ,PRI.CAT.CODE=df$PRI.CAT.CODE
-                    ,RESALE.NEW.CONSTRUCTION.CODE=df$RESALE.NEW.CONSTRUCTION.CODE
-                    ,deed.file.number=rep(num, nrow(df))
-                    ,deed.record.number=1:nrow(df)
-                    )
+  # keep the features we want
+  # add features to trace back to original source
+  r <- data.frame(
+    APN.UNFORMATTED=df$APN.UNFORMATTED, 
+    APN.FORMATTED=df$APN.FORMATTED,
+    SALE.AMOUNT=df$SALE.AMOUNT,
+    SALE.DATE=df$SALE.DATE,
+    RECORDING.DATE=df$RECORDING.DATE,
+    DOCUMENT.TYPE.CODE=df$DOCUMENT.TYPE.CODE,
+    TRANSACTION.TYPE.CODE=df$TRANSACTION.TYPE.CODE,
+    SALE.CODE=df$SALE.CODE,
+    MULTI.APN.FLAG.CODE=df$MULTI.APN.FLAG.CODE,
+    MULTI.APN.COUNT=df$MULTI.APN.COUNT,
+    PRIOR.SALES.DATE=df$PRIOR.SALES.DATE,
+    PRIOR.SALES.AMOUNT=df$PRIOR.SALES.AMOUNT,
+    PRIOR.MULTI.APN.FLAG.CODE=df$PRIOR.MULTI.APN.FLAG.CODE,
+    PRIOR.MULTI.APN.COUNT=df$PRIOR.MULTI.APN.COUNT,
+    PRI.CAT.CODE=df$PRI.CAT.CODE,
+    RESALE.NEW.CONSTRUCTION.CODE=df$RESALE.NEW.CONSTRUCTION.CODE,
+    deed.file.number=rep(num, nrow(df)),
+    deed.record.number=1:nrow(df))
 
 
-    # keep only arms-length deeds and deeds with numeric apns
-    al <- r$PRI.CAT.CODE == "A"  # arms-length deeds
-    num.al <- sum(al)
-    not.al <- nrow(r) - num.al
-    cat("numer of deeds in file", nrow(r), "\n")
-    cat("number of non-arms-length deeds", not.al, "\n")
-
-    cat("dropping deeds that are not arms length\n")
-    r <- r[al,]
-
-    # keep track of bad records
-    not.arms.length <<- not.arms.length + not.al
-    r
+  # keep only arms-length deeds and deeds with numeric apns
+  arms.length <- r$PRI.CAT.CODE == "A"  # arms-length deeds
+  r <- r[arms.length, ]
+  
+  list(df=r, num.dropped=nrow(r) - sum(arms.length))
   }
 ```
 
-## Read the deed file
+## Read the deed files
 
 Concatenate all the deeds files into one data frame.
 
 ```{r}
+ReadAll <- function() {
+  # Value: list
+  # $df : data frame containing only arms-length deeds and certain features
+  # $num.dropped : number of non arms-length deeds found and dropped
+  Iter <- function(file.number, df, num.dropped) {
+    # accumulate info in file.number
+    if (file.number == 9) {
+      list(df=df, num.dropped=num.dropped)
+    }
+    res <- ReadDeedsFile(file.number)
+    cat('dropped ', res$num.dropped, ' records from file ', file.number, '\n')
+    cat('nrows df', nrow(df), '\n')
+    cat('nrows res$df', nrow(res$df), '\n')
+    Iter(file.number + 1, 
+         rbind(df, res$df), 
+         num.dropped + res$num.dropped)
+  }
+  Iter(1, NULL, 0)
+}
+all <- ReadAll()
+cat('total number of non-arms length deeds', all$num.dropped, '\n')
+str(all$df)
+summary(all$df)
+stop()
+
 df.all <- rbind(ReadDeedsFile(1),
                 ReadDeedsFile(2),
                 ReadDeedsFile(3),
