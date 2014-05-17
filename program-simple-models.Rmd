@@ -1,5 +1,22 @@
-Program_linear_regression.R
+Program Simple Model.R
 ========================================================
+
+Create and test some simple models on the future prediction problem.
+
+Simple models include
+- linear regression
+- weighted linear regression
+- linear regression by neighborhood (zip code, zip +4, census tract)
+- CART
+- random forest
+- houses near open space
+- houses near shopping (use tax roll to identify shopping)
+- houses near factories
+
+Q: can we do better than Sumit? He used 11 months to predict the next 1 month.
+
+Future prediction means to predict the near future (1 month) given all history
+up to that time. For now, don't test retrogression.
 
 Create and test 3 different linear regression models:
 - predict last 10% of 2004 using just data from first 90% of 2004
@@ -11,19 +28,14 @@ in the RStudio header.
 
 # Initialize
 
-Select models to run.
+Set control variables.
 
 ```{r}
-models <- list("2004 only", "2004 all prior", "2004 all")
-```
-
-Control variables.
-
-```{r}
-dir.output = '../data/v6/output/'
-path.in = paste0(dir.output, "transactions-subset1.csv")
-cat(path.in, '\n')
-testing <- TRUE
+control <- list(
+  dir.output = '../data/v6/output/',
+  testing <- TRUE,
+  nrows = 1000)
+control$path.in = paste0(control$dir.output, "transactions-subset1.csv")
 ```
 
 Initialize R.
@@ -35,205 +47,89 @@ require("compiler")
 enableJIT(3)     # 3 ==> maximum JIT level
 ```
 Source files here. Nothing to source for now.
-
-# Read input file
 ```{r}
-Read <- function(path.in, testing) {
-  # return data frame containing all features 
-  read.table(path.in,
-             header=TRUE,
-             sep=",",
-             quote="",
-             comment="",
-             stringsAsFactors=TRUE,
-             na.strings="NA",
-             nrows=ifelse(testing,1000,-1))
-}
-```
-# Split date YYYY-MM-DD into YYYY, MM, DD
-```{r}
-SplitDate <- function(date) {
-  # split a date into year, month, and day
-  # ARGS:
-  # date : character vector in format "YYYY-MM-DD"
-  # RETURNS:
-  # list with numeric vector elements $year, $month, $day
-  list(day=as.integer(substr(date, 9, 10)), 
-       month=as.integer(substr(date, 6, 7)), 
-       year=as.integer(substr(date, 1, 4)))
-}
-
-SplitDateTest <- function(date) {
-  split <- SplitDate(c('1111-22-33', '1929-06-02'))
-  print(split)
-  stopifnot(split$day == c(33, 2))
-  stopifnot(split$month == c(22, 6))
-  stopifnot(split$year == c(1111, 1929))
-}
-
-SplitDateTest()
-```
-# Center values in a vector
-```{r}
-Center <- function(v) {
- (v - mean(v, na.rm=TRUE)) / sd(v, na.rm=TRUE)
-}
-
-CenterTest <- function() {
-  centered = Center(c(1,2,3))
-  stopifnot(centered[1] == -1)
-  stopifnot(centered[2] == 0)
-  stopifnot(centered[3] == 1)
-}
-
-CenterTest()
-```
-# Read and transform the data
-```{r}
-ReadAndTransform <- function(path.in, testing) {
-  # read a transactions CSV file and transform its features
-  # ARGS:
-  # path.in : string, the path to the CSV file
-  # testing : logical, if true read just first 1000 records 
-  #
-  # Chopra's description of his processing
-  # Data was transactions and tax roll for 2004. Only transactions for single 
-  # family was used. Processing steps:
-  # • remove records with one or more missing values. The reduced data set had
-  #   42,025 transactions.
-  # • transform into log space all features corresponding to price, area, and
-  #   income
-  # • tranform to 1-of-K encoding all discrete features
-  # • normalize all variables to have mean 0 and a standard deviation between
-  #   -1 and 1
-  #
-  # Chopra's features before transformations [page 87 in his thesis]
-  # PRICE
-  # LIVING.AREA
-  # YEAR.BUILT
-  # BEDROOMS
-  # BATHROOMS
-  # HAS.POOL
-  # PRIOR.PRICE  Not in the transaction file
-  # PARKING.SPACES
-  # PARKING.TYPE
-  # LOT ACERAGE Not in the transaction file
-  # LAND.VALUE
-  # IMPROVEMENT.VALUE
-  # PERCENT.IMPROVEMENT.VALUE
-  # IS.NEW.CONSTUCTION  Present, but don't know coding
-  # FOUNDATION.TYPE
-  # ROOF.TYPE
-  # HEATING.TYPE
-  # SITE.INFLUENCE  Used location influence code
-  # LATITUDE
-  # LONGITUDE
-  # MEDIAN.HOUSEHOLD.INCOME
-  # FRACTION.OWNER.OCCUPIED
-  # AVG.COMMUTE.TIME
-  # school district academic performance index (Not in our data)
-  #
-  # In addition to Chopra's features, also return these features
-  # SALE.DAY, SALE.MONTH, SALE.YEAR
-  raw <- Read(path.in, testing)
-  cat('raw input from transaction file\n')
-  str(raw)
-  splitDate <- SplitDate(raw$X.transaction.date)
-  # check pool flag
-  if (FALSE) {
-    # check pool flag computation
-    cat('checking pool flag\n')
-    str(raw$X.POOL.FLAG)
-    temp = ifelse(is.na(raw$X.POOL.FLAG), 'N', raw$X.POOL.FLAG)
-    print(head(temp == 2))
-    cat('done\n')
-  }
-  # replace NA with N
-  pool.flag.recoded <- ifelse(is.na(raw$X.POOL.FLAG), 'N', raw$X.POOL.FLAG)
-  if (FALSE) {
-    # check new construction computation
-    cat('checking new construction\n')
-    str(raw$X.RESALE.NEW.CONSTRUCTION.CODE)
-    is.new <- raw$X.RESALE.NEW.CONSTRUCTION.CODE == 'N'
-    cat('raw', raw$X.RESALE.NEW.CONSTRUCTION.CODE, '\n')
-    cat('is.new', is.new, '\n')
-    cat('done\n')
-  }
-  cat('find error\n')
-  Test <- function(s, l) {
-    print(s)
-    print(l)
-    print(log(l))
-  }
-  #Test('sale amount', raw$X.SALE.AMOUNT)
-  #Test('living area', raw$X.LIVING.SQUARE.FEET)
-  data.frame(SALE.DAY = splitDate$day,
-             sale.month = splitDate$month,
-             sale.year = splitDate$year,
-             log.price = log(raw$X.SALE.AMOUNT),
-             centerer.log.living.area = Center(log(raw$X.LIVING.SQUARE.FEET)),
-             centered.year.built = Center(raw$X.YEAR.BUILT),
-             centerer.log.bedrooms = Center(log(raw$X.BEDROOMS)),
-             centered.log.bathroom = Center(log(raw$X.TOTAL.BATHS.CALCULATED)),
-             AVG.COMMUTE.TIME = Center(raw$X.avg.commute))
-  cat('parking spaces has zero value?', 
-      any(raw$X.PARKING.SPACES == 0),
-      '\n')
-  cat('now for real\n')
-  data.frame(sale.date = splitDate$day,
-             sale.month = splitDate$month,
-             sale.year = splitDate$year,
-             log.price = log(raw$X.SALE.AMOUNT),
-             centered.log.living.area = Center(log(raw$X.LIVING.SQUARE.FEET)),
-             centered.year.built = Center(raw$X.YEAR.BUILT),
-             centered.log.bedrooms = Center(log(raw$X.BEDROOMS)),
-             centered.log.bathroom = Center(log(raw$X.TOTAL.BATHS.CALCULATED)),
-             centered.log1p.parking.spaces = Center(log1p(raw$X.PARKING.SPACES)),
-             centered.log.land.value = Center(log(raw$X.LAND.VALUE.CALCULATED)),
-             centered.log.improvement.value = 
-               Center(log(raw$X.IMPROVEMENT.VALUE.CALCULATED)),
-             centered.fraction.improvement.value = 
-               Center(raw$X.LAND.VALUE.CALCULATED / 
-                 (raw$X.LAND.VALUE.CALCULATED + 
-                    raw$X.IMPROVEMENT.VALUE.CALCULATED)),
-             factor.parking.type = raw$X.PARKING.TYPE.CODE,
-             factor.has.pool = (pool.flag.recoded == 2),
-             factor.is.new.construction = 
-               raw$X.RESALE.NEW.CONSTRUCTION.CODE == 'N',
-             factor.foundation.type = raw$X.FOUNDATION.CODE,
-             factor.roof.type = raw$X.ROOF.TYPE.CODE,
-             factor.heating.type = raw$X.HEATING.CODE,
-             factor.site.influence = raw$X.LOCATION.INFLUENCE.CODE,
-             centered.lattitude = Center(raw$X.G.LATITUDE),
-             centered.longitude = Center(raw$X.G.LONGITUDE),
-             centered.log.median.household.income = 
-               Center(log(raw$X.median.household.income)),
-             centered.fraction.owner.occupied = 
-               Center(raw$X.fraction.owner.occupied),
-             centered.avg.commute.time = Center(raw$X.avg.commute))
-}
+source('Center.R')
+source('ReadAndTransformTransactions.R')
+source('SplitDate.R')
 ```
 # Read data
 ```{r}
-df <- ReadAndTransform(path.in, testing)
+df <- ReadAndTransformTransactions(control$path.in, control$nrows, TRUE)
 str(df)
 summary(df)
 ```
-# Define models
+# Subset selection
 
-Model <- function(trainDf, testDf) {
-  # return statistics on fitted linear regression model
-  # ARGS:
-  # trainDF : data.frame with training data
-  # isTrain : boolean vector identifying training samples
-  # isTest  : boolean vector identifying test samples
-  # RETURNS double vector of predictions for test samples
+Return logical vectors that indicate the selected features, which are the
+training data.
+
+Select transactions with certain dates
+```{r}
+Is2004JanNov <- function(df) {
+  (df$year == 2004) & (df$month != 12)
 }
 
-# Run models
-
-for (model <- models) {
-  if (model = "2004 only") {
-    RunModel(df, )
-  }
+Is2004Dec <- function(df) {
+  (df$year == 2004) & (df$month == 12)
 }
+
+test.all <- function() {
+  df <- data.frame(year <- c(rep(2004, 12), rep(2005, 12)),
+                   month <- c(1:12, 1:12))
+  result <- Is2004JanNov(df)
+  expected <- c(rep(TRUE, 11), FALSE, rep(FALSE, 12))
+  stopifnot(result == expected)
+  result <- Is2004Dec(df)
+  expected <- c(rep(FALSE, 11), TRUE, rep(FALSE, 12))
+  stopifnot(result == expected)
+}
+test.all()
+```
+# Define experiments
+## Experiment 1
+Linear regression unweighted, train on first 11 months of 2004, test on Dec
+2004. Use factors Chopra used except for those we don't have, namely prior sale
+price (we could create this) and quality of the school.
+```{r}
+Ex1 <- function(data) {
+  cat('Ex1\n')
+  # RETURN fraction of estimates within 10 percent.
+  formula <- log.price ~ 
+    centered.log.living.area +
+    centered.year.built +
+    centered.log.bedrooms +
+    centered.log.bathrooms +
+    centered.log1p.parking.spaces +
+    centered.log.land.value +
+    centered.log.improvement.value +
+    centered.fraction.improvement.value +
+    factor.parking.type +
+    factor.has.pool +
+    factor.is.new.construction +
+    factor.foundation.type +
+    factor.roof.type +
+    factor.site.influence +
+    centered.latitude +
+    centered.longitude +
+    centered.log.median.household.income +
+    centered.fraction.owner.occupied +
+    centered.avg.commute.time
+    
+  m <- lm(formula = formula,
+          data = data,
+          subset = Is2004JanNov(data))
+  str(fitted)
+  summary(fitted)
+  predictions <- predict(m, newdata=data[Is2004Dec(data)])
+  stop('predict 2004Dec and determine fraction within 10%')
+  
+}
+```
+# Experiment 2
+Add or remove variables from experiment 1. See page 281 in cookbook.
+
+# Run selected experiments
+```{r}
+Ex1(df)
+```
+
