@@ -29,6 +29,7 @@ RemoveNonInformative <- function(df, write) {
   names <- colnames(df)
   for (name in names) {
     if (HasNoInfo(name)) {
+      cat('removing non-informative feature', name, '\n')
       df[name] <- NULL
     }
   }
