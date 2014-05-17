@@ -163,36 +163,12 @@ df.all <- rbind(ReadParcelsFile(1),
   cat(sprintf("across all parcels files, dropped %d that were not SFR\n",
               num.not.sfr))
 ```
-
-## Drop features that are non-informative
-
-```{r}
-df.all <- RemoveNonInformative(df.all, cat)
-cat("parcels columns retained (others dropped because non informative)\n")
-for (colname in colnames(df.all)) {
-  cat(" ", colname, "\n")
-}
-```      
-  
-## Remove duplicate parcels
-
-```{r}
-  nondups <- unique(df.all)
-  cat(sprintf("dropped %d parcels that were duplicates of others\n",
-              nrow(df.all) - nrow(nondups)))
-  cat("number of unique relevant parcels", nrow(nondups), "\n")
-
-  # try to return some memory to the OS
-  df.all <- NULL
-  gc()
-```
-
-## Write unique parcels to CSV
+## Write parcels to CSV
 
 ```{r}
 cat("writing unique single-family parcels to",
     path.parcels.out, "\n")
-write.csv(nondups,
+write.csv(df.all,
           file=path.parcels.out,
           quote=FALSE)
 cat("finished\n")

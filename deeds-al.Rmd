@@ -1,13 +1,20 @@
 # deeds-al.Rmd
 
-Create the output file holding the arms-length deeds. In order to cope with having only 16 GB of RAM on my system, only features needed downstream in the pipeline are retained.
+Create the output file holding certain features of the arms-length deeds. 
+
+I would have retained all features, but my system has only 15 GB RAM, not enough
+to keep all the features using this programmatic approach. Instead, could have
+created 8 files with just certain deeds and merged them all.
 
 Retain only features of deeds, not features of the parcels. The idea is to
 rely on the parcels file exclusive for parcels features.
 
-Drop features that are non informative (always missing or always same value).
+An earlier versions dropped features that were all missing and always had the
+same value. This was an attempt to remove non-informative features, but it
+complicates my ability to understand what the programs are doing.
 
-Drop deeds that are 100% duplicates of other deeds.
+An earlier version also attempted to remove duplicated deeds, but that code was 
+broken. Now all arms-length deeds are passed on.
 
 Files read and the deeds files the Laufer directory. This directory contains
 the file Steve Laufer used in his experiments.
@@ -33,7 +40,7 @@ path.deeds.out <- paste(dir.output,
 Set script control variables.
 
 ```{r}
-testing <- TRUE
+testing <- FALSE
 ```
 
 Initialize R.
@@ -123,71 +130,29 @@ Concatenate all the deeds files into one data frame.
 
 ```{r}
 ReadAll <- function() {
-  # Value: list
+  # RETURN: list
   # $df : data frame containing only arms-length deeds and certain features
   # $num.dropped : number of non arms-length deeds found and dropped
-  Iter <- function(file.number, df, num.dropped) {
-    # accumulate info in file.number
-    if (file.number == 9) {
-      list(df=df, num.dropped=num.dropped)
-    }
-    res <- ReadDeedsFile(file.number)
-    cat('dropped ', res$num.dropped, ' records from file ', file.number, '\n')
-    cat('nrows df', nrow(df), '\n')
-    cat('nrows res$df', nrow(res$df), '\n')
-    Iter(file.number + 1, 
-         rbind(df, res$df), 
-         num.dropped + res$num.dropped)
+  df <- NULL
+  num.dropped <- 0
+  for (file.number in 1:8) {
+    a.list<- ReadDeedsFile(file.number)
+    df = rbind(df, a.list$df)
+    num.dropped <- num.dropped + a.list$num.dropped
   }
-  Iter(1, NULL, 0)
+  list(df = df, num.dropped = num.dropped)
 }
+
 all <- ReadAll()
 cat('total number of non-arms length deeds', all$num.dropped, '\n')
 str(all$df)
 summary(all$df)
-stop()
-
-df.all <- rbind(ReadDeedsFile(1),
-                ReadDeedsFile(2),
-                ReadDeedsFile(3),
-                ReadDeedsFile(4),
-                ReadDeedsFile(5),
-                ReadDeedsFile(6),
-                ReadDeedsFile(7),
-                ReadDeedsFile(8))
-
-  
-cat("number of deeds records with not at arms length", not.arms.length, "\n")
-cat("number of deeds records at arms length", nrow(df.all), "\n") 
 ```
-
-## Drop features that are non-informative
+## Write deeds to csv
 
 ```{r}
-df.all <- RemoveNonInformative(df.all, cat)
-cat("deeds columns retained (others dropped because non informative)\n")
-for (colname in colnames(df.all)) {
-  cat(" ", colname, "\n")
-}
-```
-
-## Remove duplicate deeds
-
-Duplicate deeds cause problems in some downstream processes in the pipeline. So remove
-any duplicates.
-
-```{r}
-nondups <- unique(df.all)
-cat(sprintf("dropped %d deeds that were duplicates of others\n",
-            nrow(df.all) - nrow(nondups)))
-cat("number of unique relevant deeds", nrow(nondups), "\n")
-```
-
-## Write unique deeds to csv
-
-```{r}
-cat("writing unique arms-length deeds to", path.deeds.out, "\n")
-write.csv(nondups,
+cat("writing arms-length deeds to", path.deeds.out, "\n")
+write.csv(all,
           file=path.deeds.out,
           quote=FALSE)
 ```
