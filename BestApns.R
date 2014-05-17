@@ -48,8 +48,11 @@ BestApns <- function(apns.unformatted, apns.formatted) {
                                   rep(NA, length(apns.unformatted))))
     return(as.numeric(apns.recoded))
   }
-  else
+  else {
+    print(apns.unformatted)
+    cat('first arg', apns.unformatted, '\n')
     stop("first arg has invalid type")
+  }
   
 }
 
