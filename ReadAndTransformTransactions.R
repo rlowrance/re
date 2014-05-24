@@ -6,7 +6,7 @@ ReadAndTransformTransactions <- function(path.in, nrows, verbose) {
   # nrows   : number of rows to read (-1 for all)
   # verbose : if TRUE, print analyses of the pre-transformed input
   #
-  # RETURNS: data.frame with transformed features
+  # RETURNS: data.frame with raw and transformed feature
   #
   # Chopra's description of his processing
   # Data was transactions and tax roll for 2004. Only transactions for single 
@@ -47,58 +47,104 @@ ReadAndTransformTransactions <- function(path.in, nrows, verbose) {
   #
   # In addition to Chopra's features, also return these features
   # SALE.DAY, SALE.MONTH, SALE.YEAR
-   raw <- read.table(path.in,
-                     header=TRUE,
-                     sep=",",
-                     quote="",
-                     comment="",
-                     stringsAsFactors=TRUE,
-                     na.strings="NA",
-                     nrows=nrows)
-   if (verbose) {
-       cat('raw structure\n')
-       str(raw)
-   }
+    cat('reading all transactions\n')
+    raw <- read.table(path.in,
+                      header=TRUE,
+                      sep=",",
+                      quote="",
+                      comment="",
+                      stringsAsFactors=TRUE,
+                      na.strings="NA",
+                      nrows=nrows)
+    if (verbose) {
+        cat('raw structure\n')
+        str(raw)
+        print(summary(raw))
+    }
  
-   splitDate <- SplitDate(raw$X.transaction.date)
+    splitDate <- SplitDate(raw$transaction.date)
 
-  # replace NA with N
-   pool.flag.recoded <- ifelse(is.na(raw$X.POOL.FLAG), 'N', raw$X.POOL.FLAG)
+    # recode POOL.FLAG: this fields is populated with a "Y" if a pool is present on the parcel
+    # Because we converted strings to factors and how the input file is coded,
+    #   2 ==> a pool
+    #  NA ==> no pool
+    has.pool = ifelse(is.na(raw$POOL.FLAG), FALSE, TRUE)
 
-   # RESALE NEW CONSTRUCTION CODE
-   # N ==> New construction sale
-   # M ==> resale
+    # check of PRIOR SALE AMOUNT
+    stopifnot(is.null(raw$PRIOR.SALE.AMOUNT))
 
-   data.frame(sale.date = splitDate$day,
-              sale.month = splitDate$month,
-              sale.year = splitDate$year,
-              log.price = log(raw$X.SALE.AMOUNT),
-              centered.log1p.prior.price = Center(log1p(raw$X.PRIOR.SALE.AMOUNT)),
-              centered.log.land.square.footage = Center(log(raw$X.LAND.SQUARE.FOOTAGE)),
-              centered.log.living.area = Center(log(raw$X.LIVING.SQUARE.FEET)),
-              centered.year.built = Center(raw$X.YEAR.BUILT),
-              centered.log.bedrooms = Center(log(raw$X.BEDROOMS)),
-              centered.log.bathrooms = Center(log(raw$X.TOTAL.BATHS.CALCULATED)),
-              centered.log1p.parking.spaces = Center(log1p(raw$X.PARKING.SPACES)),
-              centered.log.land.value = Center(log(raw$X.LAND.VALUE.CALCULATED)),
-              centered.log.improvement.value = 
-                Center(log(raw$X.IMPROVEMENT.VALUE.CALCULATED)),
-              centered.fraction.improvement.value = 
-                Center(raw$X.LAND.VALUE.CALCULATED / 
-                  (raw$X.LAND.VALUE.CALCULATED + raw$X.IMPROVEMENT.VALUE.CALCULATED)),
-              factor.parking.type = raw$X.PARKING.TYPE.CODE,
-              factor.has.pool = (pool.flag.recoded == 2),
-              factor.is.new.construction = 
-                raw$X.RESALE.NEW.CONSTRUCTION.CODE == '"N"',
-              factor.foundation.type = raw$X.FOUNDATION.CODE,
-              factor.roof.type = raw$X.ROOF.TYPE.CODE,
-              factor.heating.type = raw$X.HEATING.CODE,
-              factor.site.influence = raw$X.LOCATION.INFLUENCE.CODE,
-              centered.latitude = Center(raw$X.G.LATITUDE),
-              centered.longitude = Center(raw$X.G.LONGITUDE),
-              centered.log.median.household.income = 
-                Center(log(raw$X.median.household.income)),
-              centered.fraction.owner.occupied = 
-                Center(raw$X.fraction.owner.occupied),
-              centered.avg.commute.time = Center(raw$X.avg.commute))
+    # RESALE NEW CONSTRUCTION CODE
+    # N ==> New construction sale
+    # M ==> resale
+
+    # check for valid values
+    stopifnot(all(raw$bedrooms > 0))
+    stopifnot(all(raw$bathrooms > 0))
+
+    # NOTE: Sumit used these fields which we do not have
+    # PRIOR.SALE.AMOUNT : could be reconstructed for many deeds
+    # rating for school district : we don't have school district in the taxroll file
+    # LOCAL.INFLUENCE.CODE : I have missing values, I could recode the missing values to a new category
+
+
+    fraction.improvement.value <- (raw$IMPROVEMENT.VALUE.CALCULATED / 
+                                   (raw$IMPROVEMENT.VALUE.CALCULATED + raw$LAND.VALUE.CALCULATED))
+
+    # return just the features needed, to reduce memory requirements
+    data.frame(sale.day = splitDate$day,
+               sale.month = splitDate$month,
+               sale.year = splitDate$year,
+
+               price = raw$SALE.AMOUNT,
+               log.price = log(raw$SALE.AMOUNT),
+
+               land.square.footage = raw$LAND.SQUARE.FOOTAGE,
+               centered.log.land.square.footage = Center(log(raw$LAND.SQUARE.FOOTAGE)),
+
+               living.area = raw$LIVING.SQUARE.FEET,
+               centered.log.living.area = Center(log(raw$LIVING.SQUARE.FEET)),
+
+               bedrooms = raw$BEDROOMS,
+               centered.log1p.bedrooms = Center(log1p(raw$BEDROOMS)),
+
+               bathrooms = raw$TOTAL.BATHS.CALCULATED,
+               centered.log1p.bathrooms = Center(log1p(raw$TOTAL.BATHS.CALCULATED)),
+
+               parking.spaces = raw$PARKING.SPACES,
+               centered.log1p.parking.spaces = Center(log1p(raw$PARKING.SPACES)),
+
+               land.value = raw$LAND.VALUE.CALCULATED,
+               centered.log.land.value = Center(log(raw$LAND.VALUE.CALCULATED)),
+
+               improvement.value = raw$IMPROVEMENT.VALUE.CALCULATED,
+               centered.log.improvement.value = Center(log(raw$IMPROVEMENT.VALUE.CALCULATED)),
+
+               factor.parking.type = raw$PARKING.TYPE.CODE,
+               factor.has.pool = has.pool,
+               factor.foundation.type = raw$FOUNDATION.CODE,
+               factor.roof.type = raw$ROOF.TYPE.CODE,
+               factor.heating.code = raw$HEATING.CODE,
+               factor.is.new.construction = factor(raw$RESALE.NEW.CONSTRUCTION.CODE == 'N'),
+
+               avg.commute.time = raw$avg.commute,
+               centered.avg.commute.time = Center(raw$avg.commute),
+
+               median.household.income = raw$median.household.income,
+               centered.log.median.household.income = Center(log(raw$median.household.income)),
+
+               year.built = raw$YEAR.BUILT,
+               centered.year.built = Center(raw$YEAR.BUILT),
+
+               latitude = raw$G.LATITUDE,
+               centered.latitude = Center(raw$G.LATITUDE),
+
+               longitude = raw$G.LONGITUDE,
+               centered.longitude = Center(raw$G.LONGITUDE),
+
+               fraction.owner.occupied = raw$fraction.owner.occupied,
+               centered.fraction.owner.occupied = Center(raw$fraction.owner.occupied),
+
+               fraction.improvement.value = fraction.improvement.value,
+               centered.fraction.improvement.value = Center(fraction.improvement.value)
+               )
 }
