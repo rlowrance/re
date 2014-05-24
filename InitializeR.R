@@ -16,6 +16,15 @@ InitializeR <- function(start.JIT=TRUE, duplex.output.to=NULL) {
     }
 
     if (!is.null(duplex.output.to)) {
+        if (sink.number() > 0) {
+            # end last diversion
+            # if debugging by sourcing a script, the diversion stack can overflow
+            # ending the last diversion fixes that problem
+            sink(file = NULL,
+                 type = 'output')   
+        }
+
+        # start new diversion
         sink(file = duplex.output.to, 
              type = 'output', 
              split = TRUE)  # send output to console and the file specified
