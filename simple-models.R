@@ -36,17 +36,21 @@ if (TRUE) {
 
 # source files now that JIT is set
 source('Center.R')
+source('CrossValidate2.R')
 source('NumberFeaturesWithAnNA.R')
 source('Printf.R')
 source('ReadAndTransformTransactions.R')
 source('SplitDate.R')
 
 #library(rpart)
-#library(tree)
+library(tree)
+library(randomForest)
 
 ###############################################################################
 # Utility
 ###############################################################################
+
+# RenameColumns
 
 RenameColumns <- function(df, old.names, new.names) {
     for (index in 1:length(old.names)) {
@@ -70,7 +74,54 @@ RenameColumns.Test <- function() {
 }
 
 RenameColumns.Test()
-    
+
+# Rmse
+
+Rmse <- function(actual, estimated) {
+    # return square root of mean squared error
+    stopifnot(length(actual) == length(estimated))
+    stopifnot(length(actual) > 0)
+    error <- actual - estimated
+    mse <- sum(error * error) / length(actual)
+    sqrt(mse)
+}
+
+Rmse.test <- function() {
+    actual <- c(10, 20, 30)
+    estimated <- c(11, 21, 31)
+    mse <- Rmse(actual, estimated)
+    stopifnot(mse == 1)
+}
+
+Rmse.test()
+
+# Within10Percent
+
+Within10Percent <- function(actual, estimated, precision = .10) {
+    # return fraction of estimates that are within 10 percent of the actuals
+    stopifnot(length(actual) == length(estimated))
+    stopifnot(length(actual) > 0)
+    stopifnot(sum(actual == 0) == 0)  # at least one actual is zero
+    na.indices <- is.na(actual) | is.na(estimated)  # find NAs in either arg
+    actual <- actual[!na.indices]
+    estimated <- estimated[!na.indices]
+    error <- actual - estimated
+    relative.error <- error / actual
+    sum(abs(relative.error) <= precision) / length(actual)
+}
+
+Within10Percent.test <- function() {
+    actual <- c(1,2,3)
+    estimated <- c(1.05, 20, NA)
+    within <- Within10Percent(actual, estimated)
+    cat('within', within, '\n')
+    stopifnot(all.equal(within, 1/2))
+}
+
+Within10Percent.test()
+
+# Substitute
+
 Substitute <- function(v, old.values, new.values) {
     for (index in 1:length(old.values)) {
         selected <- v == old.values[index]
@@ -160,103 +211,8 @@ test.subset.selectors <- function() {
 test.subset.selectors()
 
 ###############################################################################
-## ChopraLinear
+# Create lists of predictors
 ###############################################################################
-
-Accuracy <- function(actual.prices, estimated.prices) {
-    # return fraction within 10 percent, dropping NA values from either input
-    errors <- actual.prices - estimated.prices
-    abs.relative.error <- abs(errors) / actual.prices
-    within.10.percent <- abs.relative.error <= .10
-    fraction.within.10.percent <- sum(within.10.percent, na.rm=TRUE) / sum(!is.na(within.10.percent))
-    fraction.within.10.percent
-}
-
-
-PredictionAccuracy <- function(fitted.model, df, SelectTesting) {
-    # return fraction of testing sample predictions with 10% of true price
-    # ARGS:
-    # fitted.model  : a fitted model (e.g, result of lm())
-    # df            : data.frame with all observations
-    # SelectTesting : function(df) --> selector vector
-    # Returns fraction of predicted prices within 10% of actual price
-    cat('starting PredictionAccuracy\n')
-    testing.df <- df[SelectTesting(df), ]
-    str(testing.df)
-    print(levels(testing.df$factor.parking.type))
-    log.estimated.price <- predict(fitted.model, 
-                                   newdata = testing.df)
-    Accuracy(exp(testing.df$log.price),
-             exp(log.estimated.price))
-}
-
-LinearModelLogPrices <- function(df, SelectTraining, SelectTesting, predictors) {
-    # return fraction of testing samples within 10% of true value of price
-    # ARGS:
-    # df : data.frame
-    # SelectTraining : function(df) --> observations in training set
-    # SelectTesting  : function(df) --> observations in testing set
-    # predictors     : chr vector, the predictor variable names (features in df)
-    # RETURN fraction of estimates within testing set that are within 10% of the actual prices
-    cat('starting LinearModelLogPrices\n')
-    the.formula <- as.formula(paste0(paste0('log.price', '~'),
-                                     paste(predictors, collapse='+')))
-    cat('the.formula\n')
-    print(the.formula)
-
-    training.df <- df[SelectTraining(df), ]
-    str(training.df)
-    print(levels(training.df$factor.parking.type))
-
-    fitted.model <- lm(formula = the.formula,
-                       data = training.df)
-    summary(fitted.model)
-
-    PredictionAccuracy(fitted.model, df, SelectTesting)
-}
-
-LinearModelLogPricesForward <- function(df, SelectTraining, SelectTesting, predictors) {
-    # return fraction of testing samples within 10% of true value of price
-    # using forward stepwise model
-    # NOTE: backward model fails with an error around dataset size changing
-    # ARGS:
-    # df : data.frame
-    # SelectTraining : function(df) --> observations in training set
-    # SelectTesting  : function(df) --> observations in testing set
-    # predictors     : chr vector, the predictor variable names (features in df)
-    # RETURN fraction of estimates within testing set that are within 10% of the actual prices
-    cat('starting LinearModelLogPricesForward\n')
-
-
-    # select relevant observations and features in training set
-    data <- df[SelectTraining(df), c(predictors, 'log.price') ] 
-
-    # drop observations with an NA value
-    cat('number of observations with an NA value', NumberFeaturesWithAnNA(data), '\n')
-    data <- na.omit(data)  # drop observations with any NA value
-
-    # drop predictor factors with only one level
-    data <- DropFactorsWithOneLevel(data)
-    
-    # train the simpliest model
-    min.model <- lm(formula = log.price ~ 1, 
-                    data = data)
-    cat('min.model\n')
-    print(summary(min.model))
-
-    # add in predictors one by one
-    scope.f <- as.formula(paste0('~',
-                                 paste(predictors, collapse='+')))
-    str(scope.f)
-
-    step.model <- step(min.model,
-                       direction='forward',
-                       scope=scope.f)
-    cat('step.model\n')
-    print(summary(step.model))
-
-    PredictionAccuracy(step.model, df, SelectTesting)
-}
 
 PredictorsForward <- function() {
     # return chr vector of predictors find by experiment 6 (a forward step-wise regression)
@@ -281,7 +237,7 @@ PredictorsForward <- function() {
       'factor.has.pool')
 }
 
-PredictorsChopra <- function() {
+PredictorsChopraCenteredLog <- function() {
     # return chr vector of predictors used by Chopra that we have access to
     # NOTE: Chopra had school district quality, which we don't have
     c('centered.log.land.square.footage',
@@ -293,6 +249,29 @@ PredictorsChopra <- function() {
       'centered.log1p.bathrooms',
       'centered.log1p.parking.spaces',
       'centered.log.median.household.income',
+      'centered.fraction.owner.occupied',
+      'centered.avg.commute.time',
+      'centered.latitude',
+      'centered.longitude',
+      'factor.is.new.construction',
+      'factor.foundation.type',
+      'factor.roof.type',
+      'factor.parking.type',
+      'factor.has.pool')
+}
+
+PredictorsChopraCentered <- function() {
+    # return chr vector of centered predictors used by Chopra that we have access to
+    # NOTE: Chopra had school district quality, which we don't have
+    c('centered.land.square.footage',
+      'centered.living.area',
+      'centered.land.value',
+      'centered.improvement.value',
+      'centered.year.built',
+      'centered.bedrooms',
+      'centered.bathrooms',
+      'centered.parking.spaces',
+      'centered.median.household.income',
       'centered.fraction.owner.occupied',
       'centered.avg.commute.time',
       'centered.latitude',
@@ -327,419 +306,454 @@ PredictorsChopraRaw <- function() {
       'factor.has.pool')
 }
 
-ChopraLinearOLD <- function(control, df, SelectTrainingSet, step = FALSE) {
-    # variations on Chopra's linear model
-    cat('starting ChopraLinear\n')
+PredictorsBCHRaw <- function() {
+    # return chr vector of raw predictors used by Chopra that we have access to
+    # NOTE: Chopra had school district quality, which we don't have
+    # Exclude tax assessor's value estimates
+    c('land.square.footage',
+      'living.area',
+      'year.built',
+      'bedrooms',
+      'bathrooms',
+      'parking.spaces',
+      'median.household.income',
+      'fraction.owner.occupied',
+      'avg.commute.time',
+      'latitude',
+      'longitude',
+      'factor.is.new.construction',
+      'factor.foundation.type',
+      'factor.roof.type',
+      'factor.parking.type',
+      'factor.has.pool')
+}
+
+
+
+
+###############################################################################
+## Create models of price and log(price)
+###############################################################################
+
+MakeModelForward <- function() {
+    # create linear model that fits on Nov 2004 and tests on Dec 2004
+    # Value: list(Fit=,Predict=,description=), such that
+    # $Fit(df, training.indices) --> fitted
+    # $Predict(fitted, df, testing.indices) --> list(predicted= [,actual=])
+    # $description : chr, informal description
+
+    # ref: cookbook p 281
+
+    Fit <- function(df, training.indices) {
+        training.data <- df[training.indices & df$sale.year == 2004 & df$sale.month == 11, ]
+        min.model <- lm(formula = 'log.price ~ 1',
+                        data = training.data)
+        all.features <- paste('~ land.square.footage',
+                              '+ centered.log.land.square.footage',
+                              '+ living.area',
+                              '+ centered.log.living.area')
+        scope.formula <- as.formula(all.features)
+        step.model <- step(min.model,
+                           direction = 'forward',
+                           scope = scope.formula)
+        if (verbose) {
+            cat('step.model\n')
+            step.model
+            print(summary(step.model))
+        }
+        step.model
+    }
+
+    Predict <- function(fitted, df, training.indices) {
+        stop('write me')
+    }
+
+    list(Fit = Fit,
+         Predict = Predict,
+         description = 'select best model using step-wise forward procedure')
+}
+
+MakeModelRandomForest <- function(training.start.month, response, predictors) {
     verbose <- TRUE
-    # model: unweighted linear regression
-    # training data: first 90% for 2004
 
-
-    # some features are commented out.
-
-    # factor.is.new.contruction:
-    #  error message: contrasts can be applied only to factors with 2 or more levels
-    #  hyp: this problem occurs because some observations must have NA values
-    #    the test below shows that this hypothesis is false
-    # factor.foundation.type
-    #  error in predictions: new level UCR, but this seems like an error in R
-    cat('levels in factor.is.new.construction', levels(df$factor.is.new.construction), '\n')
-    cat('nlevels', nlevels(df$factor.is.new.construction), '\n')
-    stopifnot(nlevels(df$factor.is.new.construction) == 2)
-    cat('nlevels with na omitted', nlevels((na.omit(df))$factor.is.new.construction), '\n')
-    
-    # Training the model with data = df and selecting the training set does
-    # not work, because some levels in some factors may be only in the test
-    # data frame, resulting in an error when the predictions are made
-
-    is.training <- SelectTrainingSet(df)
-    is.testing <- Is2004Last10(df) 
-
-    training.set <- df[is.training, ]
-    testing.set <- df[is.testing, ]
-
-    # make sure factor levels in training and testing sets are the same
-    for (factor.name in c('factor.is.new.construction',
-                          'factor.foundation.type',
-                          'factor.roof.type',
-                          'factor.parking.type',
-                          'factor.has.pool')) {
-        all.levels <- levels(df[[factor.name]])
-        training.set[[factor.name]] <- factor(df[[factor.name]][is.training], all.levels)
-        testing.set[[factor.name]] <- factor(df[[factor.name]][is.testing], all.levels)
-    }
-
-    cat('num training before dropping obs with NA values', sum(is.training), '\n')
-    cat('num testing', sum(is.testing), '\n')
-    stopifnot(length(is.training) > 1)
-    stopifnot(length(is.testing) > 0)
-
-    response <- 'log.price'
-    predictors <- c('centered.log.land.square.footage',
-                    'centered.log.living.area',
-                    'centered.log.land.value',
-                    'centered.log.improvement.value',
-                    'centered.year.built',
-                    'centered.log1p.bedrooms',
-                    'centered.log1p.bathrooms',
-                    'centered.log1p.parking.spaces',
-                    'centered.log.median.household.income',
-                    'centered.fraction.owner.occupied',
-                    'centered.avg.commute.time',
-                    'centered.latitude',
-                    'centered.longitude',
-                    'factor.is.new.construction',
-                    'factor.foundation.type',
-                    'factor.roof.type',
-                    'factor.parking.type',
-                    'factor.has.pool')
-                    
-    RunModel <- function(training.set) {
-        model.formula <- as.formula(paste0(paste0(response, '~'),
-                                           paste(predictors, collapse='+')))
-        cat('model.formula\n')
-        print(model.formula)
-        str(training.set)
-
-        lm(model.formula, training.set)
-    }
-
-    m <- RunModel(training.set)
-    # str(m)
-    print(summary(m))
-
-    if (step) {
-        # follow cookbook p 281 to select best regression variables
-        cat('starting stepBackward\n')
-        # remove all the missing values in features used and re-run the base model
-        # http://stackoverflow.com/questions/11819472/why-does-the-number-of-rows-change-during-aic-in-r-how-to-ensure-that-this-does
-        relevant.features <- training.set[, c(predictors, response)]
-        cat('relevant.features\n')
-        str(relevant.features)
-        cat('number of rows with na before omitting them', NumberFeaturesWithAnNA(df), '\n')
-        df <- na.omit(relevant.features)  
-        stopifnot(NumberFeaturesWithAnNA(df) == 0)
-
-        # drop predictors with only one level
-        # http://stackoverflow.com/questions/18171246/error-in-contrasts-when-defining-a-linear-model-in-ractor.names <- sapply(df, function(x) is.factor(x))
-        df <- DropFactorsWithOneLevel(df)
-        stopifnot(NumberFeaturesWithAnNA(df) == 0)
-        cat('df\n')
-        summary(df)
-
-        method <- 'forward'  # NOTE: backward does not work
-        if (method == 'forward') {
-            f <- as.formula(paste0(response, '~ 1'))
-            str(f)
-            min.model <- lm(formula=f, data=df)
-            summary(min.model)
-            scope.f <- as.formula(paste0('~',
-                                         paste(predictors, collapse='+')))
-            str(scope.f)
-            step.model <- step(min.model,
-                               direction='forward',
-                               scope=scope.f)
-
-        } else {
-            full.model <- RunModel(df)
-            cat('starting stepBackward\n')
-            step.model <- step(full.model,
-                               direction='backward',
-                               )
+    Fit <- function(df, training.indices) {
+        if (verbose) {
+            cat('fitting random forest with starting month', training.start.month, '\n')
         }
-        print(summary(step.model))
-        stop('check result')
-    }
-
-    log.estimated.price <- predict(m, 
-                                   newdata = testing.set)
-
-    analysis <- data.frame(log.estimated.price = log.estimated.price)
-
-    analysis$actual.price <- exp(df$log.price[is.testing])
-    analysis$estimated.price <- exp(analysis$log.estimated.price)
-    analysis$error <- analysis$actual.price - analysis$estimated.price
-    analysis$abs.relative.error <- abs(analysis$error) / analysis$actual.price
-    analysis$within.10.percent <- analysis$abs.relative.error <= .1
-
-    if (FALSE) {
-        cat('analysis of test set\n')
-        print(analysis)
-    }
-
-    fraction.within.10.percent <- sum(analysis$within.10.percent, na.rm=TRUE) / nrow(analysis)
-}
-
-###############################################################################
-## Experiment based on Chopra's linear model
-###############################################################################
-
-Experiment1 <- function(control, df) {
-    # train on first 90% of transaction in 2004
-    cat('starting Experiment1\n')
-    list(experiment.number = 1,
-         train = 'first 90% of 2004',
-         test = 'last 10% of 2004',
-         predictors = 'most of Chopra',
-         accuracy = LinearModelLogPrices(df,
-                                         SelectTraining = Is2004First90,
-                                         SelectTesting = Is2004Last10,
-                                         predictors = PredictorsChopra()))
-}
-
-Experiment2 <- function(control, df) {
-    # train on every transaction before last 10% of 2004
-    cat('starting Experiment2\n')
-    list(experiment.number = 2,
-         train = 'all before last 10% of 2004',
-         test = 'last 10% of 2004',
-         predictors = 'most of Chopra',
-         accuracy = LinearModelLogPrices(df,
-                                         SelectTraining = Before2004Last10,
-                                         SelectTesting = Is2004Last10,
-                                         predictors = PredictorsChopra()))
-
-}
-
-Experiment3 <- function(control, df) {
-    # train on every transaction in 2003 or before last 10% of 2004
-    cat('starting Experiment3\n')
-    list(experiment.number = 3,
-         train = '2003 or 2004 before last 10%',
-         test = 'last 10% of 2004',
-         predictors = 'most of Chopra',
-         accuracy = LinearModelLogPrices(df,
-                                         SelectTraining = Is2003OrBefore2004Last10,
-                                         SelectTesting = Is2004Last10,
-                                         predictors = PredictorsChopra()))
-}
-
-Experiment4 <- function(control, df) {
-    # train on transations in Apr - most of Nov in 2004
-    cat('starting Experiment4\n')
-    list(experiment.number = 4,
-         train = '2004 April until before last 10%',
-         test = 'last 10% of 2004',
-         predictors = 'most of Chopra',
-         accuracy = LinearModelLogPrices(df,
-                                         SelectTraining = Is2004AprilUntilLast10,
-                                         SelectTesting = Is2004Last10,
-                                         predictors = PredictorsChopra()))
-}
-
-Experiment5 <- function(control, df) {
-    # train on Jan - Nov 24, then Feb - Nov 24, etc.
-    # select most accurate model and return predictions from it
-    # use only the features found by the forward step-wise regression to be useful
-    cat('starting Experiment5\n')
-
-    # select training data start month with highest accuracy
-    best.start.month <- 0
-    best.accuracy <- 0
-    accuracies <- rep(0, 11)
-    for (start.month in 1:11) {
-        IsTraining <- function(df) {
-            Is2004First90(df) & (df$sale.month >= start.month)
-        }
-        cat('starting experiment 5 for start.month', start.month, '\n')
-        accuracy <- LinearModelLogPrices(df,
-                                         SelectTraining = IsTraining,
-                                         SelectTesting = Is2004Last10,
-                                         predictors = PredictorsForward())
-        accuracies[start.month] <- accuracy
-        if (accuracy > best.accuracy) {
-            best.accuracy <- accuracy
-            best.start.month <- start.month
-        }
-    }
-    cat('accuracies', accuracies, '\n')
-    # NOTE: accuracy improves with shorter training period except for one month
-
-    list(experiment.number = 5,
-         train = paste('first 90% of 2004, starting in month', start.month),
-         test = 'last 10% of 2004',
-         predictors = 'features found significant in step-wise forward procedure',
-         accuracy = best.accuracy)
-}
-
-Experiment6 <- function(control, df) {
-    # select best regression variables using forward procedure
-    # follow cookbook p.281 forward procedure
-    # NOTE: backward procedure does not work, failing with a message about reduced number of rows
-    # NOTE: should do cross-validation (see james-13 or write own)
-    cat('starting Experiment6\n')
-    list(experiment.number = 6,
-         train = 'first 90% of 2004',
-         test = 'last 10% of 2004',
-         predictors = 'as selected by forward stepwise regression',
-         accuracy = LinearModelLogPricesForward(df,
-                                                SelectTraining = Is2004First90,
-                                                SelectTesting = Is2004Last10,
-                                                predictors = PredictorsChopra()))
-}
-
-###############################################################################
-# Tree-based models (CART, etc.)
-###############################################################################
-
-TreeModel <- function(which, df, SelectTraining, SelectTesting, predictors) {
-    if (TRUE) {
-        # shorten names so that tree plot will be easier to read
-        old.names <- c('avg.commute.time', 'median.household.income', 'factor.has.pool',
-                       'land.value', 'improvement.value')
-        new.names <- c('commute', 'income', 'pool',
-                       'land', 'bldg')
-        predictors <- Substitute(predictors, old.names, new.names)
-        df <- RenameColumns(df, old.names, new.names)
-    }
-
-    # rescale the price by dividing by 1000
-    df$price <- df$price / 1000
-
-    the.formula <- as.formula(paste0('price ~',
-                                     paste(predictors, collapse = '+')))
-    cat('the.formula\n')
-    print(the.formula)
-
-    FitTree <- function() {
-        fitted <- tree(formula = the.formula,
-                       data = df,
-                       subset = SelectTraining(df),
-                       #control = tree.control(nrow(data), minsize = 2, mindev = 0),
-                       split = 'deviance')
-        cat('fitted\n')
-        print(fitted)
-        cat('str(fitted)\n')
-        str(fitted)
-        cat('summary(fitted)')
-        print(summary(fitted))
-        plot(fitted, type ='uniform')
-        text(fitted, pretty=0)
-        title(main='Price/1000')
-        if (FALSE) {
-            # cross validate to find best tree (see james-13 p 326)
-            # this code fails, though it mimics james-13 p 326
-            browser()
-            cv.fitted <- cv.tree(fitted)  # will pruning the tree help performance?
-            plot(cv.fitted$size, cv.fitted$dev, type='b')
-            # Should return the tree selected by cross validation
-            stop('examine cv')
-        }
-        fitted
-    }
-
-    FitRandomForest <- function(num.predictors.tried) {
-        cat('random forest; num.predictors.tried', num.predictors.tried, '\n')
-        library(randomForest)
-        set.seed(1)  # for reproducability
-        cat('num predictors', length(predictors), '\n')
-        df <- df[SelectTraining(df), ]
-        reduced.data <- na.omit(df)
-        cat('nrows', nrow(reduced.data), '\n')
+        the.formula <- as.formula(paste0(paste0(response, '~'),
+                                         paste(predictors, collapse = '+')))
+        subset.training.indices <- (df$sale.year == 2004 & 
+                                    df$sale.month >= training.start.month &
+                                    df$sale.month <= 10 &
+                                    training.indices)
+        reduced.data <- na.omit(df[subset.training.indices, ])
         fitted <- randomForest(x = reduced.data[, predictors],
                                y = reduced.data[, 'price'],
                                do.trace = 1,
                                ntree = 10,
                                importance = TRUE)
-        cat('fitted\n')
-        print(fitted)
-        cat('summary\n')
-        print(summary(fitted))
+        if (verbose) {
+            cat('fitted\n')
+            print(fitted)
+            cat('summary\n')
+            print(summary(fitted))
+        }
         fitted
     }
 
-    fitted <- switch(which,
-                     tree = FitTree(),
-                     bag = FitRandomForest(length(predictors)),
-                     randomForest = FitRandomForest(1), # default # features
-                     randomForest = FitRandomForest(length(predictors) / 3), # default # features
-                     stop(paste('which', which)))
-
+    modelTree <- MakeModelTree(training.start.month, response, predictors)
     
-    # predict
-    features <- c(predictors, 'price')
-    new.data <- na.omit(df[SelectTesting(df), features])
-    str(new.data)
-    predictions <- predict(fitted, newdata = new.data)
-    str(predictions)
-    str(new.data$price)
-    cat('predictions', predictions[1:10], '\n')
-    cat('actuals    ', new.data$price[1:10], '\n')
-    Printf('ndx predict actual\n')
-    for (i in 1:10) {
-        Printf('%3d %5.1f %5.1f\n', i, predictions[i], new.data$price[i])
+    list(Fit = Fit,
+         Predict = modelTree$Predict,
+         description = sprintf('random forest %s start %d', response, training.start.month))
+}
+
+MakeModelTree <- function(training.start.month, response, predictors) {
+    verbose <- TRUE
+
+    Fit <- function(df, training.indices) {
+        if (verbose) {
+            cat('fitting tree model with starting month', training.start.month, '\n')
+        }
+        the.formula <- as.formula(paste0(paste0(response, '~'),
+                                         paste(predictors, collapse = '+')))
+        subset.training.indices <- (df$sale.year == 2004 & 
+                                    df$sale.month >= training.start.month &
+                                    df$sale.month <= 10 &
+                                    training.indices)
+        fitted <- tree(formula = the.formula,
+                       data = df,
+                       subset = subset.training.indices,
+                       split = 'deviance')
+        if (verbose) {
+            cat('fitted tree\n')
+            print(fitted)
+            cat('summary fitted\n')
+            print(summary(fitted))
+            plot(fitted, type = 'uniform')
+            text(fitted, pretty = 0)
+            title(main = 'Price')
+        }
+        if (FALSE) {
+            # cross validate to find best tree variables
+            cv.fitted <- cv.tree(fitted) # prune tree
+            if (verbose) {
+                cat('cv.fitted tree\n')
+                print(cv.fitted)
+                print('summary cv.fitted\n')
+                print(summary(cv.fitted))
+            }
+            stop('examine cv.fitted')
+        }
+        fitted
     }
-    fraction.within.10.percent <- Accuracy(new.data$price, predictions)
-    print(fraction.within.10.percent)
+
+    response.is.missing <- missing(response)
+
+    Predict <- function(fitted, df, testing.indices) {
+        if (verbose) {
+            cat('predicting tree model with training.start.month', training.start.month, '\n')
+        }
+        subset.testing.indices <- (df$sale.year == 2004 &
+                                   df$sale.month == 12 &
+                                   testing.indices)
+        if (response.is.missing) {
+            newdata <- na.omit(df[subset.testing.indices, predictors])
+            predicted <- predict(fitted, newdata)
+            list(predicted = predicted)
+        } else {
+            # newdata here and above may be different, because of the inclusiong of
+            # the response variable here (which is omitted above)
+            newdata <- na.omit(df[subset.testing.indices, c(response, predictors)])
+            predicted <- predict(fitted, newdata)
+            list(predicted = predicted,
+                 actual = newdata[[response]])
+        }
+    }
+
+    list(Fit = Fit,
+         Predict = Predict,
+         description = sprintf('tree %s start %d', response, training.start.month))
 }
 
-Experiment7 <- function(control, df) {
-    # tree regression using library(tree)
-    # Part 1: simple fit
-    # Part 2: with cross validation to assess effect of pruning the tree
-    # NOTE: follow james-13 p 324 (339 in pdf)
-    cat('starting Experiment7\n')
+MakeModelLinear <- function(training.start.month, response, predictors) {
+    # create linear model that tests on Nov 2004 data
+    # Arguments:
+    # response   : chr scalar, column name of response feature
+    # predictors : chr vector, column names of predictors
+    # Value: list(Fit=,Predict=,description=), such that
+    # $Fit(df, training.indices) --> fitted
+    # $Predict(fitted, df, testing.indices) --> list(predicted= [,actual=])
+    # $description : chr, informal description
 
-    list(experiment.number = 7,
-         description = 'tree',
-         train = '2004: Juyly - Nov 24',
-         test = 'last 10% of 2004',
-         predictors = 'most of Chopra',
-         accuracy = TreeModel(which = 'tree',
-                              df = df,
-                              SelectTraining = Is2004JulyUntilLast10,
-                              SelectTesting = Is2004Last10,
-                              predictors = PredictorsChopraRaw()))
+    verbose <- FALSE
+    verbose <- TRUE
+
+    if (verbose) {
+        cat('starting MakeModelLinear\n')
+        cat('respone', response, '\n')
+        cat('predictors', predictors, '\n')
+    }
+
+    Fit <- function(df, training.indices) {
+        if (verbose) {
+            cat('fitting linear model with training.start.month', training.start.month, '\n')
+        }
+        the.formula <- as.formula(paste0(paste0(response, '~'),
+                                         paste(predictors, collapse = '+')))
+        subset.training.indices <- (df$sale.year == 2004 & 
+                                    df$sale.month >= training.start.month &
+                                    df$sale.month <= 10 &
+                                    training.indices)
+        fitted <- lm(formula = the.formula,
+                     data = df,
+                     subset = subset.training.indices)
+        if (verbose) {
+            cat('fitted model\n')
+            fitted
+            print(summary(fitted))
+        }
+        fitted
+    }
+
+    response.is.missing <- missing(response)
+
+    Predict <- function(fitted, df, testing.indices) {
+        if (verbose) {
+            cat('predicting linear model with training.start.month', training.start.month, '\n')
+        }
+        subset.testing.indices <- (df$sale.year == 2004 &
+                                   df$sale.month == 12 &
+                                   testing.indices)
+        if (response.is.missing) {
+            newdata <- na.omit(df[subset.testing.indices, predictors])
+            predicted <- predict.lm(fitted, newdata)
+            list(predicted = predicted)
+        } else {
+            # newdata here and above may be different, because of the inclusiong of
+            # the response variable here (which is omitted above)
+            newdata <- na.omit(df[subset.testing.indices, c(response, predictors)])
+            predicted <- predict.lm(fitted, newdata)
+            list(predicted = predicted,
+                 actual = newdata[[response]])
+        }
+    }
+
+    list(Fit = Fit,
+         Predict = Predict,
+         description = paste('linear trained from month', training.start.month))
 }
 
-Experiment8 <- function(control, df) {
-    # tree regression using library(tree)
-    # Part 1: simple fit
-    # Part 2: with cross validation to assess effect of pruning the tree
-    # NOTE: follow james-13 p 324 (339 in pdf)
-    cat('starting Experiment8\n')
-    list(experiment.number = 8,
-         description = 'random forest',
-         train = '2004: July - Nov 24',
-         test = 'last 10% of 2004',
-         predictors = 'most of Chopra',
-         accuracy = TreeModel(which = 'randomForest',
-                              df = df,
-                              SelectTraining = Is2004JulyUntilLast10,
-                              SelectTesting = Is2004Last10,
-                              predictors = PredictorsChopraRaw()))
-}
+MakeModelLinearLogPrice <- function(training.start.month) {
+    modelLinear <- MakeModelLinear(training.start.month = training.start.month,
+                                   response = 'log.price',
+                                   predictor = PredictorsChopraCenteredLog())
 
-ExperimentsFuture <- function(control, df) {
-    # zip-code based model  without latitude and longitude
-    # census-track based model "
-    # cross validation to find best number of months of training data
-    #  -- select this variable based on whether market is rising, falling, or stable
-    stop('write me')
-}
+    Predict <- function(fitted, df, testing.indices) {
+        # return prices and actuals, not log(prices) and log(actuals)
+        result <- modelLinear$Predict(fitted, df, testing.indices)
+        list(predicted = exp(result$predicted),
+             actual = exp(result$actual))
+    }
 
+    list(Fit = modelLinear$Fit,
+         Predict = Predict,
+         description = sprintf('linear log.price start %d',
+                               training.start.month))
+}
 
 ###############################################################################
-## Experiment based on CART
-## see BetterDoctor.pdf from Stern for ideas
-## consider using rpart library
-## also partykit (which reads rpart models)
-## also randomForest
+# Select models to compare
 ###############################################################################
 
-Experiment2b <- function(control, df) {
-    # simple CART using best training set months
-    stop('write me')
+ModelsLinearLogPrice <- function() {
+    list(MakeModelLinearLogPrice(1),  # training data starts in Jan 2004
+         MakeModelLinearLogPrice(2),  # training data starts in Feb 2004
+         MakeModelLinearLogPrice(3),  # training data starts in Mar 2004
+         MakeModelLinearLogPrice(4),  # training data starts in Apr 2004
+         MakeModelLinearLogPrice(5),  # training data starts in May 2004
+         MakeModelLinearLogPrice(6),  # training data starts in Jun 2004
+         MakeModelLinearLogPrice(7),  # training data starts in Jul 2004
+         MakeModelLinearLogPrice(8),  # training data starts in Aug 2004
+         MakeModelLinearLogPrice(9))  # training data starts in Sep 2004
+    #MakeModelLinearLogPrice(10))  # training data starts in Oct 2004
 }
 
-Experiment <- function(control, df) {
-    # random forest
+MakeModelLinearPrice <- function(training.start.month) {
+    modelLinear <- MakeModelLinear(training.start.month = training.start.month,
+                                   response = 'price',
+                                   predictor = PredictorsChopraCentered())
+    list(Fit = modelLinear$Fit,
+         Predict = modelLinear$Predict,
+         description = sprintf('linear price start %d',
+                               training.start.month))
+}
+
+ModelsLinearPrice <- function() {
+    # MAYBE FIX: fails if training data is month 10 only
+    list(MakeModelLinearPrice(1),  # training data starts in Jan 2004
+         MakeModelLinearPrice(2),  # training data starts in Feb 2004
+         MakeModelLinearPrice(3),  # training data starts in Mar 2004
+         MakeModelLinearPrice(4),  # training data starts in Apr 2004
+         MakeModelLinearPrice(5),  # training data starts in May 2004
+         MakeModelLinearPrice(6),  # training data starts in Jun 2004
+         MakeModelLinearPrice(7),  # training data starts in Jul 2004
+         MakeModelLinearPrice(8),  # training data starts in Aug 2004
+         MakeModelLinearPrice(9))  # training data starts in Sep 2004
+}
+
+MakeModelTreePrice <- function(training.start.month) {
+    modelTree <- MakeModelTree(training.start.month = training.start.month,
+                               response = 'price',
+                               predictor = PredictorsChopraRaw())
+    list(Fit = modelTree$Fit,
+         Predict = modelTree$Predict,
+         description = sprintf('tree price start %d', training.start.month))
+}
+
+ModelsTreePrice <- function() {
+    list(MakeModelTreePrice(1),
+         MakeModelTreePrice(2),
+         MakeModelTreePrice(3),
+         MakeModelTreePrice(4),
+         MakeModelTreePrice(5),
+         MakeModelTreePrice(6),
+         MakeModelTreePrice(7),
+         MakeModelTreePrice(8),
+         MakeModelTreePrice(9))
+}
+
+MakeModelRandomForestPrice <- function(training.start.month) {
+    modelRandomForest <- MakeModelRandomForest(training.start.month = training.start.month,
+                                               response = 'price',
+                                               predictor = PredictorsChopraRaw())
+    list(Fit = modelRandomForest$Fit,
+         Predict = modelRandomForest$Predict,
+         description = sprintf('random forest price start %d', training.start.month))
+}
+
+ModelsRandomForestPrice <- function() {
+    list(MakeModelRandomForestPrice(1),
+         MakeModelRandomForestPrice(2),
+         MakeModelRandomForestPrice(3),
+         MakeModelRandomForestPrice(4),
+         MakeModelRandomForestPrice(5),
+         MakeModelRandomForestPrice(6),
+         MakeModelRandomForestPrice(7),
+         MakeModelRandomForestPrice(8),
+         MakeModelRandomForestPrice(9))
+}
+
+MakeModelBCH <- function(training.start.month) {
+    modelLinear <- MakeModelLinear(training.start.month = training.start.month,
+                                   response = 'price',
+                                   predictor = PredictorsBCHRaw())
+    list(Fit = modelLinear$Fit,
+         Predict = modelLinear$Predict,
+         description = sprintf('linear BCH price start %d', training.start.month))
+
+}
+
+ModelsLinearBCHPrice <- function() {
+    cat('STUB: ModelsLinearBCHPrice\n')
+    list(MakeModelBCH(5))
+}
+
+ModelsOneOfEach <- function() {
+    list(MakeModelLinearLogPrice(8),
+         MakeModelLinearPrice(8),
+         MakeModelTreePrice(8),
+         MakeModelRandomForestPrice(8))
+}
+
+#models <- c(MakeModelBCH(5))
+SelectModelsToTest <- function(name) {
+    # return list of models to test. Each model has $Fit, $Predict, and $description
+    switch(name,
+           models.linear.log.price = ModelsLinearLogPrice(),
+           models.linear.price = ModelsLinearPrice(),
+           models.tree.price = ModelsTreePrice(),
+           models.random.forest.price = ModelsRandomForestPrice(),
+           models.linear.BCH.price = ModelsLinearBCHPrice(),
+           models.one.of.each = ModelsOneOfEach(),
+           models.all = c(ModelsLinearLogPrice(),
+                          ModelsLinearPrice(),
+                          ModelsTreePrice(),
+                          ModelsRandomForestPrice(),
+                          ModelsLinearBCHPrice()),
+           ... = stop(name))
+
+}
+
+CompareViaCrossValidation <- function(control, transformed.data) {
+    # return whatever CrossValidate2 returns
+    verbose <- TRUE
+    # TODO: check that log.price models are best if trained only in Oct DONE
+    # TODO: compare price ~ models to log.price models
+    # TODO: implement forward procedure (or backward)
+    # TODO: implement tree and random forest
+
+    models <- SelectModelsToTest('models.one.of.each')
+
+    ErrorRate <- function(model.number, df, training.indices, testing.indices) {
+        # Return error rate for model indexed by model.number after testing and fitting
+        verbose <- TRUE
+        if (verbose) {
+            cat('\n****************************************** ')
+            cat('ErrorRate started\n')
+            cat(' model.number', model.number, '\n')
+            cat(' df\n'); str(df)
+            cat(' training.indices\n'); str(training.indices)
+            cat(' testing.indices\n'); str(testing.indices)
+            cat(' description', models[[model.number]]$description, '\n')
+        }
+
+        Fit <- models[[model.number]]$Fit
+        Predict <- models[[model.number]]$Predict
+
+        fitted <- Fit(df, training.indices)
+        result <- Predict(fitted, df, testing.indices)
+        rmse <- Rmse(actual = result$actual,
+                     estimated = result$predicted)
+        stopifnot(!is.nan(rmse))
+        within.10.percent <- Within10Percent(actual = result$actual, 
+                                             estimated = result$predicted, 
+                                             precision = .10)
+        list(error.rate = rmse,
+             other.info = within.10.percent)
+    }
+
+
+    nfolds <- 5
+    nmodels <- length(models) 
+    result <- CrossValidate2(transformed.data, nfolds, nmodels, ErrorRate)
+    cat('result\n'); str(result)
+    cat('index of best model', result$best.model.index, '\n')
+
+    # summarize predictions for generalized error
+    Printf('summary for cross validation with %d folds\n', nfolds)
+    df <- result$result
+    for (model.index in 1:nmodels) {
+        this.model.indices <- df$model.index == model.index
+        Summarize <- function(model.index) {
+            rmse <- mean(df[this.model.indices, 'error.rate'])
+            within <- mean(df[this.model.indices, 'other.info'])
+            Printf('model %2d %30s mean RMSE %f mean fraction within 10 percent %f\n',
+                   model.index,
+                   models[[model.index]]$description,
+                   rmse,
+                   within)
+        }
+        Summarize(model.index)
+    }
+    cat('end of cross validation summary\n')
+
+    result
 }
 
 ###############################################################################
 ## Main program
 ###############################################################################
-
 
 Main <- function(control, transformed.data) {
     control$testing <- FALSE
@@ -759,48 +773,8 @@ Main <- function(control, transformed.data) {
     # Neural network                              60.55
     # Relational factor graph                     65.76
 
-
-    experiments <- list(Experiment1,
-                        Experiment2, 
-                        Experiment3,
-                        Experiment4,
-                        Experiment5,
-                        Experiment6,
-                        Experiment7,
-                        Experiment8)
-
-
-    run <- 1:length(experiments)  # run all experiments
-    #run <- c(4)                   # run just one experiment
-    run <- c(1, 2, 3, 4, 5)
-    run <- c(1, 4, 5)
-    run <- c(6)
-    run <- c(8)
-
-    PrintOne <- function(result) {
-        cat('experiment.number', result$experiment.number, '\n')
-        cat('  description', result$description, '\n')
-        cat('  train', result$train, '\n')
-        cat('  test', result$test, '\n')
-        cat('  predictors', result$predictors, '\n')
-        cat('  fraction with 10%', result$accuracy, '\n')
-
-    }
-
-    results <- list()
-    
-    for (i in 1:length(run)) {
-        experiment.number <- run[[i]]
-        result <- (experiments[[experiment.number]])(control, transformed.data)
-        PrintOne(result)
-        results[[i]] <- result
-    }
-
-    str(run)
-    for (i in 1:length(run)) {
-        PrintOne(results[[i]])
-    }
-        
+    result <- CompareViaCrossValidation(control, transformed.data)
+    cat('Main result\n'); print(result)
 
     if (control$testing) {
         cat('DISCARD RESULTS: TESTING\n')
