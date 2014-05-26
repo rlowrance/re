@@ -100,24 +100,31 @@ ReadAndTransformTransactions <- function(path.in, nrows, verbose) {
 
                land.square.footage = raw$LAND.SQUARE.FOOTAGE,
                centered.log.land.square.footage = Center(log(raw$LAND.SQUARE.FOOTAGE)),
+               centered.land.square.footage = Center(raw$LAND.SQUARE.FOOTAGE),
 
                living.area = raw$LIVING.SQUARE.FEET,
                centered.log.living.area = Center(log(raw$LIVING.SQUARE.FEET)),
+               centered.living.area = Center(raw$LIVING.SQUARE.FEET),
 
                bedrooms = raw$BEDROOMS,
                centered.log1p.bedrooms = Center(log1p(raw$BEDROOMS)),
+               centered.bedrooms = Center(raw$BEDROOMS),
 
                bathrooms = raw$TOTAL.BATHS.CALCULATED,
                centered.log1p.bathrooms = Center(log1p(raw$TOTAL.BATHS.CALCULATED)),
+               centered.bathrooms = Center(raw$TOTAL.BATHS.CALCULATED),
 
                parking.spaces = raw$PARKING.SPACES,
                centered.log1p.parking.spaces = Center(log1p(raw$PARKING.SPACES)),
+               centered.parking.spaces = Center(raw$PARKING.SPACES),
 
                land.value = raw$LAND.VALUE.CALCULATED,
                centered.log.land.value = Center(log(raw$LAND.VALUE.CALCULATED)),
+               centered.land.value = Center(raw$LAND.VALUE.CALCULATED),
 
                improvement.value = raw$IMPROVEMENT.VALUE.CALCULATED,
                centered.log.improvement.value = Center(log(raw$IMPROVEMENT.VALUE.CALCULATED)),
+               centered.improvement.value = Center(raw$IMPROVEMENT.VALUE.CALCULATED),
 
                factor.parking.type = raw$PARKING.TYPE.CODE,
                factor.has.pool = has.pool,
@@ -131,6 +138,7 @@ ReadAndTransformTransactions <- function(path.in, nrows, verbose) {
 
                median.household.income = raw$median.household.income,
                centered.log.median.household.income = Center(log(raw$median.household.income)),
+               centered.median.household.income = Center(raw$median.household.income),
 
                year.built = raw$YEAR.BUILT,
                centered.year.built = Center(raw$YEAR.BUILT),
