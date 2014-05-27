@@ -1,5 +1,5 @@
 # InitializeR.R
-InitializeR <- function(start.JIT=TRUE, duplex.output.to=NULL) {
+InitializeR <- function(start.JIT=FALSE, duplex.output.to=NULL) {
     # setup R's execution environment
     # ARGS: None
     # RETURNS: NULL
