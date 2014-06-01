@@ -6,6 +6,7 @@ OUTPUT=../data/v6/output
 CENSUS=$(OUTPUT)/census.csv
 DEEDS=$(OUTPUT)/deeds-al.csv
 PARCELS=$(OUTPUT)/parcels-sfr.csv
+PARCELS_DERIVED_FEATURES=$(OUTPUT)/parcels-derived-features-zip5.csv
 TRANSACTIONS=$(OUTPUT)/transactions-al-sfr.csv
 SUBSET1=$(OUTPUT)/transactions-subset1.csv
  
@@ -19,7 +20,7 @@ SUBSET1=$(OUTPUT)/transactions-subset1.csv
 	Rscript -e "if (getRversion() < '3.0.0') knitr::knit2html('$*.Rmd')"
 
 .PHONY: all
-all: $(CENSUS) $(DEEDS) $(PARCELS) $(SUBSET1) $(TRANSACTIONS)
+all: $(CENSUS) $(DEEDS) $(PARCELS) $(SUBSET1) $(TRANSACTIONS) $(PARCELSDERIVEDFEATURES)
 
 $(CENSUS): census.R
 	Rscript census.R
@@ -30,8 +31,11 @@ $(DEEDS): deeds-al.R
 $(PARCELS): parcels-sfr.R
 	Rscript parcels-sfr.R
 
+$(PARCELS_DERIVED_FEATURES): parcels-derived-features.R
+	Rscript parcels-derived-features.R
+
 $(SUBSET1): transactions-subset1.R $(TRANSACTIONS)
 	Rscript transactions-subset1.R
 
-$(TRANSACTIONS): transactions-al-sfr.R $(CENSUS) $(DEEDS) $(PARCELS)
+$(TRANSACTIONS): transactions-al-sfr.R $(CENSUS) $(DEEDS) $(PARCELS) $(PARCELSDERIVEDFEATURES)
 	Rscript transactions-al-sfr.R
