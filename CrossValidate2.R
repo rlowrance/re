@@ -1,5 +1,5 @@
 # CrossValidate2.R
-CrossValidate2 <- function(data, nfolds, nmodels, ErrorRate, random.seed = 1) {
+CrossValidate2 <- function(data, nfolds, nmodels, ErrorRate, random.seed = 1, verbose = TRUE) {
     # determine index of function with lowest error rate uisng nfold cross validation
     # ARGS:
     # data        : data.frame
@@ -10,10 +10,10 @@ CrossValidate2 <- function(data, nfolds, nmodels, ErrorRate, random.seed = 1) {
     #               testing on data[testing.indices,]
     #               value = list with elements $error.rate $other.info
     # random.seed : integer or NULL, seed for random number generator if not NULL
+    # verbose     : logical, if TRUE then write to stdout
     # Value: list
     # $best.model.index : integer, index of model with lowest total $error.rate across folds
     # $results          : data.from with columns $fold, $model.index, $error.rate, $other.info
-    verbose <- FALSE
     stopifnot(nfolds <= nrow(data))
 
     if (!is.null(random.seed)) {
@@ -23,41 +23,36 @@ CrossValidate2 <- function(data, nfolds, nmodels, ErrorRate, random.seed = 1) {
     fold.indices = rep(1:nfolds, length.out=nrow(data))  # 1 2 ... nfold 1 2 ... nfold ...
     random.obs.indices <- sample(fold.indices, nrow(data))  # randomly permute by sampling without replacement
 
-    errors <- matrix(rep(0, nfolds * nmodels),
-                     nrow = nfolds,
-                     ncol = nmodels)
-    all.folds <- list()
-    all.model.indices <- list()
-    all.results <- list()
-    # start with dummy row 
-    all.results <- data.frame(fold = c(0),
-                              model.index = c(0),
-                              error.rate = c(0),
-                              other.info = c(0))
-    if (verbose) {
-        cat('initial all.results\n')
-        str(all.results)
-    }
-    for (fold in 1:nfolds) {
-        is.testing <- random.obs.indices == fold
+    # accumulate results in these variables
+    fold <- NULL
+    model.index <- NULL
+    error.rate <- NULL
+    other.info <- NULL
+    description <- NULL
+    for (this.fold in 1:nfolds) {
+        is.testing <- random.obs.indices == this.fold
         is.training <- !is.testing
-        for (model.index in 1:nmodels) {
-            all.model.indices <- list(all.model.indices, model.index)
-            Printf('determining error rate on model %d fold %d\n', model.index, fold)
+        for (this.model.index in 1:nmodels) {
             if (verbose) {
-                cat('about to call ErrorRate; fold', fold, 'model.index', model.index, '\n')
+                Printf('determining error rate on model %d fold %d\n', this.model.index, this.fold)
             }
-            results <- ErrorRate(model.index, data, is.training, is.testing)
+            this.result <- ErrorRate(this.model.index, data, is.training, is.testing)
             if (verbose) {
-                cat('CrossValidate2 ErrorRate results\n')
-                print(results)
+                Printf(' error rate %f other info %f %s\n', 
+                       this.result$error.rate, this.result$other.info, this.result$description)
             }
-            Printf(' error rate %f other info %f\n', results$error.rate, results$other.info)
-            all.results <- rbind(all.results,
-                                 c(fold, model.index, results$error.rate, results$other.info))
+            fold <- c(fold, this.fold)
+            model.index <- c(model.index, this.model.index)
+            error.rate <- c(error.rate, this.result$error.rate)
+            other.info <- c(other.info, this.result$other.info)
+            description <- c(description, this.result$description)
         }
     }   
-    all.results <- all.results[2:nrow(all.results), ]  # drop initial dummy row
+    all.results <- data.frame(fold = fold,
+                              model.index = model.index,
+                              error.rate = error.rate,
+                              other.info = other.info,
+                              description = description)
     if (verbose) {
         cat('all.results\n')
         str(all.results)
@@ -91,14 +86,15 @@ CrossValidate2Test <- function() {
             cat('is.testing', is.testing, '\n')
         }
         list(error.rate = model.number,
-             other.info = model.number * 100)
+             other.info = model.number * 100,
+             description = 'test description')
     }
 
     df <- data.frame(a = c(1,2,3),
                      b = c(10,20,30))
     nfolds <- 3
     nmodels <- 4
-    result <- CrossValidate2(df, nfolds, nmodels, ErrorRate)
+    result <- CrossValidate2(df, nfolds, nmodels, ErrorRate, verbose = FALSE)
     if (verbose) {
         cat('result\n')
         print(result)
