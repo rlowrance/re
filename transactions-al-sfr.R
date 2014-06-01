@@ -2,16 +2,26 @@
 # Create the transactions-al-sfr.csv file containing all transactions for
 # arms-length deeds for single-family-residential parcels.
 
-# Join the deeds and parcels files on the best APN (defined below), not the
+# Join these files:
+# census.csv   : census records
+# deeds-al.csv : selected deeds data for arms-length deeds
+# geocoding.tsv : geocodes for residences
+# parcels-sfr.csv : selected parcels data for single-family-residences
+# parcels-derived-features-census-tract.csv : features of census tracts
+# parcels-derived-features-zip5.csv : features of 5-digit zip codes
+
+# Join the deeds and parcels fileson the best APN (defined below), not the
 # formatted or unformatted APN.
 
 # set control variables
 control <- list()
 control$me <- 'transactions-al-sfr'
-control$dir.output="../data/v6/output/"
+control$dir.output <- "../data/v6/output/"
 control$path.census <- paste(control$dir.output, "census.csv", sep="")
 control$path.deeds <- paste(control$dir.output, "deeds-al.csv", sep="")
 control$path.parcels <- paste(control$dir.output, "parcels-sfr.csv", sep="")
+control$path.parcels.census.tract <- paste(control$dir.output, "parcels-derived-features-census-tract.csv", sep="")
+control$path.parcels.zip5 <- paste(control$dir.output, "parcels-derived-features-zip5.csv", sep="")
 control$path.geocoding <- "../data/raw/geocoding.tsv"
 control$path.out <- paste(control$dir.output, "transactions-al-sfr.csv", sep="")
 control$path.log <- paste0(control$dir.output, control$me, '.txt')
@@ -96,6 +106,54 @@ ReadParcels <- function(control) {
     parcels
 }
 
+ReadParcelsCensusTract <- function(control) {
+    # Read census tract data derived from parcels
+    # ARGS:
+    # control : list of control vars
+    # RETURNS: data.frame
+    df <- read.csv(control$path.parcels.census.tract,
+                   check.names=FALSE,
+                   header=TRUE,
+                   sep=",",
+                   quote="",
+                   comment.char="",
+                   stringsAsFactors=FALSE,
+                   nrows=ifelse(control$testing, 1000, -1))                  
+    cat("number of parcel df records read", nrow(df), "\n")
+    # fix up the column names
+    df <- data.frame(census.tract              = df[['"census.tract"']],
+                     census.tract.has.industry = df[['"has.industry"']],
+                     census.tract.has.park     = df[['"has.park"']],
+                     census.tract.has.retail   = df[['"has.retail"']],
+                     census.tract.has.school   = df[['"has.school"']])
+    str(df)
+    df
+}
+
+ReadParcelsZip5 <- function(control) {
+    # Read census tract data derived from parcels
+    # ARGS:
+    # control : list of control vars
+    # RETURNS: data.frame
+    df <- read.csv(control$path.parcels.zip5,
+                   check.names=FALSE,
+                   header=TRUE,
+                   sep=",",
+                   quote="",
+                   comment.char="",
+                   stringsAsFactors=FALSE,
+                   nrows=ifelse(control$testing, 1000, -1))                  
+    cat("number of parcel df records read", nrow(df), "\n")
+    # fix up the column names
+    df <- data.frame(zip5              = df[['"zip5"']],
+                     zip5.has.industry = df[['"has.industry"']],
+                     zip5.has.park     = df[['"has.park"']],
+                     zip5.has.retail   = df[['"has.retail"']],
+                     zip5.has.school   = df[['"has.school"']])
+    str(df)
+    df
+}
+
 MergeDeedsParcels <- function(control) {
     # merge the deeds and parcels into one data frame
     # ARGS
@@ -148,11 +206,30 @@ MergeGeocoding <- function(df, control) {
     merged
 }
 
+MergeParcelsCensusTract <- function(df, control) {
+    # merge census tract data into a data.frame
+    census.tract <- ReadParcelsCensusTract(control)
+    merged <- merge(df, census.tract,
+                    by.x = 'CENSUS.TRACT', 
+                    by.y = 'census.tract')
+}
+
+MergeParcelsZip5 <- function(df, control) {
+    # merge census tract data into a data.frame
+    zip5 <- ReadParcelsZip5(control)
+    df$zip5 <- round(df$PROPERTY.ZIPCODE / 10000)
+    merged <- merge(df, zip5,
+                    by.x = 'zip5', 
+                    by.y = 'zip5')
+}
+
 MergeAll <- function(control) {
     # merge all 4 files and return merged data.frame
     deedsParcels <- MergeDeedsParcels(control)
     deedsParcelsCensus <- MergeCensus(deedsParcels, control)
-    MergeGeocoding(deedsParcelsCensus, control)
+    transactions.geocoded <- MergeGeocoding(deedsParcelsCensus, control)
+    transactions.derived.census.tract <- MergeParcelsCensusTract(transactions.geocoded, control)
+    transactions.all.derived <- MergeParcelsZip5(transactions.derived.census.tract, control)
 }
 
 Main <- function(control) {
@@ -167,7 +244,7 @@ Main <- function(control) {
 
     # build up the fully-merged data.frame
     merged <- MergeAll(control)
-    
+
 
     # Drop extraneous features.
     str('merged\n'); str(merged)
@@ -185,4 +262,6 @@ Main <- function(control) {
 }
 
 Main(control)
+
+
 cat('done\n')
