@@ -27,7 +27,7 @@ control$testing <- TRUE
 source('InitializeR.R')
 if (TRUE) {
     InitializeR(start.JIT = FALSE,
-                duplex.output.to = control$path.log)
+                duplex.output.to = NULL)
     #InitializeR(start.JIT = ifelse(control$testing, FALSE, TRUE),
     #            duplex.output.to = control$path.log)
 } else {
@@ -37,6 +37,7 @@ if (TRUE) {
 # source files now that JIT is set
 source('Center.R')
 source('CrossValidate2.R')
+source('DuplexOutputTo.R')
 source('NumberFeaturesWithAnNA.R')
 source('Printf.R')
 source('ReadAndTransformTransactions.R')
@@ -156,61 +157,6 @@ Substitute.Test <- function() {
 Substitute.Test()
 
 ###############################################################################
-# Subset selection
-###############################################################################
-Is2003OrBefore2004Last10 <- function(df) {
-    (df$sale.year == 2003) | Is2004First90(df)
-}
-
-Is2004AprilUntilLast10 <- function(df) {
-    # return selector vector for transactions in April, May, ..., Nov 24 of 2004
-    Is2004First90(df) & df$sale.month >= 4
-}
-
-Is2004JulyUntilLast10 <- function(df) {
-    # return selector vector for transactions in July, Aug, ..., Nov 24 of 2004
-    Is2004First90(df) & df$sale.month >= 7
-}
-
-Is2004First90 <- function(df) {
-    # return selector vector for transactions in first 90% of 2004
-    (df$sale.year == 2004) &
-    ((df$sale.month <= 11) & (df$sale.day <= 24) | (df$sale.month <= 10))
-}
-
-Is2004Last10 <- function(df) {
-    # return selector vector for transactions in last 10% of 2004
-    # 2004 had 366 days, so first date in last 10% was Nov 25
-    (df$sale.year == 2004) & 
-    ((df$sale.month == 12) | ((df$sale.month == 11) & (df$sale.day >= 25)))
-}
-
-IsBefore2004Last10 <- function(df) {
-    (df$sale.year < 2004) | Is2004First90(df)
-}
-
-test.subset.selectors <- function() {
-    df <- data.frame(sale.year =  c( 2002, 2003,  2004,   2004,   2004, 2004,  2004,  2004,  2005),
-                     sale.month = c(    1,   12,     1,     04,     10,   11,    11,    12,     1),
-                     sale.day   = c(    1,   31,     1,     01,     31,   24,    25,    31,     1))
-
-    is2003OrBefore2004Last10 <-   c(FALSE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE, FALSE, FALSE, FALSE)
-    is2004AprilUntilLast10 <-     c(FALSE, FALSE, FALSE,  TRUE,  TRUE,  TRUE, FALSE, FALSE, FALSE)
-    is2004JulyUntilLast10 <-      c(FALSE, FALSE, FALSE, FALSE,  TRUE,  TRUE, FALSE, FALSE, FALSE)
-    is2004First90 <-              c(FALSE, FALSE,  TRUE,  TRUE,  TRUE,  TRUE, FALSE, FALSE, FALSE)
-    is2004Last10  <-              c(FALSE, FALSE, FALSE, FALSE, FALSE, FALSE,  TRUE,  TRUE, FALSE)
-    isBefore2004Last10 <-         c( TRUE,  TRUE,  TRUE,  TRUE,  TRUE,  TRUE, FALSE, FALSE, FALSE)
-
-    stopifnot(all(is2003OrBefore2004Last10 == Is2003OrBefore2004Last10(df)))
-    stopifnot(all(is2004AprilUntilLast10 == Is2004AprilUntilLast10(df)))
-    stopifnot(all(is2004JulyUntilLast10 == Is2004JulyUntilLast10(df)))
-    stopifnot(all(is2004First90 == Is2004First90(df)))
-    stopifnot(all(is2004Last10  == Is2004Last10(df)))
-    stopifnot(all(isBefore2004Last10 == IsBefore2004Last10(df)))
-}
-test.subset.selectors()
-
-###############################################################################
 # Create lists of predictors
 ###############################################################################
 
@@ -254,9 +200,9 @@ PredictorsChopraCenteredLog <- function() {
       'centered.latitude',
       'centered.longitude',
       'factor.is.new.construction',
-      'factor.foundation.type',
+      #'factor.foundation.type',
       'factor.roof.type',
-      'factor.parking.type',
+      #'factor.parking.type',
       'factor.has.pool')
 }
 
@@ -277,9 +223,9 @@ PredictorsChopraCentered <- function() {
       'centered.latitude',
       'centered.longitude',
       'factor.is.new.construction',
-      'factor.foundation.type',
+      #'factor.foundation.type',
       'factor.roof.type',
-      'factor.parking.type',
+      #'factor.parking.type',
       'factor.has.pool')
 }
 
@@ -330,7 +276,6 @@ PredictorsBCHRaw <- function() {
 
 
 
-
 ###############################################################################
 ## Create models of price and log(price)
 ###############################################################################
@@ -373,57 +318,57 @@ MakeModelForward <- function() {
          description = 'select best model using step-wise forward procedure')
 }
 
-MakeModelRandomForest <- function(training.start.month, response, predictors) {
-    verbose <- TRUE
 
-    Fit <- function(df, training.indices) {
-        if (verbose) {
-            cat('fitting random forest with starting month', training.start.month, '\n')
-        }
-        the.formula <- as.formula(paste0(paste0(response, '~'),
-                                         paste(predictors, collapse = '+')))
-        subset.training.indices <- (df$sale.year == 2004 & 
-                                    df$sale.month >= training.start.month &
-                                    df$sale.month <= 10 &
-                                    training.indices)
-        reduced.data <- na.omit(df[subset.training.indices, ])
-        fitted <- randomForest(x = reduced.data[, predictors],
-                               y = reduced.data[, 'price'],
-                               do.trace = 1,
-                               ntree = 10,
-                               importance = TRUE)
-        if (verbose) {
-            cat('fitted\n')
-            print(fitted)
-            cat('summary\n')
-            print(summary(fitted))
-        }
-        fitted
-    }
+# NEW STUFF STARTS HERE
 
-    modelTree <- MakeModelTree(training.start.month, response, predictors)
-    
-    list(Fit = Fit,
-         Predict = modelTree$Predict,
-         description = sprintf('random forest %s start %d', response, training.start.month))
+Formula <- function(response, predictors) {
+    as.formula(paste0(paste0(response, '~'),
+                      paste(predictors, collapse = '+')))
 }
 
-MakeModelTree <- function(training.start.month, response, predictors) {
+MakeModelLinear <- function(response, predictors, transform.response = 'no') {
+    # return list of functions
+    # $Fit(df, training.indices) --> fitted model
+    # $Predict(fitted, df, testing.index) --> transformed predictions
+    # $description : char
+
+    Fit <- function(df, training.indices) {
+        the.formula <- Formula(response, predictors)
+        # NOTE; supplying parameter subset = trainng.indices does not work
+        fitted <- lm(formula = the.formula,
+                     data = df[training.indices,])
+    }
+
+    Predict <- function(fitted, df, testing.indices) {
+        newdata <- na.omit(df[testing.indices, predictors])
+        predicted <- predict.lm(fitted, newdata)
+        switch(transform.response,
+               no = predicted,
+               exp = exp(predicted))
+    }
+
+    list(Fit = Fit, 
+         Predict = Predict, 
+         description = ifelse(transform.response == 'no', 
+                              sprintf('linear %s %d predictors', 
+                                      response, length(predictors)),
+                              sprintf('linear %s(%s) %d predictors', 
+                                      transform.response, response, length(predictors))))
+}
+
+MakeModelTree <- function(response, predictors) {
+    # return list of functions
+    # $Fit(df, training.indices) --> fitted model
+    # $Predict(fitted, df, testing.index) --> transformed predictions
+    # $description : char
+
     verbose <- TRUE
 
     Fit <- function(df, training.indices) {
-        if (verbose) {
-            cat('fitting tree model with starting month', training.start.month, '\n')
-        }
-        the.formula <- as.formula(paste0(paste0(response, '~'),
-                                         paste(predictors, collapse = '+')))
-        subset.training.indices <- (df$sale.year == 2004 & 
-                                    df$sale.month >= training.start.month &
-                                    df$sale.month <= 10 &
-                                    training.indices)
+        the.formula <- Formula(response, predictors)
+        # NOTE; supplying parameter subset = trainng.indices does not work
         fitted <- tree(formula = the.formula,
-                       data = df,
-                       subset = subset.training.indices,
+                       data = df[training.indices,],
                        split = 'deviance')
         if (verbose) {
             cat('fitted tree\n')
@@ -448,285 +393,116 @@ MakeModelTree <- function(training.start.month, response, predictors) {
         fitted
     }
 
-    response.is.missing <- missing(response)
-
     Predict <- function(fitted, df, testing.indices) {
-        if (verbose) {
-            cat('predicting tree model with training.start.month', training.start.month, '\n')
-        }
-        subset.testing.indices <- (df$sale.year == 2004 &
-                                   df$sale.month == 12 &
-                                   testing.indices)
-        if (response.is.missing) {
-            newdata <- na.omit(df[subset.testing.indices, predictors])
-            predicted <- predict(fitted, newdata)
-            list(predicted = predicted)
-        } else {
-            # newdata here and above may be different, because of the inclusiong of
-            # the response variable here (which is omitted above)
-            newdata <- na.omit(df[subset.testing.indices, c(response, predictors)])
-            predicted <- predict(fitted, newdata)
-            list(predicted = predicted,
-                 actual = newdata[[response]])
-        }
+        newdata <- na.omit(df[testing.indices, predictors])
+        predicted <- predict(fitted, newdata)
     }
 
-    list(Fit = Fit,
+    list(Fit = Fit, 
          Predict = Predict,
-         description = sprintf('tree %s start %d', response, training.start.month))
+         description = 'tree %s %d predictors', response, length(predictors))
 }
 
-MakeModelLinear <- function(training.start.month, response, predictors) {
-    # create linear model that tests on Nov 2004 data
-    # Arguments:
-    # response   : chr scalar, column name of response feature
-    # predictors : chr vector, column names of predictors
-    # Value: list(Fit=,Predict=,description=), such that
-    # $Fit(df, training.indices) --> fitted
-    # $Predict(fitted, df, testing.indices) --> list(predicted= [,actual=])
-    # $description : chr, informal description
+MakeModelRandomForest <- function(response, predictors, ntree) {
+    # return list of functions
+    # $Fit(df, training.indices) --> fitted model
+    # $Predict(fitted, df, testing.index) --> transformed predictions
+    # $description : chr
 
-    verbose <- FALSE
     verbose <- TRUE
 
-    if (verbose) {
-        cat('starting MakeModelLinear\n')
-        cat('respone', response, '\n')
-        cat('predictors', predictors, '\n')
-    }
-
     Fit <- function(df, training.indices) {
+        the.formula <- Formula(response, predictors)
+        reduced.data <- na.omit(df[training.indices, ])
+        fitted <- randomForest(x = reduced.data[,predictors],
+                               y = reduced.data[,'price'],
+                               do.trace = 1,
+                               ntree = ntree,
+                               importance = TRUE)
         if (verbose) {
-            cat('fitting linear model with training.start.month', training.start.month, '\n')
-        }
-        the.formula <- as.formula(paste0(paste0(response, '~'),
-                                         paste(predictors, collapse = '+')))
-        subset.training.indices <- (df$sale.year == 2004 & 
-                                    df$sale.month >= training.start.month &
-                                    df$sale.month <= 10 &
-                                    training.indices)
-        fitted <- lm(formula = the.formula,
-                     data = df,
-                     subset = subset.training.indices)
-        if (verbose) {
-            cat('fitted model\n')
-            fitted
+            cat('fitted random forest\n')
+            print(fitted)
+            cat('summary fitted\n')
             print(summary(fitted))
         }
         fitted
     }
 
-    response.is.missing <- missing(response)
-
     Predict <- function(fitted, df, testing.indices) {
-        if (verbose) {
-            cat('predicting linear model with training.start.month', training.start.month, '\n')
-        }
-        subset.testing.indices <- (df$sale.year == 2004 &
-                                   df$sale.month == 12 &
-                                   testing.indices)
-        if (response.is.missing) {
-            newdata <- na.omit(df[subset.testing.indices, predictors])
-            predicted <- predict.lm(fitted, newdata)
-            list(predicted = predicted)
-        } else {
-            # newdata here and above may be different, because of the inclusiong of
-            # the response variable here (which is omitted above)
-            newdata <- na.omit(df[subset.testing.indices, c(response, predictors)])
-            predicted <- predict.lm(fitted, newdata)
-            list(predicted = predicted,
-                 actual = newdata[[response]])
-        }
+        newdata <- na.omit(df[testing.indices, predictors])
+        predicted <- predict(fitted, newdata)
     }
 
-    list(Fit = Fit,
+    list(Fit = Fit, 
          Predict = Predict,
-         description = paste('linear trained from month', training.start.month))
+         description = sprintf('random forest %s %d predictors %d trees', 
+                               response, length(predictors), ntree))
 }
 
-MakeModelLinearLogPrice <- function(training.start.month) {
-    modelLinear <- MakeModelLinear(training.start.month = training.start.month,
-                                   response = 'log.price',
-                                   predictor = PredictorsChopraCenteredLog())
+first.testing.date <- as.Date('2009-01-01')
+last.testing.date <- first.testing.date + 30
 
-    Predict <- function(fitted, df, testing.indices) {
-        # return prices and actuals, not log(prices) and log(actuals)
-        result <- modelLinear$Predict(fitted, df, testing.indices)
-        list(predicted = exp(result$predicted),
-             actual = exp(result$actual))
-    }
+ErrorRateModel <- function(model, 
+                           df, training.indices, testing.indices,
+                           training.months.before, response, predictors) {
+    first.training.date <- first.testing.date - training.months.before * 30
+    selected.training <- training.indices & df$saleDate >= first.training.date & df$saleDate < first.testing.date
 
-    list(Fit = modelLinear$Fit,
-         Predict = Predict,
-         description = sprintf('linear log.price start %d',
-                               training.start.month))
+    selected.testing <- testing.indices & df$saleDate >= first.testing.date & df$saleDate <= last.testing.date
+
+    fitted <- model$Fit(df, selected.training)
+    estimated <- model$Predict(fitted, df, selected.testing)  # estimates are for price (never log.price)
+    
+    # reconstruct data frame used for estimated
+    newdata <- na.omit(df[selected.testing, c('price', predictors)])
+    actual <- newdata$price
+
+    list(rmse = Rmse(actual = actual, estimated = estimated),
+         within.10.percent = Within10Percent(actual = actual, estimated = estimated),
+         description = paste(model$description, 
+                             sprintf('%d months', training.months.before)))
 }
 
-###############################################################################
-# Select models to compare
-###############################################################################
-
-ModelsLinearLogPrice <- function() {
-    list(MakeModelLinearLogPrice(1),  # training data starts in Jan 2004
-         MakeModelLinearLogPrice(2),  # training data starts in Feb 2004
-         MakeModelLinearLogPrice(3),  # training data starts in Mar 2004
-         MakeModelLinearLogPrice(4),  # training data starts in Apr 2004
-         MakeModelLinearLogPrice(5),  # training data starts in May 2004
-         MakeModelLinearLogPrice(6),  # training data starts in Jun 2004
-         MakeModelLinearLogPrice(7),  # training data starts in Jul 2004
-         MakeModelLinearLogPrice(8),  # training data starts in Aug 2004
-         MakeModelLinearLogPrice(9))  # training data starts in Sep 2004
-    #MakeModelLinearLogPrice(10))  # training data starts in Oct 2004
+ErrorRateLinear <- function(df, training.indices, testing.indices,
+                            training.months.before, response, predictors) {
+    # return $rmse and $within.10.percent for linear model training and fitted
+    #model <- MakeModelLinear(response, predictor)
+    model <- MakeModelLinear(response, predictors, transform.response = 'no')
+    ErrorRateModel(model, 
+                   df, training.indices, testing.indices,
+                   training.months.before, response, predictors)
 }
 
-MakeModelLinearPrice <- function(training.start.month) {
-    modelLinear <- MakeModelLinear(training.start.month = training.start.month,
-                                   response = 'price',
-                                   predictor = PredictorsChopraCentered())
-    list(Fit = modelLinear$Fit,
-         Predict = modelLinear$Predict,
-         description = sprintf('linear price start %d',
-                               training.start.month))
+
+
+ErrorRateLinearLog <- function(df, training.indices, testing.indices,
+                               training.months.before, response, predictors) {
+    # return $rmse and $within.10.percent for log linear model training and fitted
+    model <- MakeModelLinear(response, predictors, transform.response = 'exp')
+    ErrorRateModel(model, 
+                   df, training.indices, testing.indices,
+                   training.months.before, response, predictors)
 }
 
-ModelsLinearPrice <- function() {
-    # MAYBE FIX: fails if training data is month 10 only
-    list(MakeModelLinearPrice(1),  # training data starts in Jan 2004
-         MakeModelLinearPrice(2),  # training data starts in Feb 2004
-         MakeModelLinearPrice(3),  # training data starts in Mar 2004
-         MakeModelLinearPrice(4),  # training data starts in Apr 2004
-         MakeModelLinearPrice(5),  # training data starts in May 2004
-         MakeModelLinearPrice(6),  # training data starts in Jun 2004
-         MakeModelLinearPrice(7),  # training data starts in Jul 2004
-         MakeModelLinearPrice(8),  # training data starts in Aug 2004
-         MakeModelLinearPrice(9))  # training data starts in Sep 2004
+ErrorRateTree <- function(df, training.indices, testing.indices,
+                          training.months.before, response, predictors) {
+    # return $rmse and $within.10.percent for tree model training and fitted
+    model <- MakeModelTree(response, predictors)
+    ErrorRateModel(model, 
+                   df, training.indices, testing.indices,
+                   training.months.before, response, predictors)
 }
 
-MakeModelTreePrice <- function(training.start.month) {
-    modelTree <- MakeModelTree(training.start.month = training.start.month,
-                               response = 'price',
-                               predictor = PredictorsChopraRaw())
-    list(Fit = modelTree$Fit,
-         Predict = modelTree$Predict,
-         description = sprintf('tree price start %d', training.start.month))
+ErrorRateRandomForest <- function(df, training.indices, testing.indices,
+                                  training.months.before, response, ntree, predictors) {
+    # return $rmse and $within.10.percent for tree model training and fitted
+    model <- MakeModelRandomForest(response, predictors, ntree)
+    ErrorRateModel(model, 
+                   df, training.indices, testing.indices,
+                   training.months.before, response, predictors)
 }
 
-ModelsTreePrice <- function() {
-    list(MakeModelTreePrice(1),
-         MakeModelTreePrice(2),
-         MakeModelTreePrice(3),
-         MakeModelTreePrice(4),
-         MakeModelTreePrice(5),
-         MakeModelTreePrice(6),
-         MakeModelTreePrice(7),
-         MakeModelTreePrice(8),
-         MakeModelTreePrice(9))
-}
-
-MakeModelRandomForestPrice <- function(training.start.month) {
-    modelRandomForest <- MakeModelRandomForest(training.start.month = training.start.month,
-                                               response = 'price',
-                                               predictor = PredictorsChopraRaw())
-    list(Fit = modelRandomForest$Fit,
-         Predict = modelRandomForest$Predict,
-         description = sprintf('random forest price start %d', training.start.month))
-}
-
-ModelsRandomForestPrice <- function() {
-    list(MakeModelRandomForestPrice(1),
-         MakeModelRandomForestPrice(2),
-         MakeModelRandomForestPrice(3),
-         MakeModelRandomForestPrice(4),
-         MakeModelRandomForestPrice(5),
-         MakeModelRandomForestPrice(6),
-         MakeModelRandomForestPrice(7),
-         MakeModelRandomForestPrice(8),
-         MakeModelRandomForestPrice(9))
-}
-
-MakeModelBCH <- function(training.start.month) {
-    modelLinear <- MakeModelLinear(training.start.month = training.start.month,
-                                   response = 'price',
-                                   predictor = PredictorsBCHRaw())
-    list(Fit = modelLinear$Fit,
-         Predict = modelLinear$Predict,
-         description = sprintf('linear BCH price start %d', training.start.month))
-
-}
-
-ModelsLinearBCHPrice <- function() {
-    cat('STUB: ModelsLinearBCHPrice\n')
-    list(MakeModelBCH(5))
-}
-
-ModelsOneOfEach <- function() {
-    list(MakeModelLinearLogPrice(8),
-         MakeModelLinearPrice(8),
-         MakeModelTreePrice(8),
-         MakeModelRandomForestPrice(8))
-}
-
-#models <- c(MakeModelBCH(5))
-SelectModelsToTest <- function(name) {
-    # return list of models to test. Each model has $Fit, $Predict, and $description
-    switch(name,
-           models.linear.log.price = ModelsLinearLogPrice(),
-           models.linear.price = ModelsLinearPrice(),
-           models.tree.price = ModelsTreePrice(),
-           models.random.forest.price = ModelsRandomForestPrice(),
-           models.linear.BCH.price = ModelsLinearBCHPrice(),
-           models.one.of.each = ModelsOneOfEach(),
-           models.all = c(ModelsLinearLogPrice(),
-                          ModelsLinearPrice(),
-                          ModelsTreePrice(),
-                          ModelsRandomForestPrice(),
-                          ModelsLinearBCHPrice()),
-           ... = stop(name))
-
-}
-
-CompareViaCrossValidation <- function(control, transformed.data) {
-    # return whatever CrossValidate2 returns
-    verbose <- TRUE
-    # TODO: check that log.price models are best if trained only in Oct DONE
-    # TODO: compare price ~ models to log.price models
-    # TODO: implement forward procedure (or backward)
-    # TODO: implement tree and random forest
-
-    models <- SelectModelsToTest('models.one.of.each')
-
-    ErrorRate <- function(model.number, df, training.indices, testing.indices) {
-        # Return error rate for model indexed by model.number after testing and fitting
-        verbose <- TRUE
-        if (verbose) {
-            cat('\n****************************************** ')
-            cat('ErrorRate started\n')
-            cat(' model.number', model.number, '\n')
-            cat(' df\n'); str(df)
-            cat(' training.indices\n'); str(training.indices)
-            cat(' testing.indices\n'); str(testing.indices)
-            cat(' description', models[[model.number]]$description, '\n')
-        }
-
-        Fit <- models[[model.number]]$Fit
-        Predict <- models[[model.number]]$Predict
-
-        fitted <- Fit(df, training.indices)
-        result <- Predict(fitted, df, testing.indices)
-        rmse <- Rmse(actual = result$actual,
-                     estimated = result$predicted)
-        stopifnot(!is.nan(rmse))
-        within.10.percent <- Within10Percent(actual = result$actual, 
-                                             estimated = result$predicted, 
-                                             precision = .10)
-        list(error.rate = rmse,
-             other.info = within.10.percent)
-    }
-
-
-    nfolds <- 5
-    nmodels <- length(models) 
-    result <- CrossValidate2(transformed.data, nfolds, nmodels, ErrorRate)
+SummarizeCrossValidationResult <- function(result, nfolds, nmodels) {
     cat('result\n'); str(result)
     cat('index of best model', result$best.model.index, '\n')
 
@@ -738,31 +514,162 @@ CompareViaCrossValidation <- function(control, transformed.data) {
         Summarize <- function(model.index) {
             rmse <- mean(df[this.model.indices, 'error.rate'])
             within <- mean(df[this.model.indices, 'other.info'])
-            Printf('model %2d %30s mean RMSE %f mean fraction within 10 percent %f\n',
+            description <- df[this.model.indices, 'description'][1]
+            Printf('model %2d mean (RMSE %f within 10 percent %f) %s\n',
                    model.index,
-                   models[[model.index]]$description,
                    rmse,
-                   within)
+                   within,
+                   description)
         }
         Summarize(model.index)
     }
     cat('end of cross validation summary\n')
+}
 
+RandomForestHpSearchPrep <- function(nsamples) {
+    # return two vectors of length 10
+    # $samples.training.months
+    # $samples.ntrees
+    # Randomly sample from 
+    #  training.months in {1, 2, ..., 12}
+    #  ntrees in {2^0,2^2, 2^2, 2^3, 2^4, 2^5, 2^6, 2^7, 2^8} = (1,2,4,7,16,32,64,128,256}
+    result <- list()
+    result$training.months <- sample(seq(from=1, to=12, by=1), nsamples, replace = TRUE)
+    result$ntrees <- sample(2^(sample(seq(from=0, to=8, by=1), nsamples, replace = TRUE)))
     result
 }
+
+random.forest.samples <- RandomForestHpSearchPrep(10)
+
+CompareViaCrossValidation <- function(control, transformed.data) {
+    # cross validate models named via control$which.cross.validate chr
+    control$which.cross.validate <- 'all'
+    #control$which.cross.validate <- 'each.once'
+    #control$which.cross.validate <- 'random.forest.nmonth'
+    #control$which.cross.validate <- 'random.forest.hp.search'
+
+    ErrorRate <- function(model.number, df, training.indices, testing.indices) {
+        # return $error.rate and $other.info
+
+        Rename <- function(lst) {
+            list(error.rate = lst$rmse,
+                 other.info = lst$within.10.percent,
+                 description = lst$description)
+        }
+
+
+        A <- function(training.months) {
+            ErrorRateLinear(df, training.indices, testing.indices, 
+                            training.months, 'price', 
+                            PredictorsChopraCentered())
+        }
+
+        B <- function(training.months) {
+            ErrorRateLinearLog(df, training.indices, testing.indices, 
+                               training.months, 'log.price', 
+                               PredictorsChopraCenteredLog())
+        }
+
+        C <- function(training.months) {
+            ErrorRateTree(df, training.indices, testing.indices,
+                          training.months, 'price',
+                          PredictorsChopraRaw())
+        }
+                    
+        D <- function(training.months, ntree = 100) {
+            ErrorRateRandomForest(df, training.indices, testing.indices,
+                                  training.months, 'price', ntree,
+                                  PredictorsChopraRaw())
+        }
+
+        RandomForestHpSearch <- function(model.number) {
+            # NOTE: THIS FUNCTION FAILS BECAUSE
+            #  the first set of hyperparameters leads to a model with 5 or fewer responses
+            # This model hadl 11 months and 64 trees
+            # Instead randomly sample from 
+            #  training.months in {1, 2, ..., 12}
+            #  ntrees in {2^0,2^1, 2^2, 2^2, 2^3, 2^4, 2^5, 2^6, 2^7, 2^8} = (1,2,4,7,16,32,64,128,256}
+            training.months <- random.forest.samples$training.month[[model.number]]
+            ntree <- random.forest.samples$ntree[[model.number]]
+            cat('RandomForestHpSearch', 'training.months', training.months, 'ntree', ntree, '\n')
+            Rename(D(training.months, ntree))
+        }
+
+
+        switch(control$which.cross.validate,
+               all = 
+                   Rename(switch(model.number,
+                          A(1), A(2), A(3), A(4), A(5), A(6), A(7), A(8), A(9), A(10), A(11), A(12),
+                          B(1), B(2), B(3), B(4), B(5), B(6), B(7), B(8), B(9), B(10), B(11), B(12),
+                          C(1), C(2), C(3), C(4), C(5), C(6), C(7), C(8), C(9), C(10), C(11), C(12),
+                          D(9,64), D(10,64), D(11,64),
+                          D(9,256), D(10,256), D(11,256))),
+               each.once =
+                   Rename(switch(model.number,
+                          A(1), B(1),C(1), D(1, 10))),
+               random.forest.nmonth =
+                   # RESULT: For 100 trees, RMSE is minimized when using 2 months of training data
+                   Rename(switch(model.number,
+                                 D(1,100), D(2,100), D(3,100), D(4,100), D(5,100), D(6,100),
+                                 D(7,100), D(8,100), D(9,100), D(10,100), D(11,100), D(12,100))),
+               random.forest.hp.search = # Search randomly over two hyperparmaters
+                   # RESULT: best is 256 trees using 8 months of training data
+
+                   # good performance with 9 - 11 months
+                   # months    |   1   3   3   3   8   8   9  11  11  12
+                   # RMSE/1000 | 221 209 206 213 202 233 206 206 208 222
+                
+                  # good performance with 64 trees
+                  # best performance with more trees
+                  #  trees     |   2   8   8  16  32  64  64  64 256 256
+                  #  RMSE/1000 | 233 222 213 209 221 206 208 206 202 206
+               
+                   RandomForestHpSearch(model.number)
+               )
+    }
+
+    nfolds <- 5
+    nmodels <- switch(control$which.cross.validate, # must match switch statement in ErrorRate above
+                      all = 12 * 3 + 6,
+                      each.once = 4,
+                      random.forest.nmonth = 12,
+                      random.forest.hp.search = 10)
+    result <- CrossValidate2(transformed.data, nfolds, nmodels, ErrorRate)
+    SummarizeCrossValidationResult(result, nfolds, nmodels)
+    result
+}
+
 
 ###############################################################################
 ## Main program
 ###############################################################################
 
-Main <- function(control, transformed.data) {
+Main <- function(control, transformed.data, command.line.args) {
+    verbose <- TRUE
+    verbose <- FALSE
+
+    # parse command line args into list control
+    # NOTE: predictor.set is not used in the current code; ELIMINATE IT
+    cat('command.line.args', command.line.args, '\n')
+    control$predictor.set <- command.line.args[1]
+    
+    DuplexOutputTo(paste0(control$me,
+                          '.predictor.set.', 
+                          control$predictor.set,
+                          '.txt'))
+
     control$testing <- FALSE
     #control$testing <- TRUE
     cat('control list\n')
     str(control)
 
-    str(transformed.data)
-    print(summary(transformed.data))
+    if (verbose) {
+        str(transformed.data)
+        print(summary(transformed.data))
+        is.2009 <- transformed.data$sale.year == 2009
+        print('summary of transaction in year 2009')
+        print(summary(transformed.data[is.2009, ]))
+    }
 
     # Sumit's results: train on first 90% of 2004, predict last 10%
     # Fraction of test transactions predicted within 10% of true value
@@ -772,6 +679,8 @@ Main <- function(control, transformed.data) {
     # Weighted local linear regression (k=70)     58.46
     # Neural network                              60.55
     # Relational factor graph                     65.76
+    #
+    # TODO: ADD SUMIT's RESULTS FOR 2009
 
     result <- CompareViaCrossValidation(control, transformed.data)
     cat('Main result\n'); print(result)
@@ -782,6 +691,7 @@ Main <- function(control, transformed.data) {
 }
 
 # speed up debugging by caching the transformed data
+force.refresh.transformed.data <- TRUE
 force.refresh.transformed.data <- FALSE
 if(force.refresh.transformed.data | !exists('transformed.data')) {
     transformed.data <- ReadAndTransformTransactions(control$path.subset1,
@@ -789,6 +699,30 @@ if(force.refresh.transformed.data | !exists('transformed.data')) {
                                                      TRUE)  # TRUE --> verbose
 }
 
-Main(control, transformed.data)
+# read command line or synthezie result
+command.line.args <- commandArgs(trailingOnly = TRUE)  # return only args after --args
+if (length(command.line.args) == 0) {
+    command.line.args <- c('Chopra')
+}
+
+CvAll <- function(control, transformed.data) {
+    # cross validate all models to select best model
+}
+
+CvEachOne <- function(control, transformed.data) {
+    # run each model once, to check syntax
+}
+
+CvRandomForestnTrees <- function(control, transformed.data) {
+    # cv to select best number of trees in random forest models
+}
+
+
+
+
+
+Main(control, 
+     transformed.data,
+     command.line.args)
 
 cat('done\n')
