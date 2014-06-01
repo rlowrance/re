@@ -61,6 +61,9 @@ ReadAndTransformTransactions <- function(path.in, nrows, verbose) {
         str(raw)
         print(summary(raw))
     }
+    
+    # convert transaction.date from string (factor) to Date
+    saleDate <- as.Date(raw$transaction.date)
  
     splitDate <- SplitDate(raw$transaction.date)
 
@@ -87,13 +90,17 @@ ReadAndTransformTransactions <- function(path.in, nrows, verbose) {
     # LOCAL.INFLUENCE.CODE : I have missing values, I could recode the missing values to a new category
 
 
+    # Create new features
+
     fraction.improvement.value <- (raw$IMPROVEMENT.VALUE.CALCULATED / 
                                    (raw$IMPROVEMENT.VALUE.CALCULATED + raw$LAND.VALUE.CALCULATED))
+
 
     # return just the features needed, to reduce memory requirements
     data.frame(sale.day = splitDate$day,
                sale.month = splitDate$month,
                sale.year = splitDate$year,
+               saleDate = saleDate,              # as a Date object
 
                price = raw$SALE.AMOUNT,
                log.price = log(raw$SALE.AMOUNT),
