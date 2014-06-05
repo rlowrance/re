@@ -160,6 +160,17 @@ ReadAndTransformTransactions <- function(path.in, nrows, verbose) {
                centered.fraction.owner.occupied = Center(raw$fraction.owner.occupied),
 
                fraction.improvement.value = fraction.improvement.value,
-               centered.fraction.improvement.value = Center(fraction.improvement.value)
+               centered.fraction.improvement.value = Center(fraction.improvement.value),
+
+               # features of census tract and zip5 locations
+               census.tract.has.industry = raw$census.tract.has.industry,
+               census.tract.has.park = raw$census.tract.has.park,
+               census.tract.has.retail = raw$census.tract.has.retail,
+               census.tract.has.school = raw$census.tract.has.school,
+               
+               zip5.has.industry = raw$zip5.has.industry,
+               zip5.has.park = raw$zip5.has.park,
+               zip5.has.retail = raw$zip5.has.retail,
+               zip5.has.school = raw$zip5.has.school
                )
 }
