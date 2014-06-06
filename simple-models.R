@@ -24,7 +24,7 @@ control <- list()
 control$which <- 'cross.validate'
 
 control$which.cross.validate <- 'all'
-control$which.cross.validate <- 'each.once'
+#control$which.cross.validate <- 'each.once'
 #control$which.cross.validate <- 'random.forest.nmonth'
 #control$which.cross.validate <- 'random.forest.hp.search'
 #control$which.cross.validate <- 'location.features'
