@@ -14,20 +14,47 @@
 # - houses near shopping (use tax roll to identify shopping)
 # - houses near factories
 
+# source files needed to set controls
+source('DateTime.R')
+
 # set control variables
 control <- list()
+
+# pick computation to do
+control$which <- 'cross.validate'
+
+control$which.cross.validate <- 'all'
+control$which.cross.validate <- 'each.once'
+#control$which.cross.validate <- 'random.forest.nmonth'
+#control$which.cross.validate <- 'random.forest.hp.search'
+#control$which.cross.validate <- 'location.features'
+#control$which.cross.validate <- 'hpi'
+
 control$me <- 'simple-models'
 control$dir.output <- '../data/v6/output/'
 control$path.subset1 <- paste0(control$dir.output, 'transactions-subset1.csv')
-control$path.log <- paste0(control$dir.output, control$me, '.txt')
+control$path.log <- paste0(control$dir.output, 
+                           control$me, 
+                           '-',
+                           control$which,
+                           '-',
+                           control$which.cross.validate,
+                           '-', 
+                           DateTime(), 
+                           '.txt')
 control$testing <- TRUE
-#control$testing <- FALSE
+control$testing <- FALSE
+
+
+# override control using values from command line
+command.line.args <- commandArgs(trailingOnly = TRUE)  # return only args after --args
+stopifnot(length(command.line.args) == 0)  # for now, don't handle command line args
 
 # initialize
 source('InitializeR.R')
 if (TRUE) {
     InitializeR(start.JIT = FALSE,
-                duplex.output.to = NULL)
+                duplex.output.to = control$path.log)
     #InitializeR(start.JIT = ifelse(control$testing, FALSE, TRUE),
     #            duplex.output.to = control$path.log)
 } else {
@@ -206,6 +233,11 @@ PredictorsChopraCenteredLog <- function() {
       'factor.has.pool')
 }
 
+PredictorsChopraCenteredLogLocation <- function() {
+    c(PredictorsChopraCenteredLog(),
+      PredictorsLocationRaw())
+}
+
 PredictorsChopraCentered <- function() {
     # return chr vector of centered predictors used by Chopra that we have access to
     # NOTE: Chopra had school district quality, which we don't have
@@ -229,6 +261,11 @@ PredictorsChopraCentered <- function() {
       'factor.has.pool')
 }
 
+PredictorsChopraCenteredLocation <- function() {
+    c(PredictorsChopraCentered(),
+      PredictorsLocationRaw())   # no need to center, as these are factors
+}
+
 PredictorsChopraRaw <- function() {
     # return chr vector of raw predictors used by Chopra that we have access to
     # NOTE: Chopra had school district quality, which we don't have
@@ -250,6 +287,24 @@ PredictorsChopraRaw <- function() {
       'factor.roof.type',
       'factor.parking.type',
       'factor.has.pool')
+}
+
+PredictorsLocationRaw <- function() {
+    c('census.tract.has.industry',
+      'census.tract.has.park',
+      'census.tract.has.retail',
+      'census.tract.has.school',
+      'zip5.has.industry',
+      'zip5.has.park',
+      'zip5.has.retail',
+      'zip5.has.school')
+}
+
+PredictorsChopraRawLocation <- function() {
+    # return chr vector of raw predictors used by Chopra that we have access to
+    # NOTE: Chopra had school district quality, which we don't have
+    c(PredictorsChopraRaw(),
+      PredictorsLocationRaw())
 }
 
 PredictorsBCHRaw <- function() {
@@ -400,7 +455,7 @@ MakeModelTree <- function(response, predictors) {
 
     list(Fit = Fit, 
          Predict = Predict,
-         description = 'tree %s %d predictors', response, length(predictors))
+         description = sprintf('tree %s %d predictors', response, length(predictors)))
 }
 
 MakeModelRandomForest <- function(response, predictors, ntree) {
@@ -543,43 +598,70 @@ random.forest.samples <- RandomForestHpSearchPrep(10)
 
 CompareViaCrossValidation <- function(control, transformed.data) {
     # cross validate models named via control$which.cross.validate chr
-    control$which.cross.validate <- 'all'
-    #control$which.cross.validate <- 'each.once'
-    #control$which.cross.validate <- 'random.forest.nmonth'
-    #control$which.cross.validate <- 'random.forest.hp.search'
 
     ErrorRate <- function(model.number, df, training.indices, testing.indices) {
         # return $error.rate and $other.info
 
-        Rename <- function(lst) {
+        Rename <- function(lst, features.name) {
+            # rename list of results to conform to API for CrossValidate2
+            # also propogate the feature name into the description
             list(error.rate = lst$rmse,
                  other.info = lst$within.10.percent,
-                 description = lst$description)
+                 description = paste(lst$description, features.name))
+        }
+
+        Features <- function(features.name) {
+            # return feature set
+            switch(features.name,
+                   centered = PredictorsChopraCentered(),
+                   centered.location = PredictorsChopraCenteredLocation(),
+                   centered.log = PredictorsChopraCenteredLog(),
+                   centered.log.location = PredictorsChopraCenteredLogLocation(),
+                   raw = PredictorsChopraRaw(),
+                   raw.location = PredictorsChopraRawLocation(),
+                   ... = stop(paste('bad features.name', features.name)))
         }
 
 
-        A <- function(training.months) {
-            ErrorRateLinear(df, training.indices, testing.indices, 
-                            training.months, 'price', 
-                            PredictorsChopraCentered())
+
+
+        A <- function(training.months, features.name = 'centered') {
+            Rename(ErrorRateLinear(df, training.indices, testing.indices, 
+                                   training.months, 'price', 
+                                   Features(features.name)),
+                   features.name)
+                   
         }
 
-        B <- function(training.months) {
-            ErrorRateLinearLog(df, training.indices, testing.indices, 
-                               training.months, 'log.price', 
-                               PredictorsChopraCenteredLog())
+        B <- function(training.months, features.name = 'centered.log') {
+            Rename(ErrorRateLinearLog(df, training.indices, testing.indices, 
+                                      training.months, 'log.price', 
+                                      Features(features.name)),
+                   features.name)
+
+
+
         }
 
-        C <- function(training.months) {
-            ErrorRateTree(df, training.indices, testing.indices,
-                          training.months, 'price',
-                          PredictorsChopraRaw())
+        C <- function(training.months, features.name = 'raw') {
+            Rename(ErrorRateTree(df, training.indices, testing.indices,
+                                 training.months, 'price',
+                                 Features(features.name)),
+                   features.name)
+
         }
                     
-        D <- function(training.months, ntree = 100) {
-            ErrorRateRandomForest(df, training.indices, testing.indices,
-                                  training.months, 'price', ntree,
-                                  PredictorsChopraRaw())
+        D <- function(training.months, ntree = 100, features.name = 'raw') {
+            Rename(ErrorRateRandomForest(df, training.indices, testing.indices,
+                                         training.months, 'price', ntree,
+                                         Features(features.name)),
+                   features.name)
+        }
+
+        HPI <- function(prior.index.months, index.name) {
+            Rename(ErrorRateIndex(df, training.indices, testing.indices,
+                                  prior.index.months, index.name),
+                   paste('index', index.name))
         }
 
         RandomForestHpSearch <- function(model.number) {
@@ -597,21 +679,41 @@ CompareViaCrossValidation <- function(control, transformed.data) {
 
 
         switch(control$which.cross.validate,
-               all = 
-                   Rename(switch(model.number,
+
+               hpi = switch(model.number,
+                            HPI(prior.index.months = 3, index.name = 'CS'),
+                            HPI(prior.index.months = 3, index.name = 'Zip5')),
+
+               location.features = switch(model.number,  # compare best model form w and wo location features
+                                          A(1, 'centered.location'), A(1, 'centered'),
+                                          B(2, 'centered.log.location'), B(2, 'centered.log'),
+                                          C(7, 'raw.location'), C(7, 'raw'),
+                                          D(11, 256, 'raw.location'), D(11, 256, 'raw')
+                                          ),
+
+               all =  # all models without location features
+                   switch(model.number,   
                           A(1), A(2), A(3), A(4), A(5), A(6), A(7), A(8), A(9), A(10), A(11), A(12),
                           B(1), B(2), B(3), B(4), B(5), B(6), B(7), B(8), B(9), B(10), B(11), B(12),
                           C(1), C(2), C(3), C(4), C(5), C(6), C(7), C(8), C(9), C(10), C(11), C(12),
-                          D(9,64), D(10,64), D(11,64),
-                          D(9,256), D(10,256), D(11,256))),
+                          D(9,64), D(10,64), D(11,64),      # implicitly raw
+                          D(9,256), D(10,256), D(11,256),   # implicitly raw
+                          D(9,64,'raw.location'),  D(10,64,'raw.location'),  D(11,64,'raw.location'),
+                          D(9,256,'raw.location'), D(10,256,'raw.location'), D(11,256,'raw.location')
+                          ),
+               
                each.once =
-                   Rename(switch(model.number,
-                          A(1), B(1),C(1), D(1, 10))),
+                   switch(model.number,
+                          A(1), B(1),C(1), D(1, 10)
+                          ),
+
                random.forest.nmonth =
                    # RESULT: For 100 trees, RMSE is minimized when using 2 months of training data
-                   Rename(switch(model.number,
+                   switch(model.number,
                                  D(1,100), D(2,100), D(3,100), D(4,100), D(5,100), D(6,100),
-                                 D(7,100), D(8,100), D(9,100), D(10,100), D(11,100), D(12,100))),
+                                 D(7,100), D(8,100), D(9,100), D(10,100), D(11,100), D(12,100)
+                                 ),
+
                random.forest.hp.search = # Search randomly over two hyperparmaters
                    # RESULT: best is 256 trees using 8 months of training data
 
@@ -630,7 +732,8 @@ CompareViaCrossValidation <- function(control, transformed.data) {
 
     nfolds <- 5
     nmodels <- switch(control$which.cross.validate, # must match switch statement in ErrorRate above
-                      all = 12 * 3 + 6,
+                      location.features = 8,
+                      all = 12 * 3 + 6 *2,
                       each.once = 4,
                       random.forest.nmonth = 12,
                       random.forest.hp.search = 10)
@@ -644,22 +747,10 @@ CompareViaCrossValidation <- function(control, transformed.data) {
 ## Main program
 ###############################################################################
 
-Main <- function(control, transformed.data, command.line.args) {
+Main <- function(control, transformed.data) {
     verbose <- TRUE
     verbose <- FALSE
 
-    # parse command line args into list control
-    # NOTE: predictor.set is not used in the current code; ELIMINATE IT
-    cat('command.line.args', command.line.args, '\n')
-    control$predictor.set <- command.line.args[1]
-    
-    DuplexOutputTo(paste0(control$me,
-                          '.predictor.set.', 
-                          control$predictor.set,
-                          '.txt'))
-
-    control$testing <- FALSE
-    #control$testing <- TRUE
     cat('control list\n')
     str(control)
 
@@ -682,12 +773,13 @@ Main <- function(control, transformed.data, command.line.args) {
     #
     # TODO: ADD SUMIT's RESULTS FOR 2009
 
-    result <- CompareViaCrossValidation(control, transformed.data)
-    cat('Main result\n'); print(result)
-
-    if (control$testing) {
-        cat('DISCARD RESULTS: TESTING\n')
+    if (control$which == 'cross.validate') {
+        result <- CompareViaCrossValidation(control, transformed.data)
+        cat('Main result\n'); print(result)
+    } else {
+        stop(paste('bad control$which', control$which))
     }
+
 }
 
 # speed up debugging by caching the transformed data
@@ -698,13 +790,6 @@ if(force.refresh.transformed.data | !exists('transformed.data')) {
                                                      ifelse(FALSE & control$testing, 1000, -1),
                                                      TRUE)  # TRUE --> verbose
 }
-
-# read command line or synthezie result
-command.line.args <- commandArgs(trailingOnly = TRUE)  # return only args after --args
-if (length(command.line.args) == 0) {
-    command.line.args <- c('Chopra')
-}
-
 CvAll <- function(control, transformed.data) {
     # cross validate all models to select best model
 }
@@ -722,7 +807,13 @@ CvRandomForestnTrees <- function(control, transformed.data) {
 
 
 Main(control, 
-     transformed.data,
-     command.line.args)
+     transformed.data)
+
+cat('control variables\n')
+str(control)
+
+if (control$testing) {
+    cat('DISCARD RESULTS: TESTING\n')
+}
 
 cat('done\n')
