@@ -1,9 +1,10 @@
 PROPN <- function(code, kind) {
-    # convert PROPN codes to strings
+    # determine if PROPN code has specific value
     # ARGS
     # code : integer vector
     # kind  : optional chr scalar
 
+    with.na <- 
     switch(kind,
            single.family.residence = code == 10,
            condominium             = code == 11,
@@ -33,4 +34,7 @@ PROPN <- function(code, kind) {
            any.industrial          = code == 50 | code == 51 | code == 52,
            retail.or.service       = code == 25 | code == 26,
            ... = stop(paste('bad kind', kind)))
+
+    result <- ifelse(is.na(with.na), FALSE, with.na)
+    result
 }
