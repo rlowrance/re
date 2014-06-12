@@ -67,7 +67,8 @@ ReadDeeds <- function(control) {
                       stringsAsFactors=FALSE,
                       nrows=ifelse(control$testing, 1000, -1))
     cat("number of deeds records read", nrow(deeds), "\n")
-    str(deeds)
+    cat('deeds column names\n')
+    print(names(deeds))
     deeds
 }
 
@@ -102,7 +103,8 @@ ReadParcels <- function(control) {
                         stringsAsFactors=FALSE,
                         nrows=ifelse(control$testing, 1000, -1))
     cat("number of parcels records read", nrow(parcels), "\n")
-    str(parcels)
+    cat('parcel column names\n')
+    print(names(parcels))
     parcels
 }
 
@@ -167,11 +169,70 @@ MergeDeedsParcels <- function(control) {
     parcels$apn.recoded <- BestApns(parcels$APN.UNFORMATTED, parcels$APN.FORMATTED)
 
     # merge deeds and parcels
+    #cat('in MergeDeedsParcels; about to merge\n'); browser()
     merged <- merge(deeds, parcels, by="apn.recoded",
                     suffixes=c(".deeds", ".parcels"))
     cat("number of deeds and parcels with common recoded.apn",
         nrow(merged),
         "\n")
+
+    BaseName <- function(components, last.index) {
+        base.name <- components[[1]] [[1]]
+        for (component in components[[1]] [2:(last.index - 1)]) {
+            base.name <- paste0(base.name, '.', component)
+        }
+        base.name
+    }
+
+    RecodeNA <- function(v) {
+        ifelse(is.na(v),
+               NA,
+               ifelse(v == 'N/AVAIL',
+                      NA,
+                      v)
+               )
+    }
+
+    BestValue <- function(deeds.value, parcels.value) {
+        ifelse(is.na(deeds.value),
+               ifelse(is.na(parcels.value),
+                      NA,
+                      parcels.value),
+               deeds.value)
+    }
+
+    cat('merging fields with redundant content\n')
+    for (name in names(merged)) {
+        #cat('top of name loop\n'); browser()
+        components <- strsplit(name, '.', fixed=TRUE)
+        last.index <- length(components[[1]])
+        last.component <- components[[1]][[last.index]]
+
+        if (last.component == 'deeds') {
+            # elimate redundant .deeds and .parcels columns
+            base.name <- BaseName(components, last.index)
+            deeds.name <- paste0(base.name, '.deeds')
+            parcels.name <- paste0(base.name, '.parcels')
+
+            deeds.value.recoded <- RecodeNA(merged[[deeds.name]])
+            parcels.value.recoded <- RecodeNA(merged[[parcels.name]])
+
+            best.value <- BestValue(deeds.value.recoded, parcels.value.recoded)
+
+            either.is.na <- is.na(deeds.value.recoded) | is.na(parcels.value.recoded)
+            significant.difference <- (deeds.value.recoded != parcels.value.recoded)[!either.is.na]
+
+            if (all(!significant.difference)) {
+                cat(' using best value to remove duplicate', base.name, '\n')
+                #browser()
+                merged[[base.name]] <- best.value
+                merged[[deeds.name]] <- NULL
+                merged[[parcels.name]] <- NULL
+                #browser()
+            }
+        }
+    }
+    #cat('review merged\n'); browser()
 
     merged
 }
@@ -179,12 +240,15 @@ MergeDeedsParcels <- function(control) {
 MergeCensus <- function(df, control) {
     # merge the census data into a data.frame
     # ARGS:
-    # df : data frame containing census tract feature
+    # df : data frame containing merged deeds and parcels features
     # control : control variables list
     # RETURNS: data.frame augmented with census data
+    #cat('starting MergeCensus', nrow(df), '\n'); browser()
     census <- ReadCensus(control)
-    cat('df\n'); str(df)
-    cat('census\n'); str(census)
+    cat('names in df\n')
+    print(names(df))
+    print('names in census\n')
+    print(names(census))
     merged <- merge(df, census, by.x="CENSUS.TRACT", by.y = "census.tract")
     cat("number of common deeds and parcels with known CENSUS.TRACT",
         nrow(merged),
@@ -225,6 +289,7 @@ MergeParcelsZip5 <- function(df, control) {
 
 MergeAll <- function(control) {
     # merge all 4 files and return merged data.frame
+    #cat('starting MergeAll\n'); browser()
     deedsParcels <- MergeDeedsParcels(control)
     deedsParcelsCensus <- MergeCensus(deedsParcels, control)
     transactions.geocoded <- MergeGeocoding(deedsParcelsCensus, control)
@@ -259,6 +324,8 @@ Main <- function(control) {
               file=control$path.out, 
               row.names=FALSE)
     cat("number of transactions written:", nrow(merged), "\n")
+    cat('\nfields in merged csv\n')
+    print(names(merged))
 }
 
 Main(control)
