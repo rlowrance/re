@@ -25,11 +25,13 @@ control$path.parcels.zip5 <- paste(control$dir.output, "parcels-derived-features
 control$path.geocoding <- "../data/raw/geocoding.tsv"
 control$path.out <- paste(control$dir.output, "transactions-al-sfr.csv", sep="")
 control$path.log <- paste0(control$dir.output, control$me, '.txt')
+control$testing.nrow <- 100000
+control$testing.nrow <- 200000
 control$testing <- TRUE
 control$testing <- FALSE
 
 source('InitializeR.R')
-InitializeR(start.JIT = ifelse(control$testing, FALSE, TRUE),
+InitializeR(start.JIT = FALSE,
             duplex.output.to = control$path.log)
 
 # Source other files here
@@ -42,13 +44,14 @@ ReadCensus <- function(control) {
     # ARGS:
     # control : list of control vars
     # RETURNS: data.frame
+    cat('starting ReadCensus\n')
     census <- read.table(control$path.census,
                          header=TRUE,
                          sep="\t",
                          quote="",
                          comment.char="",
                          stringsAsFactors=FALSE,
-                         nrows=ifelse(control$testing, 1000, -1))                  
+                         nrows=ifelse(control$testing, control$testing.nrow, -1))                  
     cat("number of census records read", nrow(census), "\n")
     str(census)
     census
@@ -59,17 +62,39 @@ ReadDeeds <- function(control) {
     # ARGS:
     # control : list of control vars
     # RETURNS data.frame
+    cat('starting ReadDeeds\n')
     deeds <- read.csv(control$path.deeds,
                       check.names = FALSE,
                       header=TRUE,
                       quote="",
                       comment="",
                       stringsAsFactors=FALSE,
-                      nrows=ifelse(control$testing, 1000, -1))
+                      nrows=ifelse(control$testing, control$testing.nrow, -1))
     cat("number of deeds records read", nrow(deeds), "\n")
     cat('deeds column names\n')
     print(names(deeds))
-    deeds
+    # drop all fields except those related to the deed itself
+    only.deed.fields <-
+        subset(deeds,
+               select = c(APN.UNFORMATTED, APN.FORMATTED,
+                          DOCUMENT.YEAR,
+                          SALE.AMOUNT, SALE.DATE, RECORDING.DATE,
+                          DOCUMENT.TYPE.CODE, TRANSACTION.TYPE.CODE, SALE.CODE,
+                          MULTI.APN.FLAG.CODE, MULTI.APN.COUNT,
+                          TITLE.COMPANY.CODE, 
+                          RESIDENTIAL.MODEL.INDICATOR.FLAG,
+                          MORTGAGE.DATE, MORTGAGE.LOAN.TYPE.CODE,
+                          MORTGAGE.DEED.TYPE.CODE, MORTGAGE.TERM.CODE, MORTGAGE.TERM,
+                          MORTGAGE.DUE.DATE, MORTGAGE.ASSUMPTION.AMOUNT,
+                          X2ND.MORTGAGE.AMOUNT, X2ND.MORTGAGE.LOAN.TYPE.CODE,
+                          X2ND.MORTGAGE.DEED.TYPE.CODE,
+                          # don't keep prior sale info
+                          # don't keep taxroll data
+                          deed.file.number, deed.record.number)
+               )
+    cat('only.deed.fields\n')
+    print(names(only.deed.fields))
+    only.deed.fields
 }
 
 ReadGeocoding <- function(control) {
@@ -77,6 +102,7 @@ ReadGeocoding <- function(control) {
     # ARGS:
     # control : list of control variables
     # RETURNS data.frame
+    cat('starting ReadGeocoding\n')
     geocoding <- read.table(control$path.geocoding,
                             header=TRUE,
                             sep="\t",
@@ -95,16 +121,60 @@ ReadParcels <- function(control) {
     # ARGS:
     # control : list of control variables
     # RETURNS data.frame
+    cat('starting ReadParcels\n')
     parcels <- read.csv(control$path.parcels,
                         check.names=FALSE,
                         header=TRUE,
                         quote="",
                         comment="",
                         stringsAsFactors=FALSE,
-                        nrows=ifelse(control$testing, 1000, -1))
+                        nrows=ifelse(control$testing, control$testing.nrow, -1))
     cat("number of parcels records read", nrow(parcels), "\n")
     cat('parcel column names\n')
     print(names(parcels))
+    
+    StartsWith <- function(name.prefix) {
+        result <- NULL
+        for (name in names(parcels)) {
+            components <- strsplit(name, '.', fixed = TRUE) [[1]]
+            if (components[[1]] == name.prefix) {
+                result <- c(result, name)
+            }
+        }
+        result
+    }
+
+    to.drop <- c('DOCUMENT.YEAR', 'SALES.DOCUMENT.TYPE.CODE', 'RECORDING.DATE',
+                 'SALE.DATE', 'SALE.AMOUNT', 'SALE.CODE', 'SALES.TRANSACTION.TYPE.CODE',
+                 'MULTI.APN.FLAG.CODE', 'MULTI.APN.COUNT', 'RESIDENTIAL.MODEL.INDICATOR.FLAG',
+                 StartsWith('X1ST'), 
+                 StartsWith('X2ND'),
+                 StartsWith('PRIOR'))
+
+    for (name in to.drop) {
+        parcels[[name]] <- NULL
+    }
+
+
+    cat('parcel column names after dropping sales data\n')
+    print(names(parcels))
+
+    # convert zipcode from char to numeric
+    # drop those that do not convert
+    #browser()
+
+    parcels$PROPERTY.ZIPCODE <- suppressWarnings(as.numeric(parcels$PROPERTY.ZIPCODE))
+    has.numeric.zipcode <- !is.na(parcels$PROPERTY.ZIPCODE)
+    parcels <- parcels[has.numeric.zipcode, ]
+
+    # create zip 5 field
+    #browser()
+    parcels$zip5 <- ifelse(parcels$PROPERTY.ZIPCODE <= 99999,
+                           parcels$PROPERTY.ZIPCODE,  # some are coded 91234, not 912345678
+                           round(parcels$PROPERTY.ZIPCODE / 10000))
+
+    #cat('check zip5 field\n'); browser()
+    
     parcels
 }
 
@@ -113,6 +183,7 @@ ReadParcelsCensusTract <- function(control) {
     # ARGS:
     # control : list of control vars
     # RETURNS: data.frame
+    cat('starting ReadParcelsCensusTract\n')
     df <- read.csv(control$path.parcels.census.tract,
                    check.names=FALSE,
                    header=TRUE,
@@ -137,6 +208,7 @@ ReadParcelsZip5 <- function(control) {
     # ARGS:
     # control : list of control vars
     # RETURNS: data.frame
+    cat('starting ReadParcelsZip5\n')
     df <- read.csv(control$path.parcels.zip5,
                    check.names=FALSE,
                    header=TRUE,
@@ -161,6 +233,7 @@ MergeDeedsParcels <- function(control) {
     # ARGS
     # control : list of control variables
     # RETURNS data.frame with deeds, parcels, and best APNs
+    cat('starting MergeDeedsParcels\n')
     deeds <- ReadDeeds(control)
     parcels <- ReadParcels(control)
 
@@ -170,11 +243,19 @@ MergeDeedsParcels <- function(control) {
 
     # merge deeds and parcels
     #cat('in MergeDeedsParcels; about to merge\n'); browser()
+    #cat('about to merge\n'); browser()
     merged <- merge(deeds, parcels, by="apn.recoded",
                     suffixes=c(".deeds", ".parcels"))
     cat("number of deeds and parcels with common recoded.apn",
         nrow(merged),
         "\n")
+    #browser()
+
+    # drop redundant fields
+    merged$APN.UNFORMATTED.deeds <- NULL
+    merged$APN.FORMATTED.deeds <- NULL
+    merged$APN.UNFORMATTED.parcels<- NULL
+    merged$APN.FORMATTED.parcels <- NULL
 
     BaseName <- function(components, last.index) {
         base.name <- components[[1]] [[1]]
@@ -243,12 +324,14 @@ MergeCensus <- function(df, control) {
     # df : data frame containing merged deeds and parcels features
     # control : control variables list
     # RETURNS: data.frame augmented with census data
-    #cat('starting MergeCensus', nrow(df), '\n'); browser()
+    cat('starting MergeCensus', nrow(df), '\n') 
+    #browser()
     census <- ReadCensus(control)
     cat('names in df\n')
     print(names(df))
     print('names in census\n')
     print(names(census))
+    #cat('about to merge in MergeCensus\n'); browser()
     merged <- merge(df, census, by.x="CENSUS.TRACT", by.y = "census.tract")
     cat("number of common deeds and parcels with known CENSUS.TRACT",
         nrow(merged),
@@ -262,6 +345,7 @@ MergeGeocoding <- function(df, control) {
     # df: data.frame containing recoded APNs
     # control: list of control variables
     # RETURNS: data.frame augmented with latitudes and longitudes
+    cat('starting MergeCoding', nrow(df), '\n')
     geocoding <- ReadGeocoding(control)
     merged <- merge(df, geocoding, by.x="apn.recoded", by.y="G.APN")
     cat("number of transactions, after considering geocoding",
@@ -272,6 +356,7 @@ MergeGeocoding <- function(df, control) {
 
 MergeParcelsCensusTract <- function(df, control) {
     # merge census tract data into a data.frame
+    cat('starting MergeParcelsCensusTract', nrow(df), '\n')
     census.tract <- ReadParcelsCensusTract(control)
     merged <- merge(df, census.tract,
                     by.x = 'CENSUS.TRACT', 
@@ -280,7 +365,9 @@ MergeParcelsCensusTract <- function(df, control) {
 
 MergeParcelsZip5 <- function(df, control) {
     # merge census tract data into a data.frame
+    cat('starting MergeParcelsZip5', nrow(df), '\n')
     zip5 <- ReadParcelsZip5(control)
+    #browser()
     df$zip5 <- round(df$PROPERTY.ZIPCODE / 10000)
     merged <- merge(df, zip5,
                     by.x = 'zip5', 
@@ -297,15 +384,21 @@ MergeAll <- function(control) {
     transactions.all.derived <- MergeParcelsZip5(transactions.derived.census.tract, control)
 }
 
+WriteControl <- function(control) {
+    # write control variables
+    cat('\ncontrol variables\n')
+    for (name in names(control)) {
+        cat('control ', name, ' = ', control[[name]], '\n')
+    }
+}
+
 Main <- function(control) {
     # this gradual approach is designed to minimize RAM usage by
     # allowing the garbage collector to free data.frames as we build
     # up the final result 
 
     # write control variables
-    for (name in names(control)) {
-        cat('control ', name, ' = ', control[[name]], '\n')
-    }
+    WriteControl(control)
 
     # build up the fully-merged data.frame
     merged <- MergeAll(control)
@@ -326,6 +419,9 @@ Main <- function(control) {
     cat("number of transactions written:", nrow(merged), "\n")
     cat('\nfields in merged csv\n')
     print(names(merged))
+
+    # write control variables
+    WriteControl(control)
 }
 
 Main(control)
