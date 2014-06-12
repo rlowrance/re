@@ -1,9 +1,10 @@
 LUSEI <- function(code, kind) {
-    # convert LUSEI codes to strings
+    # determine if a LUSEI code is a specified level for sure
     # ARGS
     # code : integer vector
-    # kind  : optional chr scalar
+    # kind : chr scalar
 
+    x <-
     switch(kind,
            residential                     = code == 100,  # (not elsewhere classified)
            townhouse                       = code == 102,  # or rowhouse
@@ -275,5 +276,9 @@ LUSEI <- function(code, kind) {
            any.school                      = (code >= 650) & (code <= 665),  # not universities
 
            # default
-           ...                             = stop(sprintf('bad kind = %s', kind)))
+           ...                             = stop(sprintf('bad kind = %s', kind))
+           )
+
+    result <- ifelse(is.na(x), FALSE, x)
+    result
 }
