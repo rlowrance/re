@@ -38,7 +38,8 @@ InitializeR(start.JIT = ifelse(control$testing, FALSE, TRUE),
 
 
 # source other files, now that the JIT may be running
-source("RemoveNonInformative.R")
+source('PRICATCODE.R')
+source('Printf.R')
 
 ReadDeedsFile <- function(num) {
     # Read the deeds file containing num in its name
@@ -69,50 +70,26 @@ ReadDeedsFile <- function(num) {
                      nrows=ifelse(control$testing,1000,-1))
 
     cat("records in", path, nrow(df), "\n")
+    
+    # track original source
+    df$deed.file.number=rep(num, nrow(df))
+    df$deed.record.number=1:nrow(df)
 
-    # keep the features we want
-    # add features to trace back to original source
-    which.features <- 'some'
-    #which.features <- 'all'
-    if (which.features == 'some') {
-        # pick features most likely to be needed downstream
-        df <- data.frame(APN.UNFORMATTED=df$APN.UNFORMATTED, 
-                         APN.FORMATTED=df$APN.FORMATTED,
-                         SALE.AMOUNT=df$SALE.AMOUNT,
-                         SALE.DATE=df$SALE.DATE,
-                         RECORDING.DATE=df$RECORDING.DATE,
-                         DOCUMENT.TYPE.CODE=df$DOCUMENT.TYPE.CODE,
-                         TRANSACTION.TYPE.CODE=df$TRANSACTION.TYPE.CODE,
-                         SALE.CODE=df$SALE.CODE,
-                         MULTI.APN.FLAG.CODE=df$MULTI.APN.FLAG.CODE,
-                         MULTI.APN.COUNT=df$MULTI.APN.COUNT,
-                         PRIOR.SALES.DATE=df$PRIOR.SALES.DATE,
-                         PRIOR.SALES.AMOUNT=df$PRIOR.SALES.AMOUNT,
-                         PRIOR.MULTI.APN.FLAG.CODE=df$PRIOR.MULTI.APN.FLAG.CODE,
-                         PRIOR.MULTI.APN.COUNT=df$PRIOR.MULTI.APN.COUNT,
-                         PRI.CAT.CODE=df$PRI.CAT.CODE,
-                         RESALE.NEW.CONSTRUCTION.CODE=df$RESALE.NEW.CONSTRUCTION.CODE,
-                         deed.file.number=rep(num, nrow(df)),
-                         deed.record.number=1:nrow(df),
-                         stringsAsFactors=FALSE)
-    }
-    else {
-        # pick all features
-        # NOT: does not work with 16GB RAM
-        df <- cbind(df, 
-                    deed.file.number=rep(num, nrow(df)),
-                    deed.record.number=1:nrow(df),
-                    stringsAsFactors=FALSE)
-
-    }
-
-
-    # keep only arms-length deeds and deeds with numeric apns
+    # keep only arms-length deeds
+    is.arms.length <- PRICATCODE(df$PRI.CAT.CODE, 'arms.length.transaction')
+    
     original.num.rows = nrow(df)
-    arms.length <- df$PRI.CAT.CODE == "A"  # arms-length deeds
-    df <- df[arms.length, ]
 
-    list(df=df, num.dropped=original.num.rows - nrow(df))
+    # create subset we want
+    interesting <- subset(df, subset = is.arms.length)
+
+    num.dropped = original.num.rows - nrow(interesting)
+    Printf('input file %d had %d records that were not arms-length deeds\n',
+           num, num.dropped)
+
+    list(df = interesting,
+         num.dropped = num.dropped)
+
 }
 
 
@@ -126,6 +103,7 @@ ReadAll <- function() {
     for (file.number in 1:8) {
         a.list<- ReadDeedsFile(file.number)
         df <- rbind(df, a.list$df)
+        #cat('after file.number', file.number, '\n'); browser()
         num.dropped <- num.dropped + a.list$num.dropped
     }
     list(df = df, num.dropped = num.dropped)
