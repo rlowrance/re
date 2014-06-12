@@ -1,13 +1,7 @@
 # parcels-sfr.Rmd
 # Create the output file holding single-family-residential parcels
+# File layout is in 2580...
 
-# Create the output file holding the single-family-residential parcels. 
-# 
-# In order to cope with having only 16 GB of RAM on my system, only features 
-# needed downstream in the pipeline are retained.
-# 
-# Files read and the deeds files the Laufer directory. This directory contains
-# the file Steve Laufer used in his experiments.
 
 # set the control variables
 control <- list()
@@ -21,10 +15,13 @@ control$testing <- FALSE
 
 # Initialize R.
 source('InitializeR.R')
-InitializeR(start.JIT = ifelse(control$testing, FALSE< TRUE),
+InitializeR(start.JIT = FALSE,
             duplex.output.to = control$path.log)
 
 # source other files now that JIT is running
+source('Informative.R')
+source('LUSEI.R')
+source('Printf.R')
 
 ## Define function to read a taxroll file
 
@@ -49,71 +46,37 @@ ReadParcelsFile <- function(num) {
                      stringsAsFactors=FALSE,
                      na.strings="",
                      nrows=ifelse(control$testing,1000,-1))
-    cat("records in", path, nrow(df), "\n")
-
-    # select the fields we want
-    df <- data.frame(APN.UNFORMATTED=df$APN.UNFORMATTED,
-                     APN.FORMATTED=df$APN.FORMATTED,
-                     CENSUS.TRACT=df$CENSUS.TRACT,
-                     ZONING=df$ZONING,
-                     UNIVERSAL.LAND.USE.CODE=df$UNIVERSAL.LAND.USE.CODE,
-                     VIEW=df$VIEW,
-                     LOCATION.INFLUENCE.CODE=df$LOCATION.INFLUENCE.CODE,
-                     NUMBER.OF.BUILDINGS=df$NUMBER.OF.BUILDINGS,
-                     PROPERTY.CITY=df$PROPERTY.CITY,
-                     PROPERTY.ZIPCODE=df$PROPERTY.ZIPCODE,
-                     TOTAL.VALUE.CALCULATED=df$TOTAL.VALUE.CALCULATED,
-                     LAND.VALUE.CALCULATED=df$LAND.VALUE.CALCULATED,
-                     IMPROVEMENT.VALUE.CALCULATED=df$IMPROVEMENT.VALUE.CALCULATED,
-                     TAX.YEAR=df$TAX.YEAR,
-                     LAND.SQUARE.FOOTAGE=df$LAND.SQUARE.FOOTAGE,
-                     UNIVERSAL.BUILDING.SQUARE.FEET=df$UNIVERSAL.BUILDING.SQUARE.FEET,
-                     LIVING.SQUARE.FEET=df$LIVING.SQUARE.FEET,
-                     YEAR.BUILT=df$YEAR.BUILT,
-                     EFFECTIVE.YEAR.BUILT=df$EFFECTIVE.YEAR.BUILT,
-                     BEDROOMS=df$BEDROOM,
-                     TOTAL.ROOMS=df$TOTAL.ROOMS,
-                     TOTAL.BATHS.CALCULATED=df$TOTAL.BATHS.CALCULATED,
-                     AIR.CONDITIONING.CODE=df$AIR.CONDITIONING.CODE,
-                     BASEMENT.FINISH.CODE=df$BASEMENT.FINISH.CODE,
-                     BLDG.CODE=df$BLDG.CODE,
-                     BLDG.IMPROVEMENT.CODE=df$BLDG.IMPROVEMENT.CODE,
-                     CONDITION.CODE=df$CONDITION.CODE,
-                     CONSTRUCTION.TYPE.CODE=df$CONSTRUCTION.TYPE.CODE,
-                     EXTERIOR.WALLS.CODE=df$EXTERIOR.WALLS.CODE,
-                     FIREPLACE.INDICATOR.FLAG=df$FIREPLACE.INDICATOR.FLAG,
-                     FIREPLACE.NUMBER=df$FIREPLACE.NUMBER,
-                     FIREPLACE.TYPE.CODE=df$FIREPLACE.TYPE.CODE,
-                     FOUNDATION.CODE=df$FOUNDATION.CODE,
-                     FLOOR.CODE=df$FLOOR.CODE,
-                     FRAME.CODE=df$FRAME.CODE,
-                     GARAGE.CODE=df$GARAGE.CODE,
-                     HEATING.CODE=df$HEATING.CODE,
-                     MOBILE.HOME.INDICATOR.FLAG=df$MOBILE.HOME.INDICATOR.FLAG,
-                     PARKING.SPACES=df$PARKING.SPACE,
-                     PARKING.TYPE.CODE=df$PARKING.TYPE.CODE,
-                     POOL.FLAG=df$POOL.FLAG,
-                     POOL.CODE=df$POOL.CODE,
-                     QUALITY.CODE=df$QUALITY.CODE,
-                     ROOF.COVER.CODE=df$ROOF.COVER.CODE,
-                     ROOF.TYPE.CODE=df$ROOF.TYPE.CODE,
-                     STORIES.CODE=df$STORIES.CODE,
-                     STYLE.CODE=df$STYLE.CODE,
-                     UNITS.NUMBER=df$UNITS.NUMBER,
-                     ELECTRIC.ENERGY.CODE=df$ELECTRIC.ENERGY.CODE,
-                     FUEL.CODE=df$FUEL.CODE,
-                     SEWER.CODE=df$SEWER.CODE,
-                     WATER.CODE=df$WATER.CODE,
-                     parcel.file.number=rep(num,nrow(df)),
-                     parcel.record.number=1:nrow(df),
-                     stringsAsFactors=FALSE)
+    #cat("records in", path, nrow(df), "\n"); browser()
+    
+    # track original source
+    df$parcel.file.number <- rep(num,nrow(df))
+    df$parcel.record.number <- 1:nrow(df)
 
     # keep only single-family residence parcels
-    # CHECK FOR NAs
+    is.sfr = LUSEI(df$UNIVERSAL.LAND.USE.CODE, 'sfr')
+    
     original.num.rows = nrow(df)
-    sfr <- df$UNIVERSAL.LAND.USE.CODE == 163
-    df <- df[sfr, ]
-    list(df=df, num.dropped = original.num.rows - nrow(df))
+
+    #informative <- c(Informative(df), 
+    #                 'PRIOR.SALE.DOCUMENT.YEAR',  # missing from file 1
+    #                 'parcel.file.number')
+    #cat('in reader', sum(is.sfr), length(informative), '\n'); browser()
+
+    # create subset we want
+    # NOTE: this algo will fail if some files have non-informative columns that
+    # are informative in other files
+    interesting <- subset(df, subset = is.sfr)  # all columns
+    #interesting <- subset(df,
+    #                      subset = is.sfr,
+    #                      select = informative)
+    num.dropped <- original.num.rows - nrow(interesting)
+
+    Printf('input file %d had %d records that were not single family residential\n',
+           num, num.dropped)
+
+
+    list(df=interesting, 
+         num.dropped = num.dropped)
 }
 
 ReadAll <- function() {
@@ -126,6 +89,24 @@ ReadAll <- function() {
     num.dropped <- 0
     for (file.number in 1:8) {
         a.list <- ReadParcelsFile(file.number)
+        if (FALSE) {
+            cat('names(a.list)\n')
+            print(names(a.list$df))
+            cat('names(df)\n')
+            print(names(df))
+            # check for new names
+            num.new.names <- 0
+            for (new.name in names(a.list$df)) {
+                if (name %in% names(df)) {
+                }
+                else {
+                    cat('new name', new.name, '\n')
+                    num.new.names <- num.new.names + 1
+                }
+            }
+            stopifnot(num.new.names == 0)
+            cat('about to rbind\n', nrow(df), nrow(a.list$df), '\n'); browser()
+        }
         df <- rbind(df, a.list$df)
         num.dropped <- num.dropped + a.list$num.dropped
     }
