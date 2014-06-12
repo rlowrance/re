@@ -97,7 +97,9 @@ ReadAndTransformTransactions <- function(path.in, nrows, verbose) {
 
 
     # return just the features needed, to reduce memory requirements
-    data.frame(sale.day = splitDate$day,
+    data.frame(apn = raw$apn.recoded,
+
+               sale.day = splitDate$day,
                sale.month = splitDate$month,
                sale.year = splitDate$year,
                saleDate = saleDate,              # as a Date object
