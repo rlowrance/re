@@ -9,6 +9,7 @@ control$me <- 'parcels-sfr'
 control$laufer.dir <-'../data/raw/from-laufer-2010-05-11'
 control$dir.output <- "../data/v6/output/"
 control$path.out <- paste0(control$dir.output, "parcels-sfr.csv")
+control$compress <- 'only'  # choices: 'no', 'only', 'also'
 control$path.log <- paste0(control$dir, control$me, '.txt')
 control$testing <- TRUE
 control$testing <- FALSE
@@ -74,6 +75,8 @@ ReadParcelsFile <- function(num) {
     Printf('input file %d had %d records that were not single family residential\n',
            num, num.dropped)
 
+    #cat('check parcel.file.number record 24\n'); browser()
+
 
     list(df=interesting, 
          num.dropped = num.dropped)
@@ -130,11 +133,31 @@ Main <- function(control) {
 
     str(all$df)
     print(summary(all$df))
+
+    #cat('check parcel.file.number\n'); browser()
     
-    write.csv(all$df,
-              file=control$path.out,
-              quote=FALSE,
-              row.names=FALSE)
+    # write uncompressed version
+    write.table(all$df,
+                file=control$path.out,    # not compressed
+                sep='\t',
+                quote=FALSE,
+                row.names=FALSE)
+
+    # maybe compress the output
+    if (control$compress == 'only') {
+        command <- paste('gzip', control$path.out)
+        system(command)
+    } else if (control$compress == 'also') {
+        command.1 <- paste('gzip --to-stdout', control$path.out) 
+        command.2 <- paste('cat - >', paste0(control$path.out, '.gz'))
+        command <- paste(command.1, '|', command.2)
+        system(command)
+    }
+
+    # write control variables
+    for (name in names(control)) {
+        cat('control ', name, ' = ', control[[name]], '\n')
+    }
     cat('done\n')
 }
 
