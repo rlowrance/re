@@ -25,7 +25,8 @@ control <- list()
 control$me <- 'deeds-al'
 control$laufer.dir="../data/raw/from-laufer-2010-05-11"
 control$dir.output="../data/v6/output/"
-control$path.deeds.out <- paste0(control$dir.output, "deeds-al.csv")
+control$path.out <- paste0(control$dir.output, "deeds-al.csv")
+control$compress <- 'only' # choices: 'also', 'no', 'only'
 control$path.log <- paste0(control$dir.output, control$me, '.txt')
 control$testing <- TRUE
 control$testing <- FALSE
@@ -33,7 +34,7 @@ control$testing <- FALSE
 
 # Turn on the JIT compiler and source files
 source('InitializeR.R')  # must be first, since starts the JIT compiler
-InitializeR(start.JIT = ifelse(control$testing, FALSE, TRUE),
+InitializeR(start.JIT = FALSE,
             duplex.output.to = control$path.log) 
 
 
@@ -128,13 +129,33 @@ Main <- function(control) {
     cat('names(all$df)')
     print(names(all$df))
 
-    ## Write deeds to csv
+    ## Write uncompressed output
 
-    cat("writing arms-length deeds to", control$path.deeds.out, "\n")
-    write.csv(all$df,
-              file=control$path.deeds.out,
-              quote=FALSE,
-              row.names = FALSE)
+    cat("writing arms-length deeds to", control$path.out, "\n")
+    write.table(all$df,
+                file=control$path.out,
+                sep='\t',
+                quote=FALSE,
+                row.names = FALSE)
+    
+
+    # maybe compress the output
+    #cat('maybe compress output', nrow(all$df), '\n'); browser()
+    if (control$compress == 'only') {
+        command <- paste('gzip', '--force', control$path.out)
+        system(command)
+    } else if (control$compress == 'also') {
+        command.1 <- paste('gzip --to-stdout', control$path.out) 
+        command.2 <- paste('cat - >', paste0(control$path.out, '.gz'))
+        command <- paste(command.1, '|', command.2)
+        system(command)
+    }
+
+    # write control variables
+    for (name in names(control)) {
+        cat('control ', name, ' = ', control[[name]], '\n')
+    }
+
     cat('done\n')
 }
 
