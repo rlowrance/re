@@ -145,7 +145,7 @@ Main <- function(control) {
 
     # maybe compress the output
     if (control$compress == 'only') {
-        command <- paste('gzip', control$path.out)
+        command <- paste('gzip', '--force', control$path.out)
         system(command)
     } else if (control$compress == 'also') {
         command.1 <- paste('gzip --to-stdout', control$path.out) 
