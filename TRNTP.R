@@ -4,7 +4,7 @@ TRNTP <- function(code, kind) {
     # code : integer vector
     # kind  : optional chr scalar
 
-    stopifnot(all(is.number(code)))
+    stopifnot(all(is.numeric(code)))
     with.na <- 
     switch(kind,
            resale            = code == 1,
