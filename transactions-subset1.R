@@ -11,29 +11,48 @@
 
 # Set control variables.
 control <- list()
-control$me <- 'transactions-subset1.R'
+control$me <- 'transactions-subset1'
 control$output.dir <- "../data/v6/output/"
-control$path.input <- paste(control$output.dir, "transactions-al-sfr.csv", sep="")
+control$path.input <- paste(control$output.dir, "transactions-al-sfr.csv.gz", sep="")
 control$path.output <- paste(control$output.dir, "transactions-subset1.csv", sep="")
 control$path.log <- paste0(control$output.dir, control$me, '.txt')
 control$path.ranges <- paste(control$output.dir, "transactions-subset1-ranges.tex", sep="")
 control$path.excluded <- paste(control$output.dir, "transactions-subset1-excluded.tex", sep="")
+control$compress <- 'only' # choices: 'also', 'no', 'only'
+control$testing.nrow <- 1000
 control$testing <- TRUE
 control$testing <- FALSE
+control$debugging <- FALSE
 
 source('InitializeR.R')
-InitializeR(start.JIT = ifelse(control$testing, FALSE, TRUE),
+InitializeR(start.JIT = FALSE,
             duplex.output.to = control$path.log)
 
 # Source other files here, now that the JIT level is set.
+source('DEEDC.R')
+source('LUSEI.R')
+source('PRICATCODE.R')
+source('PROPN.R')
+source('SCODE.R')
+source('SLMLT.R')
+source('TRNTP.R')
+
 
 ReadAllTransactions <- function(control) {
     # return everything in the input file
     # ARGS:
     # control : list of control values
     # RETURNS data.frame
-    read.csv(control$path.input,
-             nrows=ifelse(control$testing, 1000, -1)) 
+    #cat('starting ReadAllTransactions\n'); browser()
+    all <- read.csv(control$path.input,
+                    check.name=FALSE,
+                    header=TRUE,
+                    quote='',
+                    comment='',
+                    stringsAsFactors=FALSE,
+                    sep='\t',
+                    nrows=ifelse(control$testing, control$testing.nrow, -1)) 
+    all
 }
 
 TransactionDate <- function(df) {
@@ -110,6 +129,10 @@ OkDocumentTypeCode <- function(df) {
     # X|MULTI CNTY/ST OR OPEN-END MORTGAGE
     # Z|NOMINAL
 
+    dtc <- df$DOCUMENT.TYPE.CODE
+    DEEDC(dtc, 'grant.deed') |   # sale or transfer
+    DEEDC(dtc, 'deed.of.trust')  # gives mortgage lend a lien on the property
+
     df$DOCUMENT.TYPE.CODE == "G" | df$DOCUMENT.TYPE.CODE == "T"
 }
 
@@ -120,20 +143,11 @@ OkTransactionTypeCode <- function(df) {
     # RETURNS logical vector, TRUE, when observation considered valid
 
     # A valid transaction type is a resale or new construction
-    
-    # All codes
-    # Code | Meaning
-    # -----|--------
-    # 001|RESALE
-    # 002|REFINANCE
-    # 003|SUBDIVISION/NEW CONSTRUCTION
-    # 004|TIMESHARE
-    # 006|CONSTRUCTION LOAN 
-    # 007|SELLER CARRYBACK
-    # 009|NOMINAL
 
-    !is.na(df$TRANSACTION.TYPE.CODE &
-           (df$TRANSACTION.TYPE.CODE == 1 | df$TRANSACTION.TYPE.CODE == 3))
+    ttc <- df$TRANSACTION.TYPE.CODE
+
+    TRNTP(ttc, 'resale') |
+    TRNTP(ttc, 'new.construction')
 }
 
 OkSaleCode <- function(df) {
@@ -142,20 +156,7 @@ OkSaleCode <- function(df) {
     # df : data.frame with feature SALE.CODE
     # RETURNS logical vector, TRUE, if sales code is valid
 
-    # all codes
-    # Code|Meaning
-    # ----|------
-    # C|CONFIRMED
-    # E|ESTIMATED
-    # F|SALE PRICE (FULL)
-    # L|SALE PRICE (PARTIAL)
-    # N|NOT OF PUBLIC RECORD
-    # P|SALE PRICE (PARTIAL)
-    # R|LEASE
-    # U|UNKNOWN
-    # V|VERIFIED
-
-    !is.na(df$SALE.CODE) & df$SALE.CODE == "F"
+    SCODE(df$SALE.CODE, 'sale.price.full')
 }
 
 IsOneParcel <- function(df) {
@@ -163,16 +164,6 @@ IsOneParcel <- function(df) {
     # ARGS
     # df : data.frame with features MULTI.APN.FLAG.CODE and MULTI.APN.COUNT
     # RETURNS logical vector TRUE when observation is OK
-
-    # Meanings of MULTI APN FLAG CODE.
-    # 
-    # Code|Meaning
-    # ----|---
-    # D|MULTI / DETAIL PARCEL SALE
-    # M|MULTIPLE PARCEL SALE
-    # S|SPLIT PARCEL SALE
-
-    # Note: many MULTI.APN.COUNT values are zero, so accept them as defaults with default == 1 
 
     is.na(df$MULTI.APN.FLAG.CODE) & df$MULTI.APN.COUNT <= 1
 }
@@ -306,17 +297,23 @@ FormSubset <- function(df) {
     df[all.good, ]
 }
 
-Main <- function(control) {
+WriteControl <- function(control) {
     # write control values
     for (name in names(control)) {
         cat('control ', name, ' = ' , control[[name]], '\n')
     }
+}
+
+Main <- function(control) {
+    #cat('starting Main\n') ; browser()
+    WriteControl(control)
 
     # read all transactions
     df <- ReadAllTransactions(control)
     cat('all transactions\n')
     str(df)
     print(summary(df))
+    cat('read all transactions', nrow(df), '\n')
 
     # form the subset we are interested in
     df <- FormSubset(df)
@@ -333,11 +330,26 @@ Main <- function(control) {
     cat('number of duplicate observations eliminated', num.dropped, '\n')
     stopifnot(num.dropped == 0)
 
-    # write the result
-    write.csv(df, 
-              quote=FALSE,
-              file=control$path.output, 
-              row.names=FALSE)
+    # write the uncompressed result
+    write.table(df, 
+                file=control$path.output, 
+                sep='\t',
+                quote=FALSE,
+                row.names=FALSE)
+
+    # maybe compress the output
+    #cat('maybe compress output', nrow(all$df), '\n'); browser()
+    if (control$compress == 'only') {
+        command <- paste('gzip', '--force', control$path.out)
+        system(command)
+    } else if (control$compress == 'also') {
+        command.1 <- paste('gzip --to-stdout', control$path.out) 
+        command.2 <- paste('cat - >', paste0(control$path.out, '.gz'))
+        command <- paste(command.1, '|', command.2)
+        system(command)
+    }
+
+    WriteControl(control)
 }
 
 Main(control)
