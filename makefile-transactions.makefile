@@ -1,14 +1,14 @@
 # Makefile
-# create OUTPUT/transactions-subset1.csv and its predecessors
+# create OUTPUT/transactions-subset1.csv.gz and its predecessors
 
 OUTPUT=../data/v6/output
 
 CENSUS=$(OUTPUT)/census.csv
-DEEDS=$(OUTPUT)/deeds-al.csv
-PARCELS=$(OUTPUT)/parcels-sfr.csv
+DEEDS=$(OUTPUT)/deeds-al.csv.gz
+PARCELS=$(OUTPUT)/parcels-sfr.csv.gz
 PARCELS_DERIVED_FEATURES=$(OUTPUT)/parcels-derived-features-zip5.csv
-TRANSACTIONS=$(OUTPUT)/transactions-al-sfr.csv
-SUBSET1=$(OUTPUT)/transactions-subset1.csv
+TRANSACTIONS=$(OUTPUT)/transactions-al-sfr.csv.gz
+SUBSET1=$(OUTPUT)/transactions-subset1.csv.gz
  
 # These rules come from
 # https://github.com/yihui/knitr/blob/master/inst/doc/Makefile
