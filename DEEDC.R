@@ -27,10 +27,12 @@ DEEDC <- function(code, kind) {
 
     with.na <- 
     switch(kind,
+           construction.loan               = code == 'C',
            correction.deed                 = code == 'CD',  # coorects a previous mistake
            final.judgement                 = code == 'F',   # the bank has won its case
            grant.deed                      = code == 'G',   # sale or transfer
            lis.pendens                     = code == 'L',   # notify public of claim against the property
+           notice.of.default               = code == 'N',
            quit.claim                      = code == 'Q',   # disdain any interest in a property
            release                         = code == 'R',   # release a lien on a property
            loan.assignment                 = code == 'S',   # transfers lien to a new lender
@@ -38,8 +40,8 @@ DEEDC <- function(code, kind) {
            foreclosure                     = code == 'U',   # grants ownership to the purchaser at a 
                                                             # foreclosure sale
            multi.cnty.or.open.end.mortgage = code == 'X',
+           nominal                         = code == 'Z',
            # composite types NONE FOR NOW
-           any.school                      = (code >= 650) & (code <= 665),  # not universities
 
            # default
            ...                             = stop(sprintf('bad kind = %s', kind))
