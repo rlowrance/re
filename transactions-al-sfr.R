@@ -18,15 +18,17 @@ control <- list()
 control$me <- 'transactions-al-sfr'
 control$dir.output <- "../data/v6/output/"
 control$path.census <- paste(control$dir.output, "census.csv", sep="")
-control$path.deeds <- paste(control$dir.output, "deeds-al.csv", sep="")
-control$path.parcels <- paste(control$dir.output, "parcels-sfr.csv", sep="")
+control$path.deeds <- paste(control$dir.output, "deeds-al.csv.gz", sep="")
+control$path.parcels <- paste(control$dir.output, "parcels-sfr.csv.gz", sep="")
 control$path.parcels.census.tract <- paste(control$dir.output, "parcels-derived-features-census-tract.csv", sep="")
 control$path.parcels.zip5 <- paste(control$dir.output, "parcels-derived-features-zip5.csv", sep="")
 control$path.geocoding <- "../data/raw/geocoding.tsv"
 control$path.out <- paste(control$dir.output, "transactions-al-sfr.csv", sep="")
 control$path.log <- paste0(control$dir.output, control$me, '.txt')
+control$compress <- 'only' # choices: 'also', 'no', 'only'
 control$testing.nrow <- 100000
 control$testing.nrow <- 200000
+control$debugging <- FALSE
 control$testing <- TRUE
 control$testing <- FALSE
 
@@ -37,7 +39,6 @@ InitializeR(start.JIT = FALSE,
 # Source other files here
 
 source("BestApns.R")
-source("RemoveNonInformative.R")
 
 ReadCensus <- function(control) {
     # Read input files
@@ -64,6 +65,7 @@ ReadDeeds <- function(control) {
     # RETURNS data.frame
     cat('starting ReadDeeds\n')
     deeds <- read.csv(control$path.deeds,
+                      sep='\t',
                       check.names = FALSE,
                       header=TRUE,
                       quote="",
@@ -74,6 +76,7 @@ ReadDeeds <- function(control) {
     cat('deeds column names\n')
     print(names(deeds))
     # drop all fields except those related to the deed itself
+    #cat('in ReadDeeds', nrow(deeds), '\n'); browser()
     only.deed.fields <-
         subset(deeds,
                select = c(APN.UNFORMATTED, APN.FORMATTED,
@@ -124,14 +127,18 @@ ReadParcels <- function(control) {
     cat('starting ReadParcels\n')
     parcels <- read.csv(control$path.parcels,
                         check.names=FALSE,
+                        na.string = c('NA', ''),
                         header=TRUE,
                         quote="",
                         comment="",
                         stringsAsFactors=FALSE,
+                        sep='\t',
                         nrows=ifelse(control$testing, control$testing.nrow, -1))
     cat("number of parcels records read", nrow(parcels), "\n")
     cat('parcel column names\n')
     print(names(parcels))
+
+    #cat('investigate parcel.file.number', nrow(parcels), '\n'); browser()
     
     StartsWith <- function(name.prefix) {
         result <- NULL
@@ -257,64 +264,6 @@ MergeDeedsParcels <- function(control) {
     merged$APN.UNFORMATTED.parcels<- NULL
     merged$APN.FORMATTED.parcels <- NULL
 
-    BaseName <- function(components, last.index) {
-        base.name <- components[[1]] [[1]]
-        for (component in components[[1]] [2:(last.index - 1)]) {
-            base.name <- paste0(base.name, '.', component)
-        }
-        base.name
-    }
-
-    RecodeNA <- function(v) {
-        ifelse(is.na(v),
-               NA,
-               ifelse(v == 'N/AVAIL',
-                      NA,
-                      v)
-               )
-    }
-
-    BestValue <- function(deeds.value, parcels.value) {
-        ifelse(is.na(deeds.value),
-               ifelse(is.na(parcels.value),
-                      NA,
-                      parcels.value),
-               deeds.value)
-    }
-
-    cat('merging fields with redundant content\n')
-    for (name in names(merged)) {
-        #cat('top of name loop\n'); browser()
-        components <- strsplit(name, '.', fixed=TRUE)
-        last.index <- length(components[[1]])
-        last.component <- components[[1]][[last.index]]
-
-        if (last.component == 'deeds') {
-            # elimate redundant .deeds and .parcels columns
-            base.name <- BaseName(components, last.index)
-            deeds.name <- paste0(base.name, '.deeds')
-            parcels.name <- paste0(base.name, '.parcels')
-
-            deeds.value.recoded <- RecodeNA(merged[[deeds.name]])
-            parcels.value.recoded <- RecodeNA(merged[[parcels.name]])
-
-            best.value <- BestValue(deeds.value.recoded, parcels.value.recoded)
-
-            either.is.na <- is.na(deeds.value.recoded) | is.na(parcels.value.recoded)
-            significant.difference <- (deeds.value.recoded != parcels.value.recoded)[!either.is.na]
-
-            if (all(!significant.difference)) {
-                cat(' using best value to remove duplicate', base.name, '\n')
-                #browser()
-                merged[[base.name]] <- best.value
-                merged[[deeds.name]] <- NULL
-                merged[[parcels.name]] <- NULL
-                #browser()
-            }
-        }
-    }
-    #cat('review merged\n'); browser()
-
     merged
 }
 
@@ -400,6 +349,12 @@ Main <- function(control) {
     # write control variables
     WriteControl(control)
 
+    if (control$debugging) {
+        control$testing <- TRUE
+        control$testing.nrow <- 1000
+        ReadParcels(control)
+    }
+
     # build up the fully-merged data.frame
     merged <- MergeAll(control)
 
@@ -411,14 +366,27 @@ Main <- function(control) {
     merged$APN.UNFORMATTED.parcels <- NULL
     merged$APN.FORMATTED.parcels <- NULL
 
-    # Write transactions file
-    write.csv(merged, 
-              quote=FALSE,
-              file=control$path.out, 
-              row.names=FALSE)
+    # Write uncompressed transactions file
+    write.table(merged, 
+                file=control$path.out, 
+                quote=FALSE,
+                sep='\t',
+                row.names=FALSE)
     cat("number of transactions written:", nrow(merged), "\n")
     cat('\nfields in merged csv\n')
     print(names(merged))
+
+    # maybe compress the output
+    #cat('maybe compress output', nrow(all$df), '\n'); browser()
+    if (control$compress == 'only') {
+        command <- paste('gzip', '--force', control$path.out)
+        system(command)
+    } else if (control$compress == 'also') {
+        command.1 <- paste('gzip --to-stdout', control$path.out) 
+        command.2 <- paste('cat - >', paste0(control$path.out, '.gz'))
+        command <- paste(command.1, '|', command.2)
+        system(command)
+    }
 
     # write control variables
     WriteControl(control)
