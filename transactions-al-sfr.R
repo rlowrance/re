@@ -63,7 +63,7 @@ ReadDeeds <- function(control) {
     # ARGS:
     # control : list of control vars
     # RETURNS data.frame
-    cat('starting ReadDeeds\n')
+    cat('starting ReadDeeds\n'); browser()
     deeds <- read.csv(control$path.deeds,
                       sep='\t',
                       check.names = FALSE,
@@ -76,7 +76,7 @@ ReadDeeds <- function(control) {
     cat('deeds column names\n')
     print(names(deeds))
     # drop all fields except those related to the deed itself
-    #cat('in ReadDeeds', nrow(deeds), '\n'); browser()
+    cat('in ReadDeeds', nrow(deeds), '\n'); browser()
     only.deed.fields <-
         subset(deeds,
                select = c(APN.UNFORMATTED, APN.FORMATTED,
@@ -86,6 +86,7 @@ ReadDeeds <- function(control) {
                           MULTI.APN.FLAG.CODE, MULTI.APN.COUNT,
                           TITLE.COMPANY.CODE, 
                           RESIDENTIAL.MODEL.INDICATOR.FLAG,
+                          MORTGAGE.AMOUNT,
                           MORTGAGE.DATE, MORTGAGE.LOAN.TYPE.CODE,
                           MORTGAGE.DEED.TYPE.CODE, MORTGAGE.TERM.CODE, MORTGAGE.TERM,
                           MORTGAGE.DUE.DATE, MORTGAGE.ASSUMPTION.AMOUNT,
@@ -339,6 +340,9 @@ WriteControl <- function(control) {
     for (name in names(control)) {
         cat('control ', name, ' = ', control[[name]], '\n')
     }
+    if (control$testing) {
+        CAT('TESTING', 'DISCARD RESULTS\n')
+    }
 }
 
 Main <- function(control) {
@@ -388,8 +392,11 @@ Main <- function(control) {
         system(command)
     }
 
+    cat('number of transactions written', nrow(merged), '\n')
+
     # write control variables
     WriteControl(control)
+
 }
 
 Main(control)
