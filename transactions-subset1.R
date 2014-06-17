@@ -52,6 +52,7 @@ ReadAllTransactions <- function(control) {
                     stringsAsFactors=FALSE,
                     sep='\t',
                     nrows=ifelse(control$testing, control$testing.nrow, -1)) 
+    cat('ending ReadAllTransactions', nrow(all), '\n'); browser()
     all
 }
 
@@ -132,8 +133,6 @@ OkDocumentTypeCode <- function(df) {
     dtc <- df$DOCUMENT.TYPE.CODE
     DEEDC(dtc, 'grant.deed') |   # sale or transfer
     DEEDC(dtc, 'deed.of.trust')  # gives mortgage lend a lien on the property
-
-    df$DOCUMENT.TYPE.CODE == "G" | df$DOCUMENT.TYPE.CODE == "T"
 }
 
 OkTransactionTypeCode <- function(df) {
@@ -293,6 +292,7 @@ FormSubset <- function(df) {
                 ok.geocoding
 
     cat(' ALL FIELDS EXCLUDED', nrow.df - sum(all.good), '\n')
+    browser()
 
     df[all.good, ]
 }
