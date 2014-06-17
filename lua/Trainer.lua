@@ -1,1 +1,0 @@
-/home/roy/Dropbox/torch7-demos/logistic-regression/Trainer.lua
