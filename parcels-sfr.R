@@ -20,7 +20,6 @@ InitializeR(start.JIT = FALSE,
             duplex.output.to = control$path.log)
 
 # source other files now that JIT is running
-source('Informative.R')
 source('LUSEI.R')
 source('Printf.R')
 
