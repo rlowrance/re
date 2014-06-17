@@ -48,17 +48,16 @@ ReadAndTransformTransactions <- function(path.in, nrows, verbose) {
   # In addition to Chopra's features, also return these features
   # SALE.DAY, SALE.MONTH, SALE.YEAR
     cat('reading all transactions\n')
+    nrows <- 1000
     raw <- read.table(path.in,
                       header=TRUE,
-                      sep=",",
+                      sep="\t",
                       quote="",
                       comment="",
                       stringsAsFactors=TRUE,
                       na.strings="NA",
                       nrows=nrows)
     if (verbose) {
-        cat('raw structure\n')
-        str(raw)
         print(summary(raw))
     }
     
@@ -97,6 +96,7 @@ ReadAndTransformTransactions <- function(path.in, nrows, verbose) {
 
 
     # return just the features needed, to reduce memory requirements
+    cat('nrows', nrow(raw), nrow(splitDate), '\n'); browser()
     data.frame(apn = raw$apn.recoded,
 
                sale.day = splitDate$day,
