@@ -20,22 +20,25 @@ SUBSET1=$(OUTPUT)/transactions-subset1.csv.gz
 	Rscript -e "if (getRversion() < '3.0.0') knitr::knit2html('$*.Rmd')"
 
 .PHONY: all
-all: $(CENSUS) $(DEEDS) $(PARCELS) $(SUBSET1) $(TRANSACTIONS) $(PARCELSDERIVEDFEATURES)
-
-$(CENSUS): census.R
+all: $(CENSUS) $(DEEDS) $(PARCELS) $(PARCELSDERIVEDFEATURES) $(SUBSET1) $(TRANSACTIONS) 
+$(CENSUS): census.R InitializeR.R
 	Rscript census.R
 
-$(DEEDS): deeds-al.R
+$(DEEDS): deeds-al.R InitializeR.R PRICATCODE.R Printf.R
 	Rscript deeds-al.R
 
-$(PARCELS): parcels-sfr.R
+$(PARCELS): parcels-sfr.R InitializeR.R LUSEI.R Printf.R
 	Rscript parcels-sfr.R
 
-$(PARCELS_DERIVED_FEATURES): parcels-derived-features.R
+$(PARCELS_DERIVED_FEATURES): parcels-derived-features.R LUSEI.R PROPN.R Printf.F
 	Rscript parcels-derived-features.R
 
-$(SUBSET1): transactions-subset1.R $(TRANSACTIONS)
+$(SUBSET1): transactions-subset1.R \
+	InitializeR.R DEEDC.R LUSEI.R PRICATCODE.R PROPN.R SCODE.R SLMLT.R TRNTP.R \
+	$(TRANSACTIONS)
 	Rscript transactions-subset1.R
 
-$(TRANSACTIONS): transactions-al-sfr.R $(CENSUS) $(DEEDS) $(PARCELS) $(PARCELSDERIVEDFEATURES)
+$(TRANSACTIONS): transactions-al-sfr.R \
+	InitializeR.R BestApns.R \
+	$(CENSUS) $(DEEDS) $(PARCELS) $(PARCELSDERIVEDFEATURES)
 	Rscript transactions-al-sfr.R
