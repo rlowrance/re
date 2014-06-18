@@ -29,6 +29,9 @@ InitializeR(start.JIT = FALSE,
             duplex.output.to = control$path.log)
 
 # Source other files here, now that the JIT level is set.
+source('CompressFile.R')
+source('Printf.R')
+
 source('DEEDC.R')
 source('LUSEI.R')
 source('PRICATCODE.R')
@@ -52,7 +55,7 @@ ReadAllTransactions <- function(control) {
                     stringsAsFactors=FALSE,
                     sep='\t',
                     nrows=ifelse(control$testing, control$testing.nrow, -1)) 
-    cat('ending ReadAllTransactions', nrow(all), '\n'); browser()
+    cat('ending ReadAllTransactions', nrow(all), '\n')# browser()
     all
 }
 
@@ -292,7 +295,6 @@ FormSubset <- function(df) {
                 ok.geocoding
 
     cat(' ALL FIELDS EXCLUDED', nrow.df - sum(all.good), '\n')
-    browser()
 
     df[all.good, ]
 }
@@ -340,15 +342,14 @@ Main <- function(control) {
     # maybe compress the output
     #cat('maybe compress output', nrow(all$df), '\n'); browser()
     if (control$compress == 'only') {
-        command <- paste('gzip', '--force', control$path.out)
-        system(command)
+        CompressFile(old.name = control$path.out,
+                     new.name = control$path.out)
     } else if (control$compress == 'also') {
-        command.1 <- paste('gzip --to-stdout', control$path.out) 
-        command.2 <- paste('cat - >', paste0(control$path.out, '.gz'))
-        command <- paste(command.1, '|', command.2)
-        system(command)
+        CompressFile(old.name = control$path.out,
+                     new.name = paste0(control$path.out, '.gz'))
     }
 
+    Printf('wrote %d observations\n', nrow(df))
     WriteControl(control)
 }
 
