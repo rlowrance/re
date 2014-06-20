@@ -314,6 +314,13 @@ WriteControl <- function(control) {
     }
 }
 
+RecodeRecordingDate <- function(recordingDate) {
+    # replace YYYYMM00 with YYYYMM15 where recordingDate is an int
+    day <- recordingDate %% 100
+    result <- ifelse(day == 0, recordingDate + 15, recordingDate)
+    result
+}
+
 Main <- function(control) {
     #cat('starting Main\n') ; browser()
     WriteControl(control)
@@ -324,6 +331,9 @@ Main <- function(control) {
     str(df)
     print(summary(df))
     cat('read all transactions', nrow(df), '\n')
+
+    # recoded RECORDING.DATE
+    df$RECORDING.DATE <- RecodeRecordingDate(df$RECORDING.DATE)
 
     # form the subset we are interested in
     df <- FormSubset(df)
