@@ -242,10 +242,9 @@ OkGeocoding <- function(df) {
     (df$G.LATITUDE != 0) & (df$G.LONGITUDE != 0)
 }
 
-OkRecordedDate <- function(df) {
+OkRecordingDate <- function(df) {
     # there is a recorded date
-    cat('starting OkRecordedDate', nrow(df), '\n'); browser()
-    !is.na(df$RecordedDate)
+    !is.na(df$RECORDING.DATE)
 }
 
 FormSubset <- function(df) {
@@ -267,7 +266,7 @@ FormSubset <- function(df) {
         selector.vector
     }
 
-    ok.recordeding.date <- c('recorded date', OkRecordedDate(df))
+    ok.recording.date <- c('recorded date', OkRecordingDate(df))
     ok.sale.amount <- c('sale amount', OkSaleAmount(df))
     ok.document.type.code <- c('doc type', OkDocumentTypeCode(df))
     ok.transaction.type.code <- c('tran type', OkTransactionTypeCode(df))
@@ -286,7 +285,7 @@ FormSubset <- function(df) {
 
     # determine all observations excluded
     all.good <- 
-        ok.recorded.date &
+        ok.recording.date &
         ok.sale.amount & 
         ok.document.type.code &
         ok.transaction.type.code &
