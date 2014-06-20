@@ -92,6 +92,7 @@ ReadDeeds <- function(control) {
                           MORTGAGE.DUE.DATE, MORTGAGE.ASSUMPTION.AMOUNT,
                           X2ND.MORTGAGE.AMOUNT, X2ND.MORTGAGE.LOAN.TYPE.CODE,
                           X2ND.MORTGAGE.DEED.TYPE.CODE,
+                          RESALE.NEW.CONSTRUCTION.CODE,
                           # don't keep prior sale info
                           # don't keep taxroll data
                           deed.file.number, deed.record.number)
