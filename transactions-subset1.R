@@ -242,6 +242,12 @@ OkGeocoding <- function(df) {
     (df$G.LATITUDE != 0) & (df$G.LONGITUDE != 0)
 }
 
+OkRecordedDate <- function(df) {
+    # there is a recorded date
+    cat('starting OkRecordedDate', nrow(df), '\n'); browser()
+    !is.na(df$RecordedDate)
+}
+
 FormSubset <- function(df) {
     # form the subset we are interested in
     # ARGS
@@ -261,6 +267,7 @@ FormSubset <- function(df) {
         selector.vector
     }
 
+    ok.recordeding.date <- c('recorded date', OkRecordedDate(df))
     ok.sale.amount <- c('sale amount', OkSaleAmount(df))
     ok.document.type.code <- c('doc type', OkDocumentTypeCode(df))
     ok.transaction.type.code <- c('tran type', OkTransactionTypeCode(df))
@@ -278,21 +285,23 @@ FormSubset <- function(df) {
     ok.geocoding <- c('geocoding', OkGeocoding(df))
 
     # determine all observations excluded
-    all.good <- ok.sale.amount & 
-                ok.document.type.code &
-                ok.transaction.type.code &
-                ok.sale.code &
-                is.one.parcel &
-                is.one.building &
-                ok.assessed.value &
-                ok.land.square.footage &
-                ok.universal.building.square.feet &
-                ok.living.square.feet &
-                ok.year.built &
-                ok.effective.year.built &
-                ok.total.rooms &
-                ok.units.number &
-                ok.geocoding
+    all.good <- 
+        ok.recorded.date &
+        ok.sale.amount & 
+        ok.document.type.code &
+        ok.transaction.type.code &
+        ok.sale.code &
+        is.one.parcel &
+        is.one.building &
+        ok.assessed.value &
+        ok.land.square.footage &
+        ok.universal.building.square.feet &
+        ok.living.square.feet &
+        ok.year.built &
+        ok.effective.year.built &
+        ok.total.rooms &
+        ok.units.number &
+        ok.geocoding
 
     cat(' ALL FIELDS EXCLUDED', nrow.df - sum(all.good), '\n')
 
