@@ -1,4 +1,5 @@
-# ReadAndTransformTransaction.R
+source('Center.R')
+source('SplitDate.R')
 ReadAndTransformTransactions <- function(path.in, nrows, verbose) {
   # read a transactions CSV file and transform its features
   # ARGS:
@@ -48,7 +49,6 @@ ReadAndTransformTransactions <- function(path.in, nrows, verbose) {
   # In addition to Chopra's features, also return these features
   # SALE.DAY, SALE.MONTH, SALE.YEAR
     cat('reading all transactions\n')
-    nrows <- 1000
     raw <- read.table(path.in,
                       header=TRUE,
                       sep="\t",
@@ -61,6 +61,9 @@ ReadAndTransformTransactions <- function(path.in, nrows, verbose) {
         print(summary(raw))
     }
     
+    recordingDate <- as.Date(as.character(raw$RECORDING.DATE),
+                             format = '%Y%m%d')
+
     # convert transaction.date from string (factor) to Date
     saleDate <- as.Date(raw$transaction.date)
  
@@ -96,13 +99,18 @@ ReadAndTransformTransactions <- function(path.in, nrows, verbose) {
 
 
     # return just the features needed, to reduce memory requirements
-    cat('nrows', nrow(raw), nrow(splitDate), '\n'); browser()
+    #cat('nrows', nrow(raw), length(splitDate$day), '\n'); browser()
+    stopifnot(nrow(raw) == length(splitDate$day))
+
+    result <-
     data.frame(apn = raw$apn.recoded,
 
                sale.day = splitDate$day,
                sale.month = splitDate$month,
                sale.year = splitDate$year,
-               saleDate = saleDate,              # as a Date object
+               saleDate = saleDate,
+
+               recordingDate = recordingDate,
 
                price = raw$SALE.AMOUNT,
                log.price = log(raw$SALE.AMOUNT),
@@ -164,7 +172,6 @@ ReadAndTransformTransactions <- function(path.in, nrows, verbose) {
                fraction.improvement.value = fraction.improvement.value,
                centered.fraction.improvement.value = Center(fraction.improvement.value),
 
-               # features of census tract and zip5 locations
                census.tract.has.industry = raw$census.tract.has.industry,
                census.tract.has.park = raw$census.tract.has.park,
                census.tract.has.retail = raw$census.tract.has.retail,
@@ -175,4 +182,5 @@ ReadAndTransformTransactions <- function(path.in, nrows, verbose) {
                zip5.has.retail = raw$zip5.has.retail,
                zip5.has.school = raw$zip5.has.school
                )
+    result
 }
