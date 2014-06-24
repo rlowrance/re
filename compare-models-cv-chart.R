@@ -65,11 +65,71 @@ AugmentControlVariables <- function(control) {
     result
 }
 
+
+
+Varying <- function(descriptions) {
+    # return chr vector of varying portions of names
+    #cat('starting Varying\n'); browser()
+
+    # pull out each field
+    scenario <- lapply(descriptions, function(x) x$scenario)
+    testing.period.first.date <- lapply(descriptions, function(x) x$testing.period$first.date)
+    testing.period.last.date <- lapply(descriptions, function(x) x$testing.period$last.date)
+    training.period <- lapply(descriptions, function(x) x$training.period)
+    model <- lapply(descriptions, function(x) x$model)
+    response <- lapply(descriptions, function(x) x$response)
+    predictors <- lapply(descriptions, function(x) x$predictors)
+
+    varying.values <- NULL
+    varying.names <- NULL
+
+    MaybeAppend <- function(name, values) {
+        #cat('starting MaybeAppend\n'); browser()
+        AllSame <- function(values) {
+            #cat('starting AllSame\n'); browser()
+            result <- all(values == values[[1]])
+            result
+        }
+        if (!AllSame(values)) {
+            #cat('not all same'); browser()
+            n <- length(values)
+            if (is.null(varying.values)) {
+                lapply(1:n, function(i) varying.values[[i]] <<- values[[i]])
+            } else {
+                lapply(1:n, function(i) varying.values[[i]] <<- paste(varying.values[[i]], values[[i]]))
+            }
+            varying.names <<- paste(varying.names, name)
+            if (FALSE) {
+                print('varying.values'); print(varying.values)
+                print('varying.names'); print(varying.names)
+            }
+        }
+    }
+
+    # build up varying and varying.names to be just the fields that are not all the same
+    MaybeAppend('scenario', scenario)
+    MaybeAppend('testing.period.first.date', testing.period.first.date)
+    MaybeAppend('testing.period.last.date', testing.period.last.date)
+    MaybeAppend('training.period', training.period)
+    MaybeAppend('model', model)
+    MaybeAppend('response', response)
+    MaybeAppend('predictors', predictors)
+
+    result <- list(values = varying.values, names = varying.names)
+    result
+}
+
 CvChart <- function(driver.result) {
     # produce plot showing descriptions, mean RMSEs, and fractions within 10 percent
     cat('starting CvChart\n'); print(names(driver.result)); browser()
     cv.result <- driver.result$cv.result
+
+    # pull out each description component
     descriptions <- driver.result$descriptions
+    varying <- Varying(descriptions)
+    varying.values <- varying$values
+    varying.names <- varying$names
+    
 
     best.model.index <- cv.result$best.model.index
     all.results <- cv.result$all.results
@@ -81,6 +141,9 @@ CvChart <- function(driver.result) {
     mean.within.10.percent <- 
         lapply(1:nmodels,
                function(x) mean(all.results[all.results$model.index == x, 'evaluation.within.10.percent']))
+
+    
+    cat('in CvChart: create chart!\n'); browser()
 
 
     cat('in CvChart\n'); browser()
