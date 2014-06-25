@@ -166,7 +166,7 @@ SumByJob <- function(df) {
 }
 
 
-TimeByJob <- function(message, df, first.date, last.date) {
+TimeByJob <- function(message, df, first.date, last.date, skipBreak = TRUE) {
     #cat('starting TimeByJob', message, first.date, last.date, '\n'); browser()
     if (FALSE && message == 'last 7 days') {
         cat('starting TimeByJob', message, first.date, last.date, '\n')
@@ -190,6 +190,10 @@ TimeByJob <- function(message, df, first.date, last.date) {
     per.day <- 
         data.frame(job = sums$job,
                    hours.per.day = (sums$total.elapsed.minutes / 60 / as.numeric(elapsed.days)))
+    if (skipBreak) {
+        per.day <- subset(per.day,
+                          subset = job != 'break')
+    }
     print(per.day)
     #cat('ending TimeByJob\n'); browser()
 }
@@ -213,6 +217,7 @@ Main <- function(control) {
     #cat('in Main creating reports\n'); browser()
 
     TimeByJob('today', df, current.date, current.date)
+    TimeByJob('yesterday', df, current.date, current.date)
     TimeByJob('last 7 days', df, current.date - 7, current.date)
     TimeByJob('last 30 days', df, current.date - 29, current.date)
 
