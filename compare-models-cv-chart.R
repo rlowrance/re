@@ -136,15 +136,105 @@ CvChart <- function(driver.result) {
 
     nmodels <- max(all.results$model.index)
     mean.rmse <- 
-        lapply(1:nmodels,
-               function(x) mean(all.results[all.results$model.index == x, 'evaluation.rmse']))
+        sapply(1:nmodels,
+               function(x) mean(subset(all.results,
+                                       subset = model.index == x,
+                                       select = 'evaluation.rmse',
+                                       drop = TRUE)))
+    
     mean.within.10.percent <- 
-        lapply(1:nmodels,
-               function(x) mean(all.results[all.results$model.index == x, 'evaluation.within.10.percent']))
+        sapply(1:nmodels,
+               function(x) mean(subset(all.results,
+                                       subset = model.index == x,
+                                       select = 'evaluation.within.10.percent',
+                                       drop = TRUE)))
 
     
-    cat('in CvChart: create chart!\n'); browser()
+    # set g to the graphic
+    Graphic1 <- function() {
+        # one facet with only mean RMSE
+        data <- data.frame(model = factor(varying.values, rev(varying.values)),
+                           mean.rmse = mean.rmse,
+                           mean.within.10.percent = mean.within.10.percent)
 
+        # ref RGC = R Graphics Cookbook
+        # Make a Cleveland plot (RGC p 42)
+        gg <- ggplot(data,
+                     aes(x = mean.rmse, y = model))
+        g <- 
+            gg +
+            xlim(0, max(mean.rmse)) +  # RGC p 168
+            geom_segment(aes(yend = model), xend = 0, colour = 'grey50') +
+            geom_point(size = 3) +  # use larger dot
+            theme_bw() +
+            theme(panel.grid.major.x = element_blank(),
+                  panel.grid.minor.x = element_blank(),
+                  panel.grid.major.y = element_blank())  #  no horizontal grid lines
+    }
+
+    Graphic2 <- function() {
+        # 2 facets: mean rmse and mean fraction with in 10 percent
+        model.first.part <- factor(varying.values, rev(varying.values))
+        model <- c(model.first.part, model.first.part)
+        accuracy <- c(mean.rmse, mean.within.10.percent)
+        measurement <- c(rep('RMSE', 10), rep('Within 10%', 10))
+
+        data <- data.frame(model = model, 
+                           accuracy = accuracy, 
+                           measurement = measurement)
+        cat('in CVChart: created data\n'); browser()
+
+        gg <- ggplot(data,
+                     aes(x = accuracy, y = model))
+
+        g <-
+            gg +
+            geom_segment(aes(yend = model), colour = 'grey50') +
+            geom_point(size = 3) +  # use larger dot
+            facet_grid(. ~ measurement) +  # one row of subpanels
+            theme_bw()
+    }
+
+    Graphic3 <- function() {
+        # scatterplot
+        cat('starting cvChart::Graphic3\n'); browser()
+        varying.values.factors <- factor(varying.values, rev(varying.values))
+        best.model.name <- ifelse(min(mean.rmse) == mean.rmse,
+                                  varying.values,
+                                  ' ')
+        data <- data.frame(model = factor(varying.values, rev(varying.values)),
+                           best.model.name = best.model.name,
+                           mean.rmse = mean.rmse,
+                           mean.fraction.within.10.percent = mean.within.10.percent)
+        data$lowest.RMSE <- ifelse(mean.rmse == min(mean.rmse), TRUE, FALSE)
+        # labeling points see RGC p. 105
+        g1 <- ggplot(data, aes(x = mean.rmse, 
+                               y = mean.fraction.within.10.percent))
+        g2 <- g1 + geom_point(shape = 19)
+        g3 <- g2 + geom_text(aes(x = mean.rmse + 1000,   # adjust plot point
+                                 label=best.model.name), 
+                             hjust = 0,
+                             size=3)
+        g3
+    }
+
+
+    version <- 3
+    g <- switch(version,
+                Graphic1(),
+                Graphic2(),
+                Graphic3())
+    
+    # plot to a file
+    cat('in CvChart, g holds the plot\n'); browser()
+    display <- FALSE
+    if (display) {
+        X11()
+        print(g)
+    }
+    pdf(control$path.out.chart1, width = 7, height = 5)
+    print(g)
+    dev.off()
 
     cat('in CvChart\n'); browser()
     
