@@ -1,3 +1,5 @@
+dependencies-in-R-sources.makefile
+make-dependencies-log.txt
 bin
 db-*
 *~
