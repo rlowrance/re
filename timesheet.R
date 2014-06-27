@@ -217,7 +217,7 @@ Main <- function(control) {
     #cat('in Main creating reports\n'); browser()
 
     TimeByJob('today', df, current.date, current.date)
-    TimeByJob('yesterday', df, current.date, current.date)
+    TimeByJob('yesterday', df, current.date -1, current.date -1)
     TimeByJob('last 7 days', df, current.date - 7, current.date)
     TimeByJob('last 30 days', df, current.date - 29, current.date)
 
