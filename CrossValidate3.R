@@ -1,4 +1,4 @@
-source('AppendEach.R')
+Require('AppendEach')
 CrossValidate3 <- function(data, nfolds, models.params, verbose) {
     # perform cross validation
     # ARGS
