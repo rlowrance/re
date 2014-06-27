@@ -1,4 +1,4 @@
-source('Formula.R')
+Require('Formula')
 ModelLinear <- function(data, training.indices, testing.indices,
                         scenario,
                         training.period, testing.period,
