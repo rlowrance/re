@@ -9,7 +9,8 @@ WithinXPercent <- function(actual, estimated, precision = .10) {
     estimated.ok <- estimated[!na.indices]
     error <- actual.ok - estimated.ok
     relative.error <- error / actual.ok
-    sum(abs(relative.error) <= precision) / length(actual.ok)
+    result <- sum(abs(relative.error) <= precision) / length(actual.ok)
+    result
 }
 
 WithinXPercent.test <- function() {
@@ -17,7 +18,8 @@ WithinXPercent.test <- function() {
     estimated <- c(1.05, 20, NA)
     within <- WithinXPercent(actual, estimated)
     #cat('within', within, '\n')
-    stopifnot(all.equal(within, 1/2))
+    stopifnot(length(within) == 1)
+    stopifnot(within == 1/2)
 }
 
 WithinXPercent.test()
