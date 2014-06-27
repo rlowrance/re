@@ -1,3 +1,5 @@
+Require('Rmse')
+Require('WithinXPercent')
 Assess <- function(actuals, predictions) {
     # return RMSE and fraction within 10 percent for available values
     rmse <- Rmse(actual = actuals, 
