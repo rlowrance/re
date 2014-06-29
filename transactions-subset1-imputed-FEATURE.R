@@ -26,7 +26,7 @@ enableJIT(3)     # 3 ==> maximum JIT level
 # Source files here, now that the JIT level is set.
   
 source("BestApns.R")
-source("CrossValidate.R")
+source("CrossValidate1.R")
 source("DistancesEuclidean.R")
 source("KernelGaussian.R")
 source("Validate.R")
@@ -469,14 +469,14 @@ ImputeCrossValidate <- function(method,
   extra <- list(distanceFeatures=distanceFeatures,
                 targetFeature=targetFeature)
   split <- Split2(data, fractionTesting)
-  bestAlpha <- CrossValidate(split$training, 
-                             nfolds, 
-                             alphas, 
-                             TrainWeightedAverage,
-                             PredictWeightedAverage,
-                             LossWeightedAverage, 
-                             extra=extra, 
-                             verbose=1)
+  bestAlpha <- CrossValidate1(split$training, 
+                              nfolds, 
+                              alphas, 
+                              TrainWeightedAverage,
+                              PredictWeightedAverage,
+                              LossWeightedAverage, 
+                              extra=extra, 
+                              verbose=1)
   testingTrained <- TrainWeightedAverage(split$testing, bestAlpha, extra)
   testingPredictions <- 
     PredictWeightedAverage(testingTrained, split$testing, bestAlpha, extra)
@@ -611,7 +611,7 @@ ImputeValidate <- function(data,
 Impute.Test <- function() {
   # Unit test of ImputeOne
   verbose <- TRUE
-  source("CrossValidate.R")
+  source("CrossValidate1.R")
   #debug("CrossValidate")
   set.seed(1)
 
