@@ -1,16 +1,17 @@
 source('ListAppendEach.R')
-CrossValidate <- function(data, nfolds, models.params, Assess, verbose) {
+CrossValidate <- function(data, nfolds, Models, params, Assess, verbose) {
     # perform cross validation
     # ARGS
     # data           : a data frame
     # nfolds         : numeric scalar, number of folds (ex: 10)
-    # models.params  : a list of Models and parameters such that
-    #   models.params[[i]] = $Model, $param; and
-    #   $Model(data, training.indices, testing.indices, $param) returns a list $actual $prediction
-    #      where $actual     : numeric vector of values in the training set (never NA)
-    #            $prediction : numeric vector of predicts (possibly, NA)
+    # Models         : a list of functions such that calling the call
+    #                  Models[[i]](data, training.indices, testing.indices, params[[i]]) yields
+    #                  a list with elements $actual and $prediction
+    #                  where $actual     : numeric vector of values in the training set (never NA)
+    #                        $prediction : numeric vector of predicts (possibly NA)
+    # params         : list of arbitrary objects passed to each Models[[i]]
     # Assess         : function(actual, prediction) --> list $error.rate, $<other1>, ...
-    #                  evaluations of the actual and prediction results from a model
+    #                  yields evaluations of the actual and prediction results from a model
     #                  the best model is the one with the lowest error.rate
     #                  other values are returned in the data.frame all.result
     # verbose        : logical scalar, if true, we print more
@@ -18,11 +19,12 @@ CrossValidate <- function(data, nfolds, models.params, Assess, verbose) {
     # $best.model.index : index i of model with lowest error.rate
     # $all.assessment   : data.frame with $fold, $model.index, $error.rate $assessment.<Assess result name>
 
-    cat('starting CrossValidate', nrow(data), nfolds, length(models.params), '\n'); browser()
+    cat('starting CrossValidate', nrow(data), nfolds, length(Models), '\n'); browser()
 
+    stopifnot(length(Models) == length(params))
     stopifnot(nfolds <= nrow(data))
 
-    nmodels <- length(models.params)
+    nmodels <- length(Models)
 
     fold.indices = rep(1:nfolds, length.out=nrow(data))  # 1 2 ... nfold 1 2 ... nfold ...
 
@@ -45,9 +47,8 @@ CrossValidate <- function(data, nfolds, models.params, Assess, verbose) {
                 cat(sprintf('CrossValidate: determining error rate on model %d fold %d\n',
                             this.model.index, this.fold))
             }
-            Model.param <- models.params[[this.model.index]]
-            Model <- Model.param$Model
-            param <- Model.param$param
+            Model <- Models[[this.model.index]]
+            param <- params[[this.model.index]]
             model.result <- Model(data, is.training, is.testing, param)
 
             actual <- model.result$actual
@@ -130,9 +131,8 @@ CrossValidate.test <- function() {
         result
     }
 
-    models.params <- list(list(Model=Model, param = 1),
-                          list(Model=Model, param = 2),
-                          list(Model=Model, param = 3))
+    Models <- list(Model, Model, Model)
+    params <- list(1, 2, 3)
 
     MeanAbsError <- function(actual, prediction) {
         #cat('entering MeanAbsError\n'); browser()
@@ -161,7 +161,8 @@ CrossValidate.test <- function() {
 
     cv.result <- CrossValidate(data = data,
                                 nfolds = nfolds,
-                                models.params = models.params,
+                                Models = Models,
+                                params = params,
                                 Assess = Assess,
                                 verbose = verbose)
 
