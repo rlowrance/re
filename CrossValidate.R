@@ -1,248 +1,192 @@
-# CrossValidate.R edited on isolde
+Source('AppendEach.R')
+CrossValidate <- function(data, nfolds, models.params, Assess, verbose) {
+    # perform cross validation
+    # ARGS
+    # data           : a data frame
+    # nfolds         : numeric scalar, number of folds (ex: 10)
+    # models.params  : a list of Models and parameters such that
+    #   models.params[[i]] = $Model, $param; and
+    #   $Model(data, training.indices, testing.indices, $param) returns a list $actual $prediction
+    #      where $actual     : numeric vector of values in the training set (never NA)
+    #            $prediction : numeric vector of predicts (possibly, NA)
+    # Assess         : function(actual, prediction) --> list $error.rate, $<other1>, ...
+    #                  evaluations of the actual and prediction results from a model
+    #                  the best model is the one with the lowest error.rate
+    #                  other values are returned in the data.frame all.result
+    # verbose        : logical scalar, if true, we print more
+    # RETURNS a list
+    # $best.model.index : index i of model with lowest error.rate
+    # $all.assessment   : data.frame with $fold, $model.index, $error.rate $assessment.<Assess result name>
 
-CrossValidate <- function(df, nfolds, alphas, train, predict, loss, 
-                          extra=NULL, 
-                          verbose=1) {
-  # Perform cross validation to select best parameters.
-  #
-  # Args:
-  #
-  # df:  a data frame containing both input and target variables.
-  #
-  # nfolds: scalar number, the number of folds
-  #
-  # alphas: a list or vector; each element is an arbitrary object;
-  #   An element of alphas is passed to the train and predict functions.
-  #
-  # train(dfTrainingSubset, alpha, extra): Train a model with kth part of data
-  # removed.
-  #   dfTrainingSubset is the subset of rows in df not containing the kth fold.
-  #   alpha is one of the alphas.
-  #   extra is the argument passed to CrossValidate.
-  #   Value: an arbitrary object called "trained". #
-  # predict(trained, dfTestingSubset, alpha, extra): Predict using trained
-  # model
-  #   trained is a value returned by the train function.
-  #   dfTestingSubset is the subset of rows in df containing the kth fold.
-  #   alpha is one of the alphas.
-  #   extra is the argument passed to CrossValidate.
-  #   Value: a vector of predictions. The class of each element is arbitrary.
-  #
-  # loss(dfTestingSubset, predictions, extra): Determine losses from the
-  # predictions.
-  #   dfTestingSubset is the subset of rows in df containing the kth fold. It
-  #     contains the target feature.
-  #   predictions is the value of the predict function. It is a vector of 
-  #     predicted target values.
-  #   extra is the argument passed to CrossValidate.
-  #   Value: a vector of numbers, each a loss determined from the target
-  #     and prediction value.
-  #
-  # verbose: scalar integer, verbosity level; 
-  #   0 means no printing
-  #   1 means print average loss for each value of alpha
-  #   2 means print trace of computation
-  #
-  # Value: the element of the alphas that had the lowest average loss across
-  #   folds.
+    cat('starting CrossValidate', nrow(data), nfolds, length(models.params), '\n'); browser()
 
-  nfolds <- round(nfolds)
-  if (!(nfolds > 1))
-    stop("nfolds must be at least one")
-  n = nrow(df)
-  if (nfolds > n)
-    stop("nfolds is larger than number of observations")
-  
-  # randomly assign each observation in df to a fold numbered 1, 2, ..., nfolds
-  folds <- rep(1:nfolds, ceiling(n / nfolds))[1:n]
-  folds <- sample(folds)  # randomly permute
-  if (verbose >= 2) 
-    cat("CrossValidate: folds", folds, "\n")
-  
-  cv <- function(alpha) {
-    # determine average loss across folds using parameter alpha
-    # Args:
-    # alpha: one of the alphas
-    #
-    # Value: the average loss across the folds using parameter alpha
+    stopifnot(nfolds <= nrow(data))
 
-    if (verbose >= 1)
-      cat("CrossValidate: starting cv with alpha = ", alpha, "\n")
-    totalLoss <- 0
-    for (f in 1:nfolds) {
-      # determine loss across all observations in fold f
-      if (verbose >= 1)
-        cat("CrossValidate: cv working on fold", f, "\n")
-      
-      dfTrainingSubset <- df[folds != f, ]     # train on data not in the fold
-      dfTestingSubset <- df[folds == f, ]   # validate on data in the fold
-      if (verbose >= 2) {
-        cat(sprintf("CrossValidate: cv alpha %s f %d\n", alpha, f))
-        print("CrossValidate: dfTrainingSubset")
-        print(dfTrainingSubset)
-        print("CrossValidate: dfTestingSubset")
-        print(dfTestingSubset)
-      } 
-      trainedModel <- train(dfTrainingSubset, alpha, extra)
-      if (verbose >= 2) {
-        cat("CrossValidate: trainedModel\n")
-        browser()
-        print(trainedModel)
-      }
-      predictions <- predict(trainedModel, dfTestingSubset, alpha, extra)
-      if (verbose >= 2) {
-        cat("CrossValidate: head(predictions)\n")
-        print(head(predictions))
-      }
-      losses <- loss(dfTestingSubset, predictions, extra)
-      if (verbose >= 2) {
-        cat("CrossValidate: head(losses)\n")
-        print(head(losses))
-        cat("CrossValidate: total loss", sum(losses), "\n")
-      }
-      totalLoss <- totalLoss + sum(losses)
+    nmodels <- length(models.params)
+
+    fold.indices = rep(1:nfolds, length.out=nrow(data))  # 1 2 ... nfold 1 2 ... nfold ...
+
+    # assign each sample randomly to a fold
+    fold.1.to.n <- rep(1:nfolds, length.out=nrow(data))  # 1 2 ... nfold 1 2 ... nfold ...
+    fold <- sample(fold.1.to.n, nrow(data))
+
+    # accumulate results in these parallel vectors
+    all.fold <- NULL
+    all.model.index <- NULL
+    all.error.rate <- NULL
+    all.assessment <- NULL
+
+    # examine each fold and each model
+    for (this.fold in 1:nfolds) {
+        is.testing <- fold == this.fold
+        is.training <- !is.testing
+        for (this.model.index in 1:nmodels) {
+            if (verbose) {
+                cat(sprintf('CrossValidate: determining error rate on model %d fold %d\n',
+                            this.model.index, this.fold))
+            }
+            Model.param <- models.params[[this.model.index]]
+            Model <- Model.param$Model
+            param <- Model.param$param
+            model.result <- Model(data, is.training, is.testing, param)
+
+            actual <- model.result$actual
+            prediction <- model.result$prediction
+            this.assessment <- Assess(actual = actual, prediction = prediction)
+
+            # the first assessment is the one we use to decide the best model
+            this.error.rate <- this.assessment$error.rate
+            if (verbose) {
+                cat(sprintf('CrossValidate: error rate on model %d fold %d is %f\n',
+                            this.model.index, this.fold, this.error.rate))
+            }
+
+            # accumlate results
+            all.fold <- c(all.fold, this.fold)
+            all.model.index <- c(all.model.index, this.model.index)
+            all.error.rate <- c(all.error.rate, this.error.rate)
+            all.assessment <- AppendEach(all.assessment, this.assessment)
+        }
+    }   
+
+    # create data frame with all results for all models and folds
+    #cat('in CV: building all.results\n'); browser()
+    fold.assessment <- data.frame(fold = all.fold,
+                              model.index = all.model.index,
+                              error.rate = all.error.rate,
+                              assessment = all.assessment)
+    if (verbose) {
+        cat('fold.assessment\n')
+        str(fold.assessment)
+        print(fold.assessment)
     }
-    averageLoss <- totalLoss / n
-    if (verbose >= 1) {
-      cat(sprintf(paste("CrossValidate:",
-                        "average loss across folds for alpha = %s is %f\n"),
-                  alpha, averageLoss))
+
+    # determine best model to be the one with the lowest error rate on average across the folds
+    best.average.error.rate <- Inf
+    for (this.model.index in 1:nmodels) {
+        in.model <- fold.assessment$model.index == this.model.index
+        this.average.error.rate <- mean(fold.assessment$error.rate[in.model])
+        if (this.average.error.rate < best.average.error.rate) {
+            best.average.error.rate <- this.average.error.rate
+            best.model.index <- this.model.index
+        }
     }
-    averageLoss
-  }
-  #debug(cv)
-  
-  # determine alpha with lowest average loss
-  bestAlpha <- NULL
-  minAverageLoss <- Inf
-  for (alphaIndex in 1:length(alphas)) {
-    alpha <- alphas[alphaIndex]
-    avgLoss <- cv(alpha)
-    if (avgLoss < minAverageLoss) {
-      bestAlpha <- alpha
-      minAverageLoss <- avgLoss
-    }
-  }
-  
-  if (verbose >= 1) {
-    cat(sprintf("CrossValidate: alpha with lowest average loss is %s\n",
-                bestAlpha)) 
-  }
-  
-  bestAlpha
+
+    result <- list (best.model.index = best.model.index,
+                    fold.assessment = fold.assessment)
+    result
 }
 
-CrossValidate.Test <- function() {
-  # Unit test
-  # Guess the majority color without looking at the training data
-  verbose <- FALSE
-  
-  set.seed(1)
+CrossValidate.test <- function() {
+    # unit test
+    verbose <- FALSE
+    data <- data.frame(x = c(1,2,3),
+                       y = c(10,20,30))
+    nfolds <- 2
+    nModels <- 3
 
-  # df:  a data frame containing both input and target variables
-  # the majority are red
-  df <- data.frame(x=1:10,
-                   target=c(rep("red", 6), rep("blue", 4)))
-  df
+    Model <- function(model.data, training.indices, testing.indices, n) {
+        #cat('entering Model\n'); browser()
+        if (verbose) {
+            print(data)
+            print(training.indices)
+            print(testing.indices)
+        }
+        stopifnot(all(training.indices | testing.indices))
+        stopifnot(nrow(data) == nrow(model.data))
+        stopifnot(n <= nModels && n >= 1)
 
-  # nfolds: scalar number, number of folds
-  nfolds <- 3
-  
-  # alphas: a list or vector; each element is an arbitrary object;  
-  alphas <- c("red", "blue")   # red is the better guess (as its the majority)
-                   
-  # train(dfTrainingSubset, alpha, extra): Train a model with kth part of data
-  # removed
-  #   dfTrainingSubset is the subset of df not containing the kth fold.
-  #   alpha is one of the alphas.
-  #   extra is the argument passed to CrossValidate.
-  #   Value: an arbitrary object called "trained".
-  
-  trainingCall <- 0
-  train <- function(dfTrainingSubset, alphaValue, extra) {
-    # the trained model just memorizes the parameters
-    trainingCall <<- trainingCall + 1
-    if (extra != "abc")
-      stop("train: bad extra")
-    if (verbose) {
-      cat(sprintf("train call %d with alpha=%s\n", trainingCall, alphaValue))
-      print("dfTrainingSubset")
-      print(dfTrainingSubset)
+
+        Prediction <- function() {
+            #cat('starting Predition\n'); browser()
+            result <- switch(n,
+                             rep(n, 3),
+                             c(n, n, NA),
+                             c(n, NA, n))
+            result
+        }
+
+        result <- list(actual = data$x, prediction = Prediction())
+        result
     }
-    trained <- list(guess=alphaValue)  # the guess is alpha
-    if (verbose) {
-      print("trained")
-      print(trained)
+
+    models.params <- list(list(Model=Model, param = 1),
+                          list(Model=Model, param = 2),
+                          list(Model=Model, param = 3))
+
+    MeanAbsError <- function(actual, prediction) {
+        #cat('entering MeanAbsError\n'); browser()
+        good.prediction <- !is.na(prediction)
+        abs.error <- abs(actual[good.prediction] - prediction[good.prediction])
+        result <- mean(abs.error)
+        result
     }
-    trained
-  }
-  
-  # predict(trained, dfTestingSubset, alpha, extra): Predict using trained
-  # model.
-  #   trained is a value returned by the train function.
-  #   dfTestingSubset is the subset of df in the fold.
-  #   alpha is one of the alphas.
-  #   extra is the argument passed to CrossValidate.
-  #   Value: a vector of predictions. The class of element is arbitrary.
-  predictCall <- 0
-  predict <- function(trained, dfTestingSubset, alpha, extra) {
-    predictCall <<- predictCall + 1
-    if (verbose) {
-      cat(sprintf("predict call %d with alpha=%s\n", predictCall, alpha))
-      print("trained")
-      print(trained)
-      print("dfTestingSubset")
-      print(dfTestingSubset)
+
+    Coverage <- function(actual, prediction) {
+        #cat('entering Coverage\n'); browser()
+        result <- sum(!is.na(prediction)) / sum(!is.na(actual))
+        result
     }
-    if (extra != "abc")
-      stop("predict: bad extra")
-    predictions <- rep(trained$guess, nrow(dfTestingSubset))
-    if (verbose) {
-      print("predictions")
-      print(predictions)
+
+    Assess <- function(actual, prediction) {
+        #cat('entering Assess\n'); browser()
+        if (verbose) {
+            print(actual)
+            print(prediction)
+        }
+        result <- list(error.rate = MeanAbsError(actual = actual, prediction = prediction),
+                       coverage = Coverage(actual = actual, prediction = prediction))
+        result
     }
-    predictions
-  }
-  
-  # loss(dfTestingSubset, predictions): Determine losses from the
-  # predictions.
-  #   dfTestingSubset is the subset of df in the fold. Because df contains
-  #     the target feature, so does this variable.
-  #   predictions is the value of the predict function.
-  #   Value: a vector of numbers, each a loss determined from the target
-  #     and prediction value.
-  lossCall <- 0
-  loss <- function(dfTestingSubset, predictions, extra) {
-    lossCall <<- lossCall + 1
-    # use 0/1 loss
+
+    cv.result <- CrossValidate(data = data,
+                                nfolds = nfolds,
+                                models.params = models.params,
+                                Assess = Assess,
+                                verbose = verbose)
+
     if (verbose) {
-      cat("loss function")
-      print("targets") 
-      print(dfTestingSubset$target)
-      print("predictions") 
-      print(predictions)
+        print('cv.result')
+        print(cv.result)
     }
-    
-    errors <- dfTestingSubset$target != predictions
+    best.model.index <- cv.result$best.model.index
+    fold.assessment <- cv.result$fold.assessment
+    stopifnot(best.model.index == 2)
+    stopifnot(nrow(fold.assessment) == nfolds * nModels)
     if (verbose) {
-      print("errors")
-      print(errors)
+        fold.assessment.names <- names(fold.assessment)
+        print(fold.assessment.names)
     }
-    sum(errors)
-  }
-  
-  #debug(train)
-  #debug(predict)
-  #debug(loss) 
-  
-  extra <- "abc"
-  bestAlpha <-
-    CrossValidate(df, nfolds, alphas, train, predict, loss, extra, verbose=0)
-  if (verbose) cat("bestAlpha", bestAlpha, "\n")
-  if (bestAlpha != "red")
-    stop("FAILED UNIT TEST")
+
+    HasName <- function(str) {
+        stopifnot(!is.null(fold.assessment[[str]]))
+    }
+
+    HasName('fold')
+    HasName('model.index')
+    HasName('error.rate')
+    HasName('assessment.error.rate')
+    HasName('assessment.coverage')
 }
 
-#debug(CrossValidate)
-#debug(CrossValidate.Test)
-CrossValidate.Test()
+CrossValidate.test()
