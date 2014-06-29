@@ -1,4 +1,4 @@
-source('AppendEach.R')
+source('ListAppendEach.R')
 CrossValidate <- function(data, nfolds, models.params, Assess, verbose) {
     # perform cross validation
     # ARGS
@@ -65,7 +65,7 @@ CrossValidate <- function(data, nfolds, models.params, Assess, verbose) {
             all.fold <- c(all.fold, this.fold)
             all.model.index <- c(all.model.index, this.model.index)
             all.error.rate <- c(all.error.rate, this.error.rate)
-            all.assessment <- AppendEach(all.assessment, this.assessment)
+            all.assessment <- ListAppendEach(all.assessment, this.assessment)
         }
     }   
 
