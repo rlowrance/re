@@ -101,22 +101,25 @@ CrossValidate <- function(data, nfolds, Models, params, Assess, verbose) {
 CrossValidate.test <- function() {
     # unit test
     verbose <- FALSE
+    #verbose <- TRUE
     data <- data.frame(x = c(1,2,3),
                        y = c(10,20,30))
     nfolds <- 2
     nModels <- 3
 
-    Model <- function(model.data, training.indices, testing.indices, n) {
-        #cat('entering Model\n'); browser()
+    Model <- function(model.data, training.indices, testing.indices, param) {
         if (verbose) {
+            cat('entering Model\n'); browser()
             print(data)
             print(training.indices)
             print(testing.indices)
+            print(param)
         }
         stopifnot(all(training.indices | testing.indices))
         stopifnot(nrow(data) == nrow(model.data))
-        stopifnot(n <= nModels && n >= 1)
+        stopifnot(param$p <= nModels && param$p >= 1)
 
+        n <- param$p[[1]]
 
         Prediction <- function() {
             #cat('starting Predition\n'); browser()
@@ -132,7 +135,8 @@ CrossValidate.test <- function() {
     }
 
     Models <- list(Model, Model, Model)
-    params <- list(1, 2, 3)
+    params <- list(list(p = 1), list(p = 2), list(p = 3))
+    #cat('examine params\n'); print(params); browser()
 
     MeanAbsError <- function(actual, prediction) {
         #cat('entering MeanAbsError\n'); browser()
