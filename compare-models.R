@@ -6,10 +6,13 @@
 
 source('Require.R')  # read function definition file if function does not exist
 
-Require('ChartCompareCvRmse')
+Require('Assess')
 Require('CompareModelsCv01')
+Require('CrossValidate')
 Require('ExecutableName')
 Require('InitializeR')
+Require('ListAppendEach')
+Require('ListSplitNames')
 Require('Printf')
 Require('ReadAndTransformTransactions')
 Require('Rmse')
@@ -59,6 +62,8 @@ AugmentControlVariables <- function(control) {
                      sprintf('%02d', control$choice))
     result$path.out.log <- paste0(prefix, '-log.txt')
     result$path.out.driver.result <- paste0(prefix, '-', 'driver.result', '.rsave')
+    result$path.out.driver.result <- paste0(prefix, '.rsave')
+
 
     # control variables for all the experiments
     result$nfolds <- 10
@@ -73,38 +78,43 @@ AugmentControlVariables <- function(control) {
 
 
 Cv <- function(control, transformed.data) {
-    # perform one cross validation experiment
-    control$choice <- 1  # while testing, select the experiment
-    cat('starting Cv', control$choice, nrow(transformed.data), '\n'); browser()
+    # perform one cross validation experiment and return NULL
+    control$choice <- 1  # while testing, select the first experiment
+    #cat('starting Cv', control$choice, nrow(transformed.data), '\n'); browser()
 
-    driver <-
+    Driver <-
         switch(control$choice,
-               CompareModelsCv01 # assessor linear logprice chopra
-               )
-    stopifnot(driver != NULL)  # stop if control$choice out of range
+               CompareModelsCv01)  # assessor linear logprice chopra
+    stopifnot(!is.null(Driver))
 
-    driver.result <- driver(control, transformed.data)
-    cv.result <-driver.result$cv.result
-    descriptions <- driver.result$descriptions
+    Model.description <- Driver(control$testing.period, transformed.data)
+
+    Models <- lapply(Model.description, function(x) x$Model)
+    descriptions <- lapply(Model.description, function(x) x$description)
+
+    cv.result <- CrossValidate(data = transformed.data,
+                               nfolds = control$nfolds,
+                               Models = Models,
+                               Assess = Assess,
+                               verbose = TRUE)
 
     Printf('Cross Validation results\n')
 
     Printf('Experiment description\n')
     lapply(names(descriptions),
-           function(name)
-               PrintF(' %15s : %s\n', name, descriptions[[name]]))
+           function(name) Printf(' %15s : %s\n', name, description[[name]]))
     
     Printf('best model index %d\n', cv.result$best.model.index)
     Printf('models compared\n')
     print(cv.result)
 
-    # write driver result to files
-    save(driver.result, file = control$path.out.driver.result)
+    # write models and results to file
+    save(cv.result, Models, descriptions,
+         file = control$path.out.driver.result)
 
     # return NULL
     NULL
 }
-
 
 Main <- function(control, transformed.data) {
     # execute one command, return NULL
