@@ -1,19 +1,18 @@
 source('ListAppendEach.R')
-CrossValidate <- function(data, nfolds, Models, params, Assess, verbose) {
+CrossValidate <- function(data, nfolds, Models, Assess, verbose) {
     # perform cross validation
     # ARGS
     # data           : a data frame
     # nfolds         : numeric scalar, number of folds (ex: 10)
     # Models         : a list of functions such that calling the call
-    #                  Models[[i]](data, training.indices, testing.indices, params[[i]]) yields
+    #                  Models[[i]](data, training.indices, testing.indices) yields
     #                  a list with elements $actual and $prediction
     #                  where $actual     : numeric vector of values in the training set (never NA)
     #                        $prediction : numeric vector of predicts (possibly NA)
-    # params         : list of arbitrary objects passed to each Models[[i]]
-    # Assess         : function(actual, prediction) --> list $error.rate, $<other1>, ...
+    # Assess         : function(actual, prediction) --> list <error rates>
     #                  yields evaluations of the actual and prediction results from a model
-    #                  the best model is the one with the lowest error.rate
-    #                  other values are returned in the data.frame all.result
+    #                  the best model is the one with the lowest <error rates>[[1]]
+    #                  all <error rates> are returned in the data.frame all.result
     # verbose        : logical scalar, if true, we print more
     # RETURNS a list
     # $best.model.index : index i of model with lowest error.rate
@@ -21,7 +20,6 @@ CrossValidate <- function(data, nfolds, Models, params, Assess, verbose) {
 
     cat('starting CrossValidate', nrow(data), nfolds, length(Models), '\n'); browser()
 
-    stopifnot(length(Models) == length(params))
     stopifnot(nfolds <= nrow(data))
 
     nmodels <- length(Models)
@@ -48,15 +46,15 @@ CrossValidate <- function(data, nfolds, Models, params, Assess, verbose) {
                             this.model.index, this.fold))
             }
             Model <- Models[[this.model.index]]
-            param <- params[[this.model.index]]
-            model.result <- Model(data, is.training, is.testing, param)
+            model.result <- Model(data, is.training, is.testing)
 
             actual <- model.result$actual
             prediction <- model.result$prediction
             this.assessment <- Assess(actual = actual, prediction = prediction)
 
             # the first assessment is the one we use to decide the best model
-            this.error.rate <- this.assessment$error.rate
+            #cat('in CV, checking assessment\n'); browser()
+            this.error.rate <- this.assessment[[1]]  
             if (verbose) {
                 cat(sprintf('CrossValidate: error rate on model %d fold %d is %f\n',
                             this.model.index, this.fold, this.error.rate))
@@ -73,9 +71,9 @@ CrossValidate <- function(data, nfolds, Models, params, Assess, verbose) {
     # create data frame with all results for all models and folds
     #cat('in CV: building all.results\n'); browser()
     fold.assessment <- data.frame(fold = all.fold,
-                              model.index = all.model.index,
-                              error.rate = all.error.rate,
-                              assessment = all.assessment)
+                                  model.index = all.model.index,
+                                  error.rate = all.error.rate,
+                                  assessment = all.assessment)
     if (verbose) {
         cat('fold.assessment\n')
         str(fold.assessment)
@@ -107,36 +105,37 @@ CrossValidate.test <- function() {
     nfolds <- 2
     nModels <- 3
 
-    Model <- function(model.data, training.indices, testing.indices, param) {
-        if (verbose) {
-            cat('entering Model\n'); browser()
-            print(data)
-            print(training.indices)
-            print(testing.indices)
-            print(param)
-        }
-        stopifnot(all(training.indices | testing.indices))
-        stopifnot(nrow(data) == nrow(model.data))
-        stopifnot(param$p <= nModels && param$p >= 1)
+    MakeModel <- function(model.index) {
+        n <- model.index  # force evaluation, or this code doesn't work
 
-        n <- param$p[[1]]
+        Model <- function(model.data, training.indices, testing.indices) {
+            if (verbose) {
+                cat('entering Model\n'); browser()
+                print(data)
+                print(training.indices)
+                print(testing.indices)
+            }
+            stopifnot(all(training.indices | testing.indices))
+            stopifnot(nrow(data) == nrow(model.data))
 
-        Prediction <- function() {
-            #cat('starting Predition\n'); browser()
-            result <- switch(n,
-                             rep(n, 3),
-                             c(n, n, NA),
-                             c(n, NA, n))
+            Prediction <- function() {
+                #cat('starting Predition\n'); browser()
+                result <- switch(model.index,
+                                 rep(n, 3),
+                                 c(n, n, NA),
+                                 c(n, NA, n))
+                result
+            }
+
+            result <- list(actual = data$x, prediction = Prediction())
             result
         }
 
-        result <- list(actual = data$x, prediction = Prediction())
-        result
+        Model
     }
 
-    Models <- list(Model, Model, Model)
-    params <- list(list(p = 1), list(p = 2), list(p = 3))
-    #cat('examine params\n'); print(params); browser()
+    Models <- lapply(1:nModels, MakeModel)
+
 
     MeanAbsError <- function(actual, prediction) {
         #cat('entering MeanAbsError\n'); browser()
@@ -155,18 +154,19 @@ CrossValidate.test <- function() {
     Assess <- function(actual, prediction) {
         #cat('entering Assess\n'); browser()
         if (verbose) {
+            print('Assess')
             print(actual)
             print(prediction)
         }
         result <- list(error.rate = MeanAbsError(actual = actual, prediction = prediction),
                        coverage = Coverage(actual = actual, prediction = prediction))
+        if (verbose) {print(result$error.rate)}
         result
     }
 
     cv.result <- CrossValidate(data = data,
                                 nfolds = nfolds,
                                 Models = Models,
-                                params = params,
                                 Assess = Assess,
                                 verbose = verbose)
 
