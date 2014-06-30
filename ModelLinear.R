@@ -1,7 +1,10 @@
 Require('Formula')
-ModelLinear <- function(data, training.indices, testing.indices,
+ModelLinear <- function(data, 
+                        training.indices, 
+                        testing.indices,
                         scenario,
-                        training.period, testing.period,
+                        training.period, 
+                        testing.period,
                         features,
                         verbose.model) {
     # return list: $actuals (numeric vector), $predictions (numeric vector)
@@ -13,7 +16,6 @@ ModelLinear <- function(data, training.indices, testing.indices,
     # testing.indices  : selector vector; only these observations in data can be used for testing
     # scenario         : chr scalar, one of 'assessor', 'avm', 'mortgage'
     # training.period  : list of Date, $first.date, $last.date
-    # TrainingPeriod   : function() returning list $first.date $last.date
     # testing.period   : list of Date, $first.date, $last.date
     # features         : list of $response (chr scalar) $predictors (chr vector)
     # verbose.model    : logical, if true, print as we go
@@ -80,7 +82,7 @@ ModelLinear <- function(data, training.indices, testing.indices,
     Avm <- function() {
         # return list $predictions $actuals for the AVM scenario
         cat('starting ModelLinear::Avm\n'); browser()
-        visible.to.avm <- date$saleDate <= last.training.date
+        visible.to.avm <- date$recordingDate <= last.training.date
         result <- Lm(visible.to.avm)
         result
     }
