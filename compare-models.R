@@ -6,6 +6,8 @@
 
 source('Require.R')  # read function definition file if function does not exist
 
+library(ggplot2)
+
 Require('Assess')
 Require('CompareModelsCv01')
 Require('CrossValidate')
@@ -80,17 +82,19 @@ AugmentControlVariables <- function(control) {
 Cv <- function(control, transformed.data) {
     # perform one cross validation experiment and return NULL
     control$choice <- 1  # while testing, select the first experiment
-    #cat('starting Cv', control$choice, nrow(transformed.data), '\n'); browser()
+    cat('starting Cv', control$choice, nrow(transformed.data), '\n'); browser()
 
     Driver <-
         switch(control$choice,
                CompareModelsCv01)  # assessor linear logprice chopra
     stopifnot(!is.null(Driver))
 
-    Model.description <- Driver(control$testing.period, transformed.data)
+    Model.description.Tests <- Driver(control$testing.period, transformed.data)
 
-    Models <- lapply(Model.description, function(x) x$Model)
-    descriptions <- lapply(Model.description, function(x) x$description)
+    Models <- Model.description.Tests$Model
+    descriptions <- Model.description.Tests$description
+    Tests <- Model.description.Tests$Tests
+    
 
     cv.result <- CrossValidate(data = transformed.data,
                                nfolds = control$nfolds,
@@ -108,27 +112,101 @@ Cv <- function(control, transformed.data) {
     Printf('models compared\n')
     print(cv.result)
 
+    # Test hypotheses in the model
+    cat('test hypothesis in the model\n'); browser()
+    Print.Test.Result <- function(test.result) {
+        cat('Test hypothesis:', test.result$hypothesis, '\n')
+        cat('Passed?        :', test.result$passed, '\n')
+        cat('Support\n')
+        print(support)
+    }
+
+    Test.passed <- function(n) {
+        test.result <- Test[[n]](cv.result)
+        Print.Test.Result(test.result)
+        test.result$test.passed
+    }
+
+    test.results <- lapply(Tests, function(Test) Test(cv.result))
+    cat('in CV after running all Tests\n'); browser()
+    passed <- sapply(test.results, function(test.result) test.result$passed)
+
+
+    if (!all(passed)) {
+        msg <- 'AT LEAST ONE TEST FAILED'
+        cat(msg, '\n')
+        PrintFailedTest <- function(test.result) {
+            print('Failing Test')
+            print(test.result)
+        }
+        sapply(test.results, function(test.result) if (!test.result$passed) {PrintFailedTest(test.resuls)})
+        stop(msg)
+    }
+
     # write models and results to file
-    save(cv.result, Models, descriptions,
+    save(cv.result, Models, descriptions, Tests, test.results,
          file = control$path.out.driver.result)
 
     # return NULL
     NULL
 }
 
+An <- function(control, transformed.data) {
+    # perform one analysis
+    control$choice <- 1  # while developing, select the first analysis
+    cat('starting An', control$choice, nrow(transformed.data), '\n'); browser()
+
+    Require('CompareModelsAn01')
+
+    Driver <- 
+        switch(control$choice,
+               CompareModelsAn01)  # median price by month
+    stopifnot(!is.null(Driver))
+
+    an.result <- Driver(transformed.data)
+    cat('in An\n'); browser()
+    Printf('Analysis results\n')
+    print('an.result')
+
+
+    if (is(an.result, 'ggplot')) {
+        path.base <- paste0(control$dir.output,
+                           control$me,
+                           '-an',
+                           sprintf('-%02d', control$choice),
+                           '.pdf')
+        # print the plot 
+        pdf(file = path.base)  # R adds the .pdf suffix
+        print(an.result)
+        dev.off()
+
+        # save the an result
+        save(an.result, file = paste0(path.base, '.rsave'))
+    } else {
+        stop('class of an.result is not handled')
+    }
+}
+
 Main <- function(control, transformed.data) {
     # execute one command, return NULL
     control$what <- 'cv'  # while debugging
+    control$what <- 'an'
     #cat('starting Main', control$what, nrow(transformed.data), '\n'); browser()
 
 
     switch(control$what,
            cv = Cv(control, transformed.data),
+           an = An(control, transformed.data),
            plot = Plot(control, transformed.data))
 
     NULL
 }
 
+Restart <- function(what) {
+    control <- AugmentControlVariables(ParseCommandLineArguments(new.command.args))
+    control$what <- what
+    Main(control, transformed.data)
+}
 
 ###############################################################################
 # EXECUTION STARTS HERE
