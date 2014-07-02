@@ -7,7 +7,15 @@ ModelLinear <- function(data,
                         testing.period,
                         features,
                         verbose.model) {
-    # return list: $actuals (numeric vector), $predictions (numeric vector)
+    # linear model
+    # - train on data selected by training.indices and in training.period
+    # - test on data selected by testing.indices and in testing.period
+    # - for specified scenario and features
+
+    # Return list: 
+    # $actual               : num vector, possibly with NAs, actual values if available
+    # $prediction           : num vector, possibly with NAs, predicted values if available
+    # $num.training.samples : num scalar, number of training samples
     #   for linear model trained and tested on specified observations in data
     #   for the specified scenario. training period, testing period, and feature set
     # ARGS:
@@ -39,6 +47,7 @@ ModelLinear <- function(data,
             data$saleDate >= training.period$first.date &
             data$saleDate <= training.period$last.date
         selected.for.training <- training.indices & in.training.period & is.visible
+        num.training.samples <- sum(selected.for.training)
         stopifnot(sum(selected.for.training) > 0)
 
         the.formula <- Formula(features$response, features$predictors)
@@ -57,17 +66,19 @@ ModelLinear <- function(data,
         stopifnot(sum(selected.for.testing) > 0)
 
         newdata <- data[selected.for.testing,]
-        actuals <- newdata$price
-        predictions <- predict.lm(fitted, newdata)
+        actual <- newdata$price
+        prediction <- predict.lm(fitted, newdata)
 
         # adjust log.price to price
         if (features$response == 'log.price') {
-            predictions.returned <- exp(predictions)
+            prediction.returned <- exp(prediction)
         }  else {
-            predictions.returned <- predictions
+            prediction.returned <- prediction
         }
-
-        result <- list(actuals = actuals, predictions = predictions.returned)
+        
+        result <- list(actual = actual, 
+                       prediction = prediction.returned, 
+                       num.training.samples = num.training.samples)
         result
     }
 
