@@ -1,7 +1,7 @@
-CompareModelsAn01 <- function(data, verbose=FALSE) {
+CompareModelsAn01 <- function(data, showGraph=FALSE) {
     # determine median price by month
     # RETURN ggplot2 object
-    cat('starting CompareModelsAn01', nrow(data), '\n'); browser()
+    #cat('starting CompareModelsAn01', nrow(data), '\n'); browser()
 
     MedianPrice <- function(year, month) {
         # TODO: select columns and rows; compute median price
@@ -14,8 +14,7 @@ CompareModelsAn01 <- function(data, verbose=FALSE) {
 
     all.median.price <- NULL
     all.date <- NULL
-    all.date.str <- NULL
-    all.some.date.str <- NULL
+    all.month.str <- NULL
 
     for (year in 2006:2009) {
         last.month <- ifelse(year == 2009, 11, 12)
@@ -24,22 +23,24 @@ CompareModelsAn01 <- function(data, verbose=FALSE) {
 
             date.chr <- sprintf('%02d-%02d-01', year, month)
             date <- as.Date(date.chr, '%Y-%m-%d')
-            date.str <- sprintf('%04d-%02d', year, month)
+
+            month.str <- sprintf('%04d-%02d', year, month)
 
             all.median.price <- c(all.median.price, median.price)
             all.date <- c(all.date, date)
-            all.date.str <- c(all.date.str, date.str)
-            all.some.date.str <- c(all.some.date.str, ifelse(month==1, date.str, ' '))
+            all.month.str <- c(all.month.str, month.str)
         }
     }
 
-    cat('starting analysis\n'); browser()
+    #cat('starting analysis\n'); browser()
     analysis <- data.frame(date = all.date,
                            median.price = all.median.price)
 
-    analysis <- data.frame(stringsAsFactors = TRUE, 
-                           date = all.date.str,  # will be converted to factor
+    month.factor <- factor(all.month.str, levels=sort(all.month.str, decreasing = TRUE))
+    analysis <- data.frame(month = month.factor,
                            median.price = all.median.price)
+    print('analysis')
+    print(analysis)
 
 #    analysis <- data.frame(date = all.some.date.str,
 #                           median.price = all.median.price)
@@ -49,15 +50,10 @@ CompareModelsAn01 <- function(data, verbose=FALSE) {
     assumed.max.median.price <- 800000
     stopifnot(max(analysis$median.price) <= assumed.max.median.price)
     gg <- ggplot(analysis,
-                aes(x = median.price, y = date))
-    g <- gg + geom_point(size = 3) + xlim(0, assumed.max.median.price)
+                 aes(x = median.price, y = month))
+    g <- gg + geom_point(size = 3) + xlim(0, assumed.max.median.price) 
 
-    if (FALSE) {
-        gg <- ggplot(analysis,
-                     aes(x = rev(date), y = median.price))
-        g <- gg + geom_bar(stat='identity') + geom_text(aes(label = date), vjust = -0.2)
-    }
-    if (verbose) {
+    if (showGraph) {
         X11()
         print(g)
     }
