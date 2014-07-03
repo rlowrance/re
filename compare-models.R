@@ -9,6 +9,7 @@ source('Require.R')  # read function definition file if function does not exist
 library(ggplot2)
 
 Require('Assess')
+Require('CommandArgs')
 Require('CompareModelsCv01')
 Require('CrossValidate')
 Require('ExecutableName')
@@ -186,8 +187,6 @@ An <- function(control, transformed.data) {
 
 Main <- function(control, transformed.data) {
     # execute one command, return NULL
-    control$what <- 'cv'; control$choice <- 1  # while debugging
-    #control$what <- 'an'; control$choice < 1
     #cat('starting Main', control$what, nrow(transformed.data), '\n'); browser()
 
 
@@ -199,31 +198,12 @@ Main <- function(control, transformed.data) {
     NULL
 }
 
-Restart <- function(what) {
-    control <- AugmentControlVariables(ParseCommandLineArguments(new.command.args))
-    control$what <- what
-    Main(control, transformed.data)
-}
-
 ###############################################################################
 # EXECUTION STARTS HERE
 ###############################################################################
 
 # handle command line and setup control variables
-executable.name <- ExecutableName()
-if (executable.name == 'R') {
-    # create the command args
-    new.command.args <- list('--what', 'cv', '--choice', '1')
-} else if (executable.name == 'Rscript') {
-    # use actual command line
-    new.command.args <- commandArgs()
-} else {
-    print(commandArgs())
-    print(executable.name)
-    stop('unable to handle executable.name')
-}
-
-# setup control variables
+command.args <- CommandArgs(ifR = list('--what', 'cv', 'which', '01'))
 control <- AugmentControlVariables(ParseCommandLineArguments(new.command.args))
 
 # initilize R
