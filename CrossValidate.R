@@ -1,4 +1,5 @@
-source('ListAppendEach.R')
+source('Require.R')
+Require('ListAppendEach')
 CrossValidate <- function(data, nfolds, Models, Assess, verbose) {
     # perform cross validation
     # ARGS
