@@ -13,8 +13,6 @@ Require('CompareModelsCv01')
 Require('CrossValidate')
 Require('ExecutableName')
 Require('InitializeR')
-Require('ListAppendEach')
-Require('ListSplitNames')
 Require('Printf')
 Require('ReadAndTransformTransactions')
 Require('Rmse')
@@ -154,7 +152,7 @@ Cv <- function(control, transformed.data) {
 An <- function(control, transformed.data) {
     # perform one analysis
     control$choice <- 1  # while developing, select the first analysis
-    cat('starting An', control$choice, nrow(transformed.data), '\n'); browser()
+    #cat('starting An', control$choice, nrow(transformed.data), '\n'); browser()
 
     Require('CompareModelsAn01')
 
@@ -164,7 +162,7 @@ An <- function(control, transformed.data) {
     stopifnot(!is.null(Driver))
 
     an.result <- Driver(transformed.data)
-    cat('in An\n'); browser()
+    #cat('in An\n'); browser()
     Printf('Analysis results\n')
     print('an.result')
 
