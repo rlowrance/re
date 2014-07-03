@@ -1,13 +1,14 @@
-# compare-models.R
+# compare-model-cv-chart.R
 # Main program to create charts from the results of running compare-models
 # driven by command line arguments, which have this syntax
-# Rscript compare-models.R --what cv   --choice NUM   --> produce file OUTPUT/compare-models-NUM.txt
-#                          --what plot --choice NUM --> produce file OUTPUT/compare-models-plot-NUM.pdf
+# Rscript compare-models.R --what cv   --choice NUM   --> 
+#   produce file OUTPUT/compare-models-cv-chart-chart-NUM.pdf
 
 library(ggplot2)
 
 source('Require.R')  # read function definition file if function does not exist
 
+Require('CommandArgs')
 Require('InitializeR')
 Require('Printf')
 
@@ -53,7 +54,7 @@ AugmentControlVariables <- function(control) {
     prefix.in <- Prefix('compare-models')
     prefix.out <-Prefix(result$me)
 
-    result$path.in.driver.result <- paste0(prefix.in, '-driver.result.rsave')
+    result$path.in.driver.result <- paste0(prefix.in, '.rsave')
 
     result$path.out.log <- paste0(prefix.out, '-log.txt')
     result$path.out.chart1 <- paste0(prefix.out, '-chart1.pdf')
@@ -61,7 +62,7 @@ AugmentControlVariables <- function(control) {
     # control variables for all the experiments
 
     result$testing <- TRUE
-    #result$testing <- FALSE
+    result$testing <- FALSE
     result
 }
 
@@ -119,124 +120,88 @@ Varying <- function(descriptions) {
     result
 }
 
-CvChart <- function(driver.result) {
+CvChart <- function(cv.result, descriptions) {
     # produce plot showing descriptions, mean RMSEs, and fractions within 10 percent
-    cat('starting CvChart\n'); print(names(driver.result)); browser()
-    cv.result <- driver.result$cv.result
+    #cat('starting CvChart', length(cv.result), length(descriptions), '\n'); browser()
 
     # pull out each description component
-    descriptions <- driver.result$descriptions
     varying <- Varying(descriptions)
     varying.values <- varying$values
     varying.names <- varying$names
-    
 
     best.model.index <- cv.result$best.model.index
-    all.results <- cv.result$all.results
+    fold.assessment <- cv.result$fold.assessment
 
-    nmodels <- max(all.results$model.index)
+    nmodels <- max(fold.assessment$model.index)
+
     mean.rmse <- 
         sapply(1:nmodels,
-               function(x) mean(subset(all.results,
+               function(x) mean(subset(fold.assessment,
                                        subset = model.index == x,
-                                       select = 'evaluation.rmse',
+                                       select = 'assessment.rmse',
                                        drop = TRUE)))
     
     mean.within.10.percent <- 
         sapply(1:nmodels,
-               function(x) mean(subset(all.results,
+               function(x) mean(subset(fold.assessment,
                                        subset = model.index == x,
-                                       select = 'evaluation.within.10.percent',
+                                       select = 'assessment.within.10.percent',
                                        drop = TRUE)))
 
     
-    # set g to the graphic
-    Graphic1 <- function() {
-        # one facet with only mean RMSE
-        data <- data.frame(model = factor(varying.values, rev(varying.values)),
-                           mean.rmse = mean.rmse,
-                           mean.within.10.percent = mean.within.10.percent)
+    Graphic <- function() {
+        # scatterplot; show all labels;
+        # RETURN graphic
 
-        # ref RGC = R Graphics Cookbook
-        # Make a Cleveland plot (RGC p 42)
-        gg <- ggplot(data,
-                     aes(x = mean.rmse, y = model))
-        g <- 
-            gg +
-            xlim(0, max(mean.rmse)) +  # RGC p 168
-            geom_segment(aes(yend = model), xend = 0, colour = 'grey50') +
-            geom_point(size = 3) +  # use larger dot
-            theme_bw() +
-            theme(panel.grid.major.x = element_blank(),
-                  panel.grid.minor.x = element_blank(),
-                  panel.grid.major.y = element_blank())  #  no horizontal grid lines
-    }
-
-    Graphic2 <- function() {
-        # 2 facets: mean rmse and mean fraction with in 10 percent
-        model.first.part <- factor(varying.values, rev(varying.values))
-        model <- c(model.first.part, model.first.part)
-        accuracy <- c(mean.rmse, mean.within.10.percent)
-        measurement <- c(rep('RMSE', 10), rep('Within 10%', 10))
-
-        data <- data.frame(model = model, 
-                           accuracy = accuracy, 
-                           measurement = measurement)
-        cat('in CVChart: created data\n'); browser()
-
-        gg <- ggplot(data,
-                     aes(x = accuracy, y = model))
-
-        g <-
-            gg +
-            geom_segment(aes(yend = model), colour = 'grey50') +
-            geom_point(size = 3) +  # use larger dot
-            facet_grid(. ~ measurement) +  # one row of subpanels
-            theme_bw()
-    }
-
-    Graphic3 <- function() {
-        # scatterplot
-        cat('starting cvChart::Graphic3\n'); browser()
-        varying.values.factors <- factor(varying.values, rev(varying.values))
-        best.model.name <- ifelse(min(mean.rmse) == mean.rmse,
-                                  varying.values,
-                                  ' ')
-        data <- data.frame(model = factor(varying.values, rev(varying.values)),
-                           best.model.name = best.model.name,
+        #cat('starting cvChart::Graphic\n'); browser()
+        # an earlier version created a text label only for the best model
+        # the statement below is dead code
+#        best.model.name <- ifelse(min(mean.rmse) == mean.rmse,
+#                                  varying.values,
+#                                  ' ')
+        data <- data.frame(model.name = varying.values,
                            mean.rmse = mean.rmse,
                            mean.fraction.within.10.percent = mean.within.10.percent)
         data$lowest.RMSE <- ifelse(mean.rmse == min(mean.rmse), TRUE, FALSE)
         # labeling points see RGC p. 105
-        g1 <- ggplot(data, aes(x = mean.rmse, 
+        gg <- ggplot(data, aes(x = mean.rmse, 
                                y = mean.fraction.within.10.percent))
-        g2 <- g1 + geom_point(shape = 19)
-        g3 <- g2 + geom_text(aes(x = mean.rmse + 1000,   # adjust plot point
-                                 label=best.model.name), 
-                             hjust = 0,
-                             size=3)
-        g3
+        g <- 
+            gg +
+            geom_point(shape = 19) +
+            geom_text(aes(x = mean.rmse - 1000,   # adjust plot point
+                          y = mean.fraction.within.10.percent + .001,
+                          label=model.name), 
+                      hjust = 0,
+                      size=3) +
+            theme_bw() +
+            theme(panel.grid.major.x = element_blank(),
+                  panel.grid.minor.x = element_blank(),
+                  panel.grid.major.y = element_blank())  #  no horizontal grid lines
+        g
     }
 
 
-    version <- 3
-    g <- switch(version,
-                Graphic1(),
-                Graphic2(),
-                Graphic3())
+    g <- Graphic()
     
     # plot to a file
-    cat('in CvChart, g holds the plot\n'); browser()
+    #cat('in CvChart, g holds the plot\n'); browser()
     display <- FALSE
+    display <-TRUE
+    graphic.width <- 7  # inches
+    graphic.height <- 5  # inches
     if (display) {
-        X11()
+        X11(width = graphic.width, height = graphic.height)
         print(g)
+        # leave the device on, so that the user can view the graphic
+        #dev.off()
     }
-    pdf(control$path.out.chart1, width = 7, height = 5)
+    pdf(control$path.out.chart1, width = graphic.width, height = graphic.height)
     print(g)
     dev.off()
 
-    cat('in CvChart\n'); browser()
+    #cat('in CvChart\n'); browser()
+    NULL
     
 }
 
@@ -245,10 +210,14 @@ Cv <- function(control) {
     # create all the charts for experiment control$what control$choice
     #cat('starting Cv', control$choice, '\n'); browser()
 
+    cv.result <- NULL
+    descriptions <- NULL
     variables.loaded <- load(control$path.in.driver.result)
-    stopifnot(variables.loaded[[1]] == 'driver.result')
-    CvChart(driver.result)
-    NULL
+    stopifnot(!is.null(cv.result))  # I expect cv.result to have been loaded
+    stopifnot(!is.null(descriptions))
+    result <- CvChart(cv.result = cv.result,
+                      descriptions = descriptions)
+    result
 }
 
 
@@ -268,12 +237,7 @@ Main <- function(control) {
 ###############################################################################
 
 # handle command line and setup control variables
-ignore.command.line <- TRUE
-if (ignore.command.line) {
-    command.args <- list('--what', 'cv', '--choice', 1)
-} else {
-    command.args <- commandArgs()
-}
+command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '01'))
 
 control <- AugmentControlVariables(ParseCommandLineArguments(command.args))
 
