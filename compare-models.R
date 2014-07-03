@@ -79,8 +79,7 @@ AugmentControlVariables <- function(control) {
 
 Cv <- function(control, transformed.data) {
     # perform one cross validation experiment and return NULL
-    control$choice <- 1  # while testing, select the first experiment
-    cat('starting Cv', control$choice, nrow(transformed.data), '\n'); browser()
+    #cat('starting Cv', control$choice, nrow(transformed.data), '\n'); browser()
 
     Driver <-
         switch(control$choice,
@@ -111,7 +110,7 @@ Cv <- function(control, transformed.data) {
     print(cv.result)
 
     # Test hypotheses in the model
-    cat('test hypothesis in the model\n'); browser()
+    #cat('test hypothesis in the model\n'); browser()
     Print.Test.Result <- function(test.result) {
         cat('Test hypothesis:', test.result$hypothesis, '\n')
         cat('Passed?        :', test.result$passed, '\n')
@@ -126,7 +125,7 @@ Cv <- function(control, transformed.data) {
     }
 
     test.results <- lapply(Tests, function(Test) Test(cv.result))
-    cat('in CV after running all Tests\n'); browser()
+    #cat('in CV after running all Tests\n'); browser()
     passed <- sapply(test.results, function(test.result) test.result$passed)
 
 
@@ -187,8 +186,8 @@ An <- function(control, transformed.data) {
 
 Main <- function(control, transformed.data) {
     # execute one command, return NULL
-    control$what <- 'cv'  # while debugging
-    control$what <- 'an'
+    control$what <- 'cv'; control$choice <- 1  # while debugging
+    #control$what <- 'an'; control$choice < 1
     #cat('starting Main', control$what, nrow(transformed.data), '\n'); browser()
 
 
