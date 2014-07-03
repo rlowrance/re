@@ -164,17 +164,17 @@ An <- function(control, transformed.data) {
     an.result <- Driver(transformed.data)
     #cat('in An\n'); browser()
     Printf('Analysis results\n')
-    print('an.result')
+    print(an.result)
 
 
     if (is(an.result, 'ggplot')) {
+        #cat('in An\n'); browser()
         path.base <- paste0(control$dir.output,
                            control$me,
                            '-an',
-                           sprintf('-%02d', control$choice),
-                           '.pdf')
+                           sprintf('-%02d', control$choice))
         # print the plot 
-        pdf(file = path.base)  # R adds the .pdf suffix
+        pdf(file = paste0(path.base, '.pdf'), width = 14, height = 10)
         print(an.result)
         dev.off()
 
