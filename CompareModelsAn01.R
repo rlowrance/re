@@ -51,10 +51,17 @@ CompareModelsAn01 <- function(data, showGraph=FALSE) {
     stopifnot(max(analysis$median.price) <= assumed.max.median.price)
     gg <- ggplot(analysis,
                  aes(x = median.price, y = month))
-    g <- gg + geom_point(size = 3) + xlim(0, assumed.max.median.price) 
+    g <- 
+        gg + 
+        geom_point(size = 3) + 
+        xlim(0, assumed.max.median.price) 
+        theme_bw() +
+        theme(panel.grid.major.x = element_blank(),
+              panel.grid.minor.x = element_blank(),
+              panel.grid.major.y = element_blank())  #  no horizontal grid lines
 
     if (showGraph) {
-        X11()
+        X11(width = 14, height = 10)
         print(g)
     }
 
