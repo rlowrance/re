@@ -1,8 +1,8 @@
 # make-dependencies.R
 # Program to find all *.R source files and create a makefile with dependencies
 #
-# Dependencies are identified through either source('blah.R') or Require('blah') statements
-# on separate lines
+# Dependencies are identified through either sourceX('blah.R') or RequireX('blah') statements
+# on separate lines (but without the X, written to prevent identification)
 #
 # invoking
 # Rscript make-dependencies.R --filename DEPENDENCIES_FILE_NAME
@@ -42,8 +42,8 @@ AugmentControlVariables <- function(control) {
     result$me <- 'make-dependencies'
 
     # input/output
-    result$dir.output <- './'
-    result$path.out.dependencies <- paste0(result$dir.output, control$filename)
+    result$dir.output <- '../data/v6/output/'
+    result$path.out.dependencies <- paste0(control$filename)  # write to the src directory
     result$path.out.log <- paste0(result$dir.output, result$me, '-log.txt')
 
 
@@ -99,8 +99,8 @@ MaybeDependency  <- function(line) {
         result
     }
 
-    pattern.source.1 <- ".*source\\('(.*)'\\).*"
-    pattern.source.2 <- '.*source\\("(.*)"\\).*'
+    pattern.source.1 <- "^[[:blank:]]*source\\('(.*)'\\).*"
+    pattern.source.2 <- '^[[:blank:]]*source\\("(.*)"\\).*'
 
     found.source.1 <- Find(pattern.source.1)
     if (found.source.1$value) {
@@ -112,8 +112,8 @@ MaybeDependency  <- function(line) {
         return(found.source.2$match)
     }
 
-    pattern.require.1 <- ".*Require\\('(.*)'\\).*"
-    pattern.require.2 <- '.*Require\\("(.*)"\\).*'
+    pattern.require.1 <- "^[[:blank:]]*Require\\('(.*)'\\).*"
+    pattern.require.2 <- '^[[:blank:]]*Require\\("(.*)"\\).*'
 
     found.require.1 <- Find(pattern.require.1)
     if (found.require.1$value) {
@@ -129,12 +129,19 @@ MaybeDependency  <- function(line) {
 }
 
 MaybeDependency.test <- function() {
+    #cat('starting MaybeDependcy.test\n'); browser()
+    r <- MaybeDependency("     # found source('blah.R')")
+    stopifnot(is.null(r))
+
     r <- MaybeDependency("  source('abc.X') ")
     stopifnot(r == 'abc.X')
+
     r <- MaybeDependency('  Require("abc") ')
     stopifnot(r == 'abc.R')
+
     r <- MaybeDependency("")
     stopifnot(is.null(r))
+
     r <- MaybeDependency("abc.R")
     stopifnot(is.null(r))
 }
@@ -162,6 +169,7 @@ AllDependencies.test <- function() {
 AllDependencies.test()
 
 
+
 Main <- function(control) {
     # confine I/O to the main function
     #cat('starting Main', length(control), '\n'); browser()
@@ -178,7 +186,10 @@ Main <- function(control) {
                               open = 'w')
     FindAndSaveDependencies <- function(filename) {
         # mutate dependencies by appending a line with all the dependencies for filename
-        #cat('starting FindAndSaveDependencies', filename, '\n'); browser()
+        if (FALSE && filename == 'make-dependencies.R') {
+            cat('starting FindAndSaveDependencies', filename, '\n'); browser()
+        }
+            
         all.lines <- readLines(con = filename)
         all.dependencies <- AllDependencies(all.lines)
         if (length(all.dependencies) > 0 ) {
@@ -206,12 +217,14 @@ Main <- function(control) {
 executable.name <- ExecutableName()
 new.command.args <-
     switch(executable.name,
-           R = list('--filename', 'dependencies-in-R-sources.makefile'),
+           R = list('--filename', 'dependencies-in-R-sources.generated'),
            Rscript = commandArgs(),  # actual command line
            stop('unable to handle executable.name'))
 
 # setup control variables
 control <- AugmentControlVariables(ParseCommandLineArguments(new.command.args))
+print('control\n')
+print(control)
 
 # initilize R
 InitializeR(start.JIT = FALSE,
