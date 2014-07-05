@@ -92,8 +92,8 @@ ModelLinear <- function(data,
 
     Avm <- function() {
         # return list $predictions $actuals for the AVM scenario
-        cat('starting ModelLinear::Avm\n'); browser()
-        visible.to.avm <- date$recordingDate <= last.training.date
+        #cat('starting ModelLinear::Avm\n'); browser()
+        visible.to.avm <- data$recordingDate <= training.period$last.date
         result <- Lm(visible.to.avm)
         result
     }
