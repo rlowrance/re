@@ -4,8 +4,9 @@
 OUTPUT=../data/v6/output
 TRANSACTIONS=$(OUTPUT)/transactions-subset1.csv.gz
 AN01=$(OUTPUT)/compare-models-an-01.pdf
-#CV01=$(OUTPUT)/compare-models-cv-01.rsave
-TARGETS=$(AN01) $(CV01)
+CV01=$(OUTPUT)/compare-models-cv-01.rsave
+CV02=$(OUTPUT)/compare-models-cv-02.rsave
+TARGETS=$(AN01) $(CV01) $(CV02)
 
 SOURCES=$(wildcard *.R)
 
@@ -28,6 +29,10 @@ $(AN01): compare-models.R CompareModelsAn01.R $(TRANSACTIONS)
 $(CV01): compare-models.R CompareModelsCv01.R $(TRANSACTIONS) 
 	Rscript compare-models.R --what cv --choice 01
 
+$(CV02): compare-models.R CompareModelsCv02.R $(TRANSACTIONS) 
+	Rscript compare-models.R --what cv --choice 02
+
+# souce file dependencies
 include dependencies-in-R-sources.generated
 #
 # Output info about each rule and why it was executed
