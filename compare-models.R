@@ -1,7 +1,7 @@
 # compare-models.R
 # Main program to compare models
 # driven by command line arguments, which have this syntax
-# Rscript compare-models.R --what cv   --choice NUM   --> produce file OUTPUT/compare-models-NUM.txt
+# Rscript compare-models.R --what cv   --choice NUM --> produce file OUTPUT/compare-models-NUM.txt
 #                          --what plot --choice NUM --> produce file OUTPUT/compare-models-plot-NUM.pdf
 
 source('Require.R')  # read function definition file if function does not exist
@@ -11,6 +11,7 @@ library(ggplot2)
 Require('Assess')
 Require('CommandArgs')
 Require('CompareModelsCv01')
+Require('CompareModelsCv02')
 Require('CrossValidate')
 Require('ExecutableName')
 Require('InitializeR')
@@ -23,7 +24,7 @@ ParseCommandLineArguments <- function(cl) {
     # parse command line into a list
     # ARGS
     # cl : chr vector of arguments in form --KEYWORD value
-    #cat('starting ParseCommandLine\n'); browser()
+    #cat('starting ParseCommandLineArguments\n'); browser()
     result <- list()
     cl.index <- 1
     while (cl.index < length(cl)) {
@@ -82,9 +83,58 @@ Cv <- function(control, transformed.data) {
     # perform one cross validation experiment and return NULL
     #cat('starting Cv', control$choice, nrow(transformed.data), '\n'); browser()
 
+    PrintCvResult <- function(cv.result) {
+        Printf('Cross Validation results\n')
+
+        Printf('Experiment description\n')
+        lapply(names(descriptions),
+               function(name) Printf(' %15s : %s\n', name, description[[name]]))
+
+        Printf('best model index %d\n', cv.result$best.model.index)
+        Printf('models compared\n')
+        print(cv.result)
+        NULL
+    }
+
+    TestHypotheses <- function(Tests, cv.result) {
+        # Test hypotheses in the model
+        #cat('compare-models::Cv::TestHypotheses', length(Tests), '\n'); browser()
+        Print.Test.Result <- function(test.result) {
+            cat('Test hypothesis:', test.result$hypothesis, '\n')
+            cat('Passed?        :', test.result$passed, '\n')
+            cat('Support\n')
+            print(support)
+        }
+
+        Test.passed <- function(n) {
+            test.result <- Test[[n]](cv.result)
+            Print.Test.Result(test.result)
+            test.result$test.passed
+        }
+
+        test.results <- lapply(Tests, function(Test) Test(cv.result))
+        #cat('in CV after running all Tests\n'); browser()
+        passed <- sapply(test.results, function(test.result) test.result$passed)
+
+
+        if (!all(passed)) {
+            msg <- 'AT LEAST ONE TEST FAILED'
+            cat(msg, '\n')
+            PrintFailedTest <- function(test.result) {
+                print('Failing Test')
+                print(test.result)
+            }
+            sapply(test.results, function(test.result) if (!test.result$passed) {PrintFailedTest(test.results)})
+            stop(msg)
+        }
+
+        test.results
+    }
+
     Driver <-
         switch(control$choice,
-               CompareModelsCv01)  # assessor linear logprice chopra
+               CompareModelsCv01,
+               CompareModelsCv02)  # assessor linear logprice chopra
     stopifnot(!is.null(Driver))
 
     Model.description.Tests <- Driver(control$testing.period, transformed.data)
@@ -92,54 +142,14 @@ Cv <- function(control, transformed.data) {
     Models <- Model.description.Tests$Model
     descriptions <- Model.description.Tests$description
     Tests <- Model.description.Tests$Tests
-    
 
     cv.result <- CrossValidate(data = transformed.data,
                                nfolds = control$nfolds,
                                Models = Models,
                                Assess = Assess,
                                verbose = TRUE)
-
-    Printf('Cross Validation results\n')
-
-    Printf('Experiment description\n')
-    lapply(names(descriptions),
-           function(name) Printf(' %15s : %s\n', name, description[[name]]))
-    
-    Printf('best model index %d\n', cv.result$best.model.index)
-    Printf('models compared\n')
-    print(cv.result)
-
-    # Test hypotheses in the model
-    #cat('test hypothesis in the model\n'); browser()
-    Print.Test.Result <- function(test.result) {
-        cat('Test hypothesis:', test.result$hypothesis, '\n')
-        cat('Passed?        :', test.result$passed, '\n')
-        cat('Support\n')
-        print(support)
-    }
-
-    Test.passed <- function(n) {
-        test.result <- Test[[n]](cv.result)
-        Print.Test.Result(test.result)
-        test.result$test.passed
-    }
-
-    test.results <- lapply(Tests, function(Test) Test(cv.result))
-    #cat('in CV after running all Tests\n'); browser()
-    passed <- sapply(test.results, function(test.result) test.result$passed)
-
-
-    if (!all(passed)) {
-        msg <- 'AT LEAST ONE TEST FAILED'
-        cat(msg, '\n')
-        PrintFailedTest <- function(test.result) {
-            print('Failing Test')
-            print(test.result)
-        }
-        sapply(test.results, function(test.result) if (!test.result$passed) {PrintFailedTest(test.resuls)})
-        stop(msg)
-    }
+    PrintCvResult(cv.result)
+    test.results <- TestHypotheses(Tests, cv.result)
 
     # write models and results to file
     save(cv.result, Models, descriptions, Tests, test.results,
@@ -187,7 +197,7 @@ An <- function(control, transformed.data) {
 
 Main <- function(control, transformed.data) {
     # execute one command, return NULL
-    #cat('starting Main', control$what, nrow(transformed.data), '\n'); browser()
+    #cat('starting Main', control$what, control$which, nrow(transformed.data), '\n'); browser()
 
 
     switch(control$what,
@@ -203,8 +213,9 @@ Main <- function(control, transformed.data) {
 ###############################################################################
 
 # handle command line and setup control variables
-command.args <- CommandArgs(ifR = list('--what', 'cv', 'which', '01'))
-control <- AugmentControlVariables(ParseCommandLineArguments(new.command.args))
+#command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '01'))
+command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '02'))
+control <- AugmentControlVariables(ParseCommandLineArguments(command.args))
 
 # initilize R
 InitializeR(start.JIT = FALSE,
