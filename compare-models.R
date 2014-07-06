@@ -10,8 +10,6 @@ library(ggplot2)
 
 Require('Assess')
 Require('CommandArgs')
-Require('CompareModelsCv01')
-Require('CompareModelsCv02')
 Require('CrossValidate')
 Require('ExecutableName')
 Require('InitializeR')
@@ -83,11 +81,11 @@ Cv <- function(control, transformed.data) {
     # perform one cross validation experiment and return NULL
     #cat('starting Cv', control$choice, nrow(transformed.data), '\n'); browser()
 
-    PrintCvResult <- function(cv.result) {
+    PrintCvResult <- function(cv.result, description) {
         Printf('Cross Validation results\n')
 
         Printf('Experiment description\n')
-        lapply(names(descriptions),
+        lapply(names(description),
                function(name) Printf(' %15s : %s\n', name, description[[name]]))
 
         Printf('best model index %d\n', cv.result$best.model.index)
@@ -131,28 +129,35 @@ Cv <- function(control, transformed.data) {
         test.results
     }
 
+    Require('CompareModelsCv01')
+    Require('CompareModelsCv02')
+    Require('CompareModelsCv03')
+    Require('CompareModelsCv04')
+
     Driver <-
         switch(control$choice,
-               CompareModelsCv01,
-               CompareModelsCv02)  # assessor linear logprice chopra
+               CompareModelsCv01,  # assessor linear log-log chopra
+               CompareModelsCv02,  # avm      linear log-log-chopra
+               CompareModelsCv03,  # mortgage linear log-log chopra
+               CompareModelsCv04)  # best of log-log chopra
     stopifnot(!is.null(Driver))
 
-    Model.description.Tests <- Driver(control$testing.period, transformed.data)
+    Model.description.Test <- Driver(control$testing.period, transformed.data)
 
-    Models <- Model.description.Tests$Model
-    descriptions <- Model.description.Tests$description
-    Tests <- Model.description.Tests$Tests
+    Model <- Model.description.Test$Model
+    description <- Model.description.Test$description
+    Test <- Model.description.Test$Test
 
     cv.result <- CrossValidate(data = transformed.data,
                                nfolds = control$nfolds,
-                               Models = Models,
+                               Models = Model,
                                Assess = Assess,
                                verbose = TRUE)
-    PrintCvResult(cv.result)
-    test.results <- TestHypotheses(Tests, cv.result)
+    PrintCvResult(cv.result, description)
+    test.results <- TestHypotheses(Test, cv.result)
 
     # write models and results to file
-    save(cv.result, Models, descriptions, Tests, test.results,
+    save(cv.result, Model, description, Test, test.results,
          file = control$path.out.driver.result)
 
     # return NULL
@@ -214,7 +219,9 @@ Main <- function(control, transformed.data) {
 
 # handle command line and setup control variables
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '01'))
-command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '02'))
+#command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '02'))
+#command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '03'))
+#command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '04'))
 control <- AugmentControlVariables(ParseCommandLineArguments(command.args))
 
 # initilize R
