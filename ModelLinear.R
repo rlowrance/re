@@ -1,4 +1,5 @@
 Require('Formula')
+Require('Printf')
 ModelLinear <- function(data, 
                         training.indices, 
                         testing.indices,
@@ -23,7 +24,8 @@ ModelLinear <- function(data,
     # training.indices : selector vector; only these observations in data can be used for training
     # testing.indices  : selector vector; only these observations in data can be used for testing
     # scenario         : chr scalar, one of 'assessor', 'avm', 'mortgage'
-    # training.period  : list of Date, $first.date, $last.date
+    # training.period  : list of Date, $first.date, $last.date or
+    #                    function(transaction.date) --> training.period for the transaction date
     # testing.period   : list of Date, $first.date, $last.date
     # features         : list of $response (chr scalar) $predictors (chr vector)
     # verbose.model    : logical, if true, print as we go
@@ -32,7 +34,7 @@ ModelLinear <- function(data,
         cat('starting ModelLinear',
             nrow(data), sum(training.indices), sum(testing.indices),
             scenario,
-            training.period$first.date, training.period$last.date,
+            class(training.period),
             testing.period$first.date, testing.period$last.date,
             features$response, length(features$predictors),
             '\n')
@@ -100,15 +102,10 @@ ModelLinear <- function(data,
 
     Mortgage <- function() {
         # return list $prediction $actuals for the mortgage scenario
-        cat('starting ModelLinear::Mortgage\n'); browser()
-        in.training.period <- 
-            data$saleDate >= training.period$first.date &
-            data$saleDate <= training.period$last.date
-        selected.for.training <- training.indices & in.training.period
-        stopifnot(sum(selected.for.training) > 0)
+        # NOTE: another design choice is to implement a local model for each testing transaction
+        #cat('starting ModelLinear::Mortgage\n'); browser()
 
-        the.formula = Formula(model.response, model.predictors)
-
+        the.formula <- Formula(features$response, features$predictors)
 
         # select samples in test period
         in.testing.period <- 
@@ -117,36 +114,40 @@ ModelLinear <- function(data,
         selected.for.testing <- testing.indices & in.testing.period
         stopifnot(sum(selected.for.testing) > 0)
 
-        # predict for the sample data[index]
+        # predict for the sample data[index] (a local model)
         Test1Mortgage <- function(index) {
-            fitted <- lm(data,
-                         formula = the.formula,
-                         subset = selected.for.training)
+            #cat('starting ModelLinear::Test1Mortgage', index, '\n'); browser()
+            my.training.period <- training.period(data$saleDate[[index]])
+            in.training.period <- 
+                data$saleDate >= my.training.period$first.date &
+                data$saleDate <= my.training.period$last.date
+               
+            selected.for.training <- training.indices & in.training.period
+
+            fitted <- lm(data[selected.for.training,],
+                         formula = the.formula)
             newdata <- data[index,]
-            actuals <- data[index, 'SALE.AMOUNT']
-            predictions <- predict.lm(fitted, newdata = newdata)
-            predictions.returned <- ifelse(features$response == 'log.price', exp(predictions), predictions)
+            actual <- data[index, 'price']
+            prediction <- predict.lm(fitted, newdata = newdata)
+            prediction.returned <- ifelse(features$response == 'log.price', exp(prediction), prediction)
 
-            result <- list(actuals = actuals, predictions = returned.predictions)
-            result
-        }
-
-        Rewrap <- function(lst) {
-            # convert list of elements $actuals $predictions to 2 lists
-            cat('starting Rewrap', length(lst), '\n'); browser()
-            actuals <- NULL
-            predictions <- NULL
-            for (element in lst) {
-                actuals <- c(actuals, element$actuals)
-                predictions <- c(predictions, element$predictions)
+            result <- list(actual = actual, prediction = prediction.returned)
+            if (verbose.model) {
+                Printf('mortgage index %d actual %7.0f prediction %7.0f\n',
+                       index, result$actual, result$prediction)
             }
-            result <- list(actuals = actuals, predictions = predictions)
             result
         }
 
         # predict each test sample using a model just for the sample
-        result <- lapply(which(selected.for.testing), Test1Mortgage)
-        result2 <- Rewrap(result)  # convert [[i]]$actuals $predictions to $actuals[[i]] $predictions[[i]]
+        testing.indices <- which(selected.for.testing)
+        if (verbose.model) {
+            Printf('mortgage has %d testing indices\n', length(testing.indices))
+        }
+        result <- lapply(testing.indices, Test1Mortgage)
+        actual <- sapply(result, function(x) x$actual)
+        prediction <- sapply(result, function(x) x$prediction)
+        result2 <- list(actual = actual, prediction = prediction)
         result2
     }
 
