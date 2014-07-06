@@ -120,12 +120,12 @@ Varying <- function(descriptions) {
     result
 }
 
-CvChart <- function(cv.result, descriptions) {
-    # produce plot showing descriptions, mean RMSEs, and fractions within 10 percent
-    #cat('starting CvChart', length(cv.result), length(descriptions), '\n'); browser()
+CvChart <- function(cv.result, description) {
+    # produce plot showing description, mean RMSEs, and fractions within 10 percent
+    cat('starting CvChart', length(cv.result), length(description), '\n'); browser()
 
     # pull out each description component
-    varying <- Varying(descriptions)
+    varying <- Varying(description)
     varying.values <- varying$values
     varying.names <- varying$names
 
@@ -208,15 +208,15 @@ CvChart <- function(cv.result, descriptions) {
 
 Cv <- function(control) {
     # create all the charts for experiment control$what control$choice
-    #cat('starting Cv', control$choice, '\n'); browser()
+    cat('starting Cv', control$choice, '\n'); browser()
 
     cv.result <- NULL
-    descriptions <- NULL
+    description <- NULL
     variables.loaded <- load(control$path.in.driver.result)
     stopifnot(!is.null(cv.result))  # I expect cv.result to have been loaded
-    stopifnot(!is.null(descriptions))
+    stopifnot(!is.null(description))
     result <- CvChart(cv.result = cv.result,
-                      descriptions = descriptions)
+                      description = description)
     result
 }
 
@@ -237,7 +237,7 @@ Main <- function(control) {
 ###############################################################################
 
 # handle command line and setup control variables
-command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '01'))
+command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '02'))
 
 control <- AugmentControlVariables(ParseCommandLineArguments(command.args))
 
