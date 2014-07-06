@@ -20,21 +20,49 @@ CompareModelsCv02 <- function(testing.period, transformed.data) {
     #                   $passed     : logical scalar, TRUE or FALSE
     #                   $support    : any object, provides evidence for $passed
 
-    #cat('starting CompareModelsCv02', testing.period$first.date, testing.period$last.date, nrow(transformed.data), '\n'); browser()
+    cat('starting CompareModelsCv02', testing.period$first.date, testing.period$last.date, nrow(transformed.data), '\n'); browser()
 
-    Require('CompareModelsCvLinear')
+    Require('PredictorsChopraCenteredLogAvm')
     Require('MakeTestBestModelIndex')
-    
+    Require('MakeModelLinear')
 
-    expected.best.model.index <- 2 
-    Test1 <- MakeTestBestModelIndex(expected.best.model.index = expected.best.model.index,
-                                    verbose = TRUE)
-    Test <- list(Test1)
+    MyTrainingDays <- function(model.index) {
+        30 * model.index  # 30 days per model index
+    }
 
-    result <- CompareModelsCvLinear(testing.period = testing.period,
-                                    transformed.data = transformed.data,
-                                    model.form = 'log.log',
-                                    scenario = 'avm',
-                                    Test = Test)
+    my.scenario <- 'avm'
+    my.response.var <- 'log.price'
+    my.predictors <- PredictorsChopraCenteredLogAvm()
+    my.predictors.name <- 'chopra centered log avm'
+
+    MyMakeModel <- function(model.index) {
+        Model <- MakeModelLinear(testing.period = testing.period,
+                                 data = transformed.data,
+                                 num.training.days = MyTrainingDays(model.index),
+                                 scenario = my.scenario,
+                                 response = my.response.var,
+                                 predictors = my.predictors)
+        Model
+    }
+
+    MyDescription <- function(model.index) {
+        # return description of model
+        #cat('starting CompareModelsCv02::MyDescription', model.index, '\n'); browser()
+        result <- 
+            list(scenario = my.scenario,
+                 testing.period = testing.period,
+                 training.period = sprintf('%d days before Dec 31', MyTrainingDays(model.index)),
+                 model = 'ModelLinear',
+                 response = my.response.var,
+                 predictors = my.predictors.name)
+        result
+    }
+
+    nModels <- 10
+    Model <- lapply(1:nModels, MyMakeModel)
+    description <- lapply(1:nModels, MyDescription)
+    Test <- list(MakeTestBestModelIndex(expected.best.model.index = 2))
+
+    result <- list(Model = Model, description = description, Test = Test)
     result
 }
