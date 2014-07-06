@@ -148,11 +148,12 @@ Cv <- function(control, transformed.data) {
     description <- Model.description.Test$description
     Test <- Model.description.Test$Test
 
+    experiment <- sprintf('CV%02d', control$choice)
     cv.result <- CrossValidate(data = transformed.data,
                                nfolds = control$nfolds,
                                Models = Model,
                                Assess = Assess,
-                               verbose = TRUE)
+                               experiment = experiment)
     PrintCvResult(cv.result, description)
     test.results <- TestHypotheses(Test, cv.result)
 
@@ -221,7 +222,7 @@ Main <- function(control, transformed.data) {
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '01'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '02'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '03'))
-#command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '04'))
+command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '04'))
 control <- AugmentControlVariables(ParseCommandLineArguments(command.args))
 
 # initilize R
