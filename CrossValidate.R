@@ -1,6 +1,6 @@
 source('Require.R')
 Require('ListAppendEach')
-CrossValidate <- function(data, nfolds, Models, Assess, verbose) {
+CrossValidate <- function(data, nfolds, Models, Assess, experiment = NULL) {
     # perform cross validation
     # ARGS
     # data           : a data frame
@@ -14,7 +14,9 @@ CrossValidate <- function(data, nfolds, Models, Assess, verbose) {
     #                  yields evaluations of the actual and prediction results from a model
     #                  the best model is the one with the lowest <error rates>[[1]]
     #                  all <error rates> are returned in the data.frame all.result
-    # verbose        : logical scalar, if true, we print more
+    # experiment     : chr scalar or NULL
+    #                  if not null, experiment name is printed when results are printed
+    #                  if null, runs without printing
     # RETURNS a list
     # $best.model.index : index i of model with lowest error.rate
     # $all.assessment   : data.frame with $fold, $model.index, $error.rate $assessment.<Assess result name>
@@ -22,6 +24,9 @@ CrossValidate <- function(data, nfolds, Models, Assess, verbose) {
     #cat('starting CrossValidate', nrow(data), nfolds, length(Models), '\n'); browser()
 
     stopifnot(nfolds <= nrow(data))
+    stopifnot(is.null(experiment) || is.character(experiment))
+
+    verbose <- is.character(experiment)
 
     nmodels <- length(Models)
 
@@ -43,8 +48,8 @@ CrossValidate <- function(data, nfolds, Models, Assess, verbose) {
         is.training <- !is.testing
         for (this.model.index in 1:nmodels) {
             if (verbose) {
-                cat(sprintf('CrossValidate: determining error rate on model %d fold %d\n',
-                            this.model.index, this.fold))
+                cat(sprintf('CrossValidate %s: determining error rate on model %d fold %d\n',
+                            experiment, this.model.index, this.fold))
             }
             Model <- Models[[this.model.index]]
             model.result <- Model(data, is.training, is.testing)
@@ -55,8 +60,8 @@ CrossValidate <- function(data, nfolds, Models, Assess, verbose) {
             this.error.rate <- this.assessment[[1]]  
             stopifnot(length(this.error.rate) == 1)
             if (verbose) {
-                cat(sprintf('CrossValidate: error rate on model %d fold %d is %f\n',
-                            this.model.index, this.fold, this.error.rate))
+                cat(sprintf('CrossValidate %s: error rate on model %d fold %d is %f\n',
+                            experiment, this.model.index, this.fold, this.error.rate))
             }
 
             # accumlate results
@@ -101,8 +106,11 @@ CrossValidate <- function(data, nfolds, Models, Assess, verbose) {
 
 CrossValidate.test <- function() {
     # unit test
-    verbose <- FALSE
-    #verbose <- TRUE
+
+    experiment <- NULL 
+    #experiment <- 'unit test'
+    verbose <- is.character(experiment)
+
     data <- data.frame(x = c(1,2,3),
                        y = c(10,20,30))
     nfolds <- 2
@@ -169,10 +177,10 @@ CrossValidate.test <- function() {
     }
 
     cv.result <- CrossValidate(data = data,
-                                nfolds = nfolds,
-                                Models = Models,
-                                Assess = Assess,
-                                verbose = verbose)
+                               nfolds = nfolds,
+                               Models = Models,
+                               Assess = Assess,
+                               experiment = NULL)
 
     if (verbose) {
         print('cv.result')
