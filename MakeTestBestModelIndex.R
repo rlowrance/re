@@ -29,7 +29,7 @@ MakeTestBestModelIndex <- function(expected.best.model.index, verbose = TRUE) {
             nModels <- max(fold.assessment$model.index)
             mean.rmse <- sapply(1:nModels, MeanRmse)
             for (i in 1:nModels) {
-                Printf('Test1: model %d mean.rmse %f\n', i, mean.rmse[[i]])
+                Printf('Test1: model %2d mean.rmse %f\n', i, mean.rmse[[i]])
             }
         }
 
