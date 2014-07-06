@@ -147,7 +147,7 @@ ModelLinear <- function(data,
         result <- lapply(testing.indices, Test1Mortgage)
         actual <- sapply(result, function(x) x$actual)
         prediction <- sapply(result, function(x) x$prediction)
-        result2 <- list(actual = actual, prediction = prediction)
+        result2 <- list(actual = actual, prediction = prediction, num.training.samples = 0)
         result2
     }
 
