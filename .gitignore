@@ -1,4 +1,6 @@
 dependencies-in-R-sources.makefile
+dependencies-in-R-sources.generated
+.Rapp.history
 make-dependencies-log.txt
 bin
 db-*
