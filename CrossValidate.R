@@ -54,6 +54,7 @@ CrossValidate <- function(data, nfolds, Models, Assess, experiment = NULL) {
             Model <- Models[[this.model.index]]
             model.result <- Model(data, is.training, is.testing)
             this.assessment <- Assess(model.result)
+            #cat('examine this.assessment in CrossValidate\n'); browser()
 
             # the first assessment is the one we use to decide the best model
             #cat('in CV, checking assessment\n'); browser()
@@ -65,7 +66,7 @@ CrossValidate <- function(data, nfolds, Models, Assess, experiment = NULL) {
             }
 
             # accumlate results
-            # NOTE: we through away the model.result, relying on the Assess function to
+            # NOTE: we throw away the model.result, relying on the Assess function to
             # reduce the model.result to a list of scalar values
             #cat('in CrossValidate, accumulate results\n'); browser()
             all.fold <- c(all.fold, this.fold)
