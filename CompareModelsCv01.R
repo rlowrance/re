@@ -25,79 +25,50 @@ CompareModelsCv01 <- function(testing.period, transformed.data) {
 
     cat('starting CompareModelsCv01', testing.period$first.date, testing.period$last.date, nrow(transformed.data), '\n'); browser()
 
-    Require('CompareModelsCvLinear')
+    Require('PredictorsChopraCenteredLogAssessor')
     Require('MakeTestBestModelIndex')
+    Require('MakeTestHigherWithinMoreObservations')
+    Require('MakeModelLinear')
 
-    # define test 1
-    expected.best.model.index <- 9
-    Test1 <- MakeTestBestModelIndex(expected.best.model.index = expected.best.model.index,
-                                    verbose = TRUE)
+    MyTrainingDays <- function(model.index) {
+        30 * model.index  # 30 days per model index
+    }
 
-    # define test 2
-    Test2 <- function(cv.result) {
-        # verify that models with higher (mean.within.10.percent) have more observations
-        # ARG:
-        # cv.result : the returned value from CrossValidate, which has these fields
-        #   $best.model.index : num scalar
-        #   $all.assessment   : data.frame
-        # RETURN a list satisfying the API for function Cv in compare-models.R
-        #   $hypothesis : char scalar
-        #   $passed     : logical scalar, TRUE caller will stop if not TRUE
-        #   $support    : arbitrary object that justified value of $passed
+    my.scenario <- 'assessor'
+    my.response.var <- 'log.price'
+    my.predictors <- PredictorsChopraCenteredLogAssessor()
+    my.predictors.name <- 'chopra centered log assessor'
 
-        #cat('starting Test2\n'); browser()
-        verbose <- FALSE
+    MyMakeModel <- function(model.index) {
+        Model <- MakeModelLinear(testing.period = testing.period,
+                                 data = transformed.data,
+                                 num.training.days = MyTrainingDays(model.index),
+                                 scenario = my.scenario,
+                                 response = my.response.var,
+                                 predictors = my.predictors)
+        Model
+    }
 
-        # determine statistics for each model across folds
-        fold.assessment <- cv.result$fold.assessment
-
-        MeanWithin10Percent <- function(model.index) {
-            values <- fold.assessment[model.index == fold.assessment$model.index,
-                                      'assessment.within.10.percent']
-            result <- mean(values)
-            result
-        }
-
-        MeanNumTrainingSamples <- function(model.index) {
-            values <- fold.assessment[model.index == fold.assessment$model.index,
-                                      'assessment.num.training.samples']
-            result <- mean(values)
-            result
-        }
-
-        nModels <- max(fold.assessment$model.index)
-        mean.within.10.percent <- sapply(1:nModels, MeanWithin10Percent)
-        mean.num.training.samples <- sapply(1:nModels, MeanNumTrainingSamples)
-
-        reduced.data <- data.frame(model.index = 1:nModels,
-                                   mean.within.10.percent = mean.within.10.percent,
-                                   mean.num.training.samples = mean.num.training.samples)
-        if (verbose) {
-            print(reduced.data)
-        }
-
-        # regress mean.num.training.samples ~ mean.within.10.percent
-        fitted.lm <- lm(formula = mean.num.training.samples ~ 0 + mean.within.10.percent,
-                        data = reduced.data)
-        if (verbose) {
-            print(fitted.lm)
-        }
-        coefficient <- fitted.lm$coefficients  # there is only one coefficient
-        passed <- coefficient > 0 
-
-        result = list(hypothesis = 'models with higher mean within 10 percent have more observations',
-                      passed = passed,
-                      support = list(cv.result = cv.result,
-                                     reduced.data = reduced.data,
-                                     fitted.lm = fitted.lm))
+    MyDescription <- function(model.index) {
+        # return description of model
+        #cat('starting CompareModelsCv02::MyDescription', model.index, '\n'); browser()
+        result <- 
+            list(scenario = my.scenario,
+                 testing.period = testing.period,
+                 training.period = sprintf('%d days before Oct 1', MyTrainingDays(model.index)),
+                 model = 'ModelLinear',
+                 response = my.response.var,
+                 predictors = my.predictors.name)
         result
     }
 
-    result <- CompareModelsCvLinear(testing.period = testing.period,
-                                    transformed.data = transformed.data,
-                                    model.form = 'log.log',
-                                    scenario = 'assessor',
-                                    Test = list(Test1, Test2))
+    # assemble outputs
+    nModels <- 10
+    Model <- lapply(1:nModels, MyMakeModel)
+    description <- lapply(1:nModels, MyDescription)
+    Test <- list(MakeTestBestModelIndex(expected.best.model.index = 2),
+                 MakeTestHigherWithinMoreObservations())
 
+    result <- list(Model = Model, description = description, Test = Test)
     result
 }
