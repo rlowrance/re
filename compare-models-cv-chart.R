@@ -136,7 +136,7 @@ OnlyTrainingPeriodVary <- function(description) {
 }
 
 
-CvChart <- function(cv.result, description) {
+CvChart <- function(cv.result, description, choice) {
     # produce plot showing description, mean RMSEs, and fractions within 10 percent
     cat('starting CvChart', length(cv.result), length(description), '\n'); browser()
 
@@ -180,7 +180,7 @@ CvChart <- function(cv.result, description) {
         # scatterplot; show all labels;
         # RETURN graphic
 
-        #cat('starting cvChart::Graphic\n'); browser()
+        cat('starting cvChart::Graphic\n'); browser()
         # an earlier version created a text label only for the best model
         # the statement below is dead code
 #        best.model.name <- ifelse(min(mean.rmse) == mean.rmse,
@@ -193,19 +193,33 @@ CvChart <- function(cv.result, description) {
         # labeling points see RGC p. 105
         gg <- ggplot(data, aes(x = mean.rmse, 
                                y = mean.fraction.within.10.percent))
+
         g <- 
             gg +
             geom_point(shape = 19) +
-            geom_text(aes(x = mean.rmse - 1000,   # adjust plot point
-                          y = mean.fraction.within.10.percent + .001,
-                          label = point.name), 
-                      hjust = 0,
-                      size=3) +
             theme_bw() +
             theme(panel.grid.major.x = element_blank(),
                   panel.grid.minor.x = element_blank(),
                   panel.grid.major.y = element_blank())  #  no horizontal grid lines
-        g
+        # add in the text labels, position depends on the data
+        if (choice == 5) {
+            g2 <- g + 
+            geom_text(aes(x = mean.rmse + 2000,   # adjust plot point
+                          y = mean.fraction.within.10.percent,
+                          label = point.name), 
+                      hjust = 0,
+                      size = 3) +
+            coord_cartesian(xlim = c(350000, 600000)) 
+        } else {
+            g2 <- g +
+            geom_text(aes(x = mean.rmse - 1000,   # adjust plot point
+                          y = mean.fraction.within.10.percent + 0.001,
+                          label = point.name), 
+                      hjust = 0,
+                      size=3)
+        }
+            
+        g2
     }
 
 
@@ -243,7 +257,8 @@ Cv <- function(control) {
     stopifnot(!is.null(cv.result))  # I expect cv.result to have been loaded
     stopifnot(!is.null(description))
     result <- CvChart(cv.result = cv.result,
-                      description = description)
+                      description = description,
+                      choice = control$choice)
     result
 }
 
@@ -264,7 +279,7 @@ Main <- function(control) {
 ###############################################################################
 
 # handle command line and setup control variables
-command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '03'))
+command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '05'))
 
 control <- AugmentControlVariables(ParseCommandLineArguments(command.args))
 
