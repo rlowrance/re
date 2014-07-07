@@ -67,6 +67,11 @@ AugmentControlVariables <- function(control) {
 }
 
 
+AllSame <- function(values) {
+    #cat('starting AllSame\n'); browser()
+    result <- all(values == values[[1]])
+    result
+}
 
 Varying <- function(descriptions) {
     # return chr vector of varying portions of names
@@ -86,11 +91,6 @@ Varying <- function(descriptions) {
 
     MaybeAppend <- function(name, values) {
         #cat('starting MaybeAppend\n'); browser()
-        AllSame <- function(values) {
-            #cat('starting AllSame\n'); browser()
-            result <- all(values == values[[1]])
-            result
-        }
         if (!AllSame(values)) {
             #cat('not all same'); browser()
             n <- length(values)
@@ -120,14 +120,41 @@ Varying <- function(descriptions) {
     result
 }
 
+HasName <- function(description) {
+    d1 <- description[[1]]
+    !is.null(d1$name)
+}
+
+OnlyTrainingPeriodVary <- function(description) {
+    AllSame(lapply(description, function(x) x$scenario)) &
+    AllSame(lapply(description, function(x) x$testing.period$first.date)) &
+    AllSame(lapply(description, function(x) x$testing.period$last.date)) &
+    AllSame(lapply(description, function(x) x$model)) &
+    AllSame(lapply(description, function(x) x$response)) &
+    AllSame(lapply(description, function(x) x$predictors)) &
+    !AllSame(lapply(description, function(x) x$training.period)) 
+}
+
+
 CvChart <- function(cv.result, description) {
     # produce plot showing description, mean RMSEs, and fractions within 10 percent
     cat('starting CvChart', length(cv.result), length(description), '\n'); browser()
 
-    # pull out each description component
-    varying <- Varying(description)
-    varying.values <- varying$values
-    varying.names <- varying$names
+    # set point names
+    if (HasName(description)) {
+        point.name <- sapply(description, function(x) x$name)
+    } else if (OnlyTrainingPeriodVary(description)) {
+        point.name <- sapply(description, function(x) x$training.period)
+    } else {
+        # pull out each description component
+
+        varying <- Varying(description)
+        varying.values <- varying$values
+        varying.names <- varying$names
+
+        point.name <- varying.values
+    }
+    
 
     best.model.index <- cv.result$best.model.index
     fold.assessment <- cv.result$fold.assessment
@@ -159,7 +186,7 @@ CvChart <- function(cv.result, description) {
 #        best.model.name <- ifelse(min(mean.rmse) == mean.rmse,
 #                                  varying.values,
 #                                  ' ')
-        data <- data.frame(model.name = varying.values,
+        data <- data.frame(point.name = point.name,
                            mean.rmse = mean.rmse,
                            mean.fraction.within.10.percent = mean.within.10.percent)
         data$lowest.RMSE <- ifelse(mean.rmse == min(mean.rmse), TRUE, FALSE)
@@ -171,7 +198,7 @@ CvChart <- function(cv.result, description) {
             geom_point(shape = 19) +
             geom_text(aes(x = mean.rmse - 1000,   # adjust plot point
                           y = mean.fraction.within.10.percent + .001,
-                          label=model.name), 
+                          label = point.name), 
                       hjust = 0,
                       size=3) +
             theme_bw() +
@@ -237,7 +264,7 @@ Main <- function(control) {
 ###############################################################################
 
 # handle command line and setup control variables
-command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '02'))
+command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '03'))
 
 control <- AugmentControlVariables(ParseCommandLineArguments(command.args))
 
