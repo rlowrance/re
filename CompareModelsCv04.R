@@ -79,7 +79,7 @@ CompareModelsCv04 <- function(testing.period, transformed.data) {
     nModels <- 3
     Model <- lapply(1:nModels, MyMakeModel)
     description <- lapply(1:nModels, MyDescription)
-    Test <- list(MakeTestBestModelIndex(expected.best.model.index = 0))  # for now, take error
+    Test <- list(MakeTestBestModelIndex(expected.best.model.index = 3)) 
 
     result <- list(Model = Model, description = description, Test = Test)
     result
