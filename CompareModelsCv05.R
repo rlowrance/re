@@ -44,7 +44,7 @@ CompareModelsCv05 <- function(testing.period, transformed.data) {
                                      num.training.days = num.training.days,
                                      scenario = 'assessor',
                                      response = 'log.price',
-                                     predictors = PredictorsChopraCenteredLogAssessor())
+                                     predictors = predictors)
             Model
         }
 
@@ -101,10 +101,10 @@ CompareModelsCv05 <- function(testing.period, transformed.data) {
     }
 
     # assemble outputs
-    nModels <- 11
+    nModels <- 12
     Model <- lapply(1:nModels, MyMakeModel)
     description <- lapply(1:nModels, MyDescription)
-    Test <- list(MakeTestBestModelIndex(expected.best.model.index = 4))
+    Test <- list(MakeTestBestModelIndex(expected.best.model.index = 2))
 
     result <- list(Model = Model, description = description, Test = Test)
     result
