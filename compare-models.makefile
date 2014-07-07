@@ -9,7 +9,9 @@ TRANSACTIONS=$(OUTPUT)/transactions-subset1.csv.gz
 AN01=$(OUTPUT)/compare-models-an-01.pdf
 CV01=$(OUTPUT)/compare-models-cv-01.rsave
 CV02=$(OUTPUT)/compare-models-cv-02.rsave
-TARGETS=$(AN01) $(CV01) $(CV02)
+CV03=$(OUTPUT)/compare-models-cv-03.rsave
+CV04=$(OUTPUT)/compare-models-cv-04.rsave
+TARGETS=$(AN01) $(CV01) $(CV02) $(CV03) $(CV04)
 
 SOURCES=$(wildcard *.R)
 
@@ -30,6 +32,12 @@ CVO1: $(CV01)
 .PHONY: CV02
 CV02: $(CV02)
 
+.PHONY: CV03
+CV03: $(CV03)
+
+.PHONY: CV04
+CV04: $(CV04)
+
 # analyses
 $(AN01): compare-models.R CompareModelsAn01.R $(TRANSACTIONS)
 	Rscript compare-models.R --what an --choice 01
@@ -41,6 +49,12 @@ $(CV01): compare-models.R CompareModelsCv01.R $(TRANSACTIONS)
 
 $(CV02): compare-models.R CompareModelsCv02.R $(TRANSACTIONS) 
 	Rscript compare-models.R --what cv --choice 02
+
+$(CV03): compare-models.R CompareModelsCv03.R $(TRANSACTIONS) 
+	Rscript compare-models.R --what cv --choice 03
+
+$(CV04): compare-models.R CompareModelsCv04.R $(TRANSACTIONS) 
+	Rscript compare-models.R --what cv --choice 04
 
 # dependencies
 .PHONY: depend
