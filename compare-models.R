@@ -133,13 +133,17 @@ Cv <- function(control, transformed.data) {
     Require('CompareModelsCv02')
     Require('CompareModelsCv03')
     Require('CompareModelsCv04')
+    Require('CompareModelsCv05')
 
     Driver <-
-        switch(control$choice,
-               CompareModelsCv01,  # assessor linear log-log chopra
-               CompareModelsCv02,  # avm      linear log-log-chopra
-               CompareModelsCv03,  # mortgage linear log-log chopra
-               CompareModelsCv04)  # best of log-log chopra
+        switch(control$choice
+               ,CompareModelsCv01  # assessor linear log-log chopra
+               ,CompareModelsCv02  # avm      linear log-log-chopra
+               ,CompareModelsCv03  # mortgage linear log-log chopra
+               ,CompareModelsCv04  # best of log-log chopra
+               ,CompareModelsCv05  # avm vs. assessor w/o assessor's estimates:w
+    )
+
     stopifnot(!is.null(Driver))
 
     Model.description.Test <- Driver(control$testing.period, transformed.data)
@@ -222,7 +226,8 @@ Main <- function(control, transformed.data) {
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '01'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '02'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '03'))
-command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '04'))
+#command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '04'))
+command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '05'))
 control <- AugmentControlVariables(ParseCommandLineArguments(command.args))
 
 # initilize R
