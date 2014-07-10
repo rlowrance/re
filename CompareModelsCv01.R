@@ -11,6 +11,7 @@ CompareModelsCv01 <- function(testing.period, transformed.data) {
     # $Model       : list of functions
     # $description : list of chr vectors
     # $Test        : list of functions
+    # ModelIndexToTrainingDays : function(model.index) --> number of days in training period
     # where
     #   Model and description are parallel lists such that
     #     Model[[i]]: is a function(data, training.indices, testing.indices)
@@ -62,6 +63,7 @@ CompareModelsCv01 <- function(testing.period, transformed.data) {
         result
     }
 
+
     # assemble outputs
     nModels <- 10
     Model <- lapply(1:nModels, MyMakeModel)
@@ -69,6 +71,10 @@ CompareModelsCv01 <- function(testing.period, transformed.data) {
     Test <- list(MakeTestBestModelIndex(expected.best.model.index = 2),
                  MakeTestHigherWithinMoreObservations())
 
-    result <- list(Model = Model, description = description, Test = Test)
+    result <- list( Model = Model
+                   ,description = description
+                   ,Test = Test
+                   ,ModelIndexToTrainingDays = MyTrainingDays
+                   )
     result
 }
