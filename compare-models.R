@@ -13,10 +13,13 @@ Require('CommandArgs')
 Require('CrossValidate')
 Require('ExecutableName')
 Require('InitializeR')
+Require('ListAppend')
 Require('Printf')
 Require('ReadAndTransformTransactions')
 Require('Rmse')
 Require('WithinXPercent')
+
+## handle command line, explicit and implicit
 
 ParseCommandLineArguments <- function(cl) {
     # parse command line into a list
@@ -31,7 +34,7 @@ ParseCommandLineArguments <- function(cl) {
         if (keyword == '--what') {
             result$what <- value
         } else if (keyword == '--choice') {
-            result$choice <- as.numeric(value)
+            result$choice <- value
         } else {
             # to facilite debugging via source(), allow unexpected arguments
             cat('unexpected keyword and its value skipped\n')
@@ -59,7 +62,7 @@ AugmentControlVariables <- function(control) {
                      '-', 
                      control$what, 
                      '-', 
-                     sprintf('%02d', control$choice))
+                     sprintf('%s', control$choice))
     result$path.out.log <- paste0(prefix, '-log.txt')
     result$path.out.driver.result <- paste0(prefix, '-', 'driver.result', '.rsave')
     result$path.out.driver.result <- paste0(prefix, '.rsave')
@@ -67,8 +70,6 @@ AugmentControlVariables <- function(control) {
 
     # control variables for all the experiments
     result$nfolds <- 10
-    result$testing.period <- list(first.date = as.Date('2008-01-01'),
-                                  last.date  = as.Date('2008-01-31'))
 
     # whether testing
     result$testing <- TRUE
@@ -76,9 +77,78 @@ AugmentControlVariables <- function(control) {
     result
 }
 
+## suppport functions
+
+DaysInMonth <- function(year, month) {
+    # return number of days in month, accounting for leap years
+    #cat('starting DaysInMonth', year, month, '\n'); browser()
+
+    result.no.leap.year <- c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)[[month]]
+    is.leap.year <- DivisibleBy(year, 4) & (!DivisiblyBy(year, 100))
+    result <- ifelse(is.leap.year & month == 2, 29, result.no.leap.year)
+    result
+}
+
+DaysInMonth.test <- function() {
+    stopifnot(DaysInMonth(2008,1) == 31)
+    stopifnot(DaysInMonth(2008,2) == 29)
+    stopifnot(DaysInMonth(2008,12) == 31)
+    stopifnot(DaysInMonth(2009, 2) == 28)
+}
+
+DaysInMonth.test()
+DivisibleBy <- function(n, k) {
+    # return TRUE iff n is exaclty divisible by k
+    0 == (n %% k)   # %% is mod
+}
+
+DivisibleBy.test <- function() {
+    stopifnot(DivisibleBy(2008, 4))
+    stopifnot(!DivisibleBy(2009, 4))
+}
+
+DivisibleBy.test()
+
+TestingPeriods <- function() {
+    # return list of testing period, each element a list (first.date, last.date)
+    #cat('starting TestingPeriods\n'); browser()
+    result <- NULL
+    for (year in c(2008, 2009)) {
+         last.month <- ifelse(year == 2008, 12, 11)
+         for (month in 1:last.month) {
+             first.date <- as.Date(sprintf('%4d-%2d-%2d', year, month, 1))
+             last.date <- first.date + DaysInMonth(year, month) - 1
+             result <- ListAppend(result, 
+                                  list( first.date = first.date
+                                       ,last.date = last.date
+                                       )
+                                  )
+         }
+    }
+    result
+}
+
+TestingPeriods.test <- function() {
+    #cat('starting TestingPeriods.test\n'); browser()
+    testing.periods <- TestingPeriods()
+    stopifnot(length(testing.periods) == 23)
+
+    first <- testing.periods[[1]]
+    stopifnot(first$first.date == as.Date('2008-01-01'))
+    stopifnot(first$last.date == as.Date('2008-01-31'))
+
+    last <- testing.periods[[length(testing.periods)]]
+    stopifnot(last$first.date == as.Date('2009-11-01'))
+    stopifnot(last$last.date == as.Date('2009-11-30'))
+}
+
+TestingPeriods.test()
+
+## control$what implementations
 
 Cv <- function(control, transformed.data) {
     # perform one cross validation experiment and return NULL
+    # use the testing period 2008-Jan
     #cat('starting Cv', control$choice, nrow(transformed.data), '\n'); browser()
 
     PrintCvResult <- function(cv.result, description) {
@@ -136,16 +206,19 @@ Cv <- function(control, transformed.data) {
     Require('CompareModelsCv05')
 
     Driver <-
-        switch(control$choice
+        switch( as.numeric(control$choice)
                ,CompareModelsCv01  # assessor linear log-log chopra
                ,CompareModelsCv02  # avm      linear log-log-chopra
                ,CompareModelsCv03  # mortgage linear log-log chopra
                ,CompareModelsCv04  # best of log-log chopra
                ,CompareModelsCv05  # avm vs. assessor w/o assessor's estimates:w
-    )
+               )
 
     stopifnot(!is.null(Driver))
 
+    testing.period <- list( first.date = as.Date('2008-01-01')
+                           ,last.date  = as.Date('2009-01-31')
+                           )
     Model.description.Test <- Driver(control$testing.period, transformed.data)
 
     Model <- Model.description.Test$Model
@@ -205,15 +278,89 @@ An <- function(control, transformed.data) {
     }
 }
 
+
+Bmtp <- function(control, transformed.data) {
+    # determine best model for each testing period in scenario control$choice
+    # the testing periods are the months 2008-Jan, 2008-Feb, ..., 2009-Nov
+    # follow the protocol from Cv as much as possible
+
+    cat('starting Bmtp', control$choice, nrow(transformed.data), '\n'); browser()
+
+    verbose <- TRUE
+
+    Require('CompareModelsCv01')
+    Require('CompareModelsCv02')
+    Require('CompareModelsCv03')
+    Driver <- switch( control$choice
+                     ,assessor = CompareModelsCv01
+                     ,avm      = CompareModelsCv02
+                     ,mortgage = CompareModelsCv03
+                     )
+    stopifnot(!is.null(Driver))
+
+    all.row <- NULL
+    testing.period.index <- 0
+    for (testing.period in TestingPeriods()) {
+        testing.period.index <- testing.period.index + 1
+        mdti <- Driver(testing.period, transformed.data)
+        Model <- mdti$Model
+        ModelIndexToTrainingDays <- mdti$ModelIndexToTrainingDays
+
+        experiment.name <- sprintf( 'Bmtp %s testing period %d'
+                                   ,control$choice
+                                   ,testing.period.index
+                                   )
+        cv.result <- CrossValidate( data = transformed.data
+                                   ,nfolds = control$nfolds
+                                   ,Models = Model
+                                   ,Assess = Assess
+                                   ,experiment = experiment.name
+                                   )
+
+        best.model.index <- cv.result$best.model.index
+        next.row <- data.frame( stringsAsFactor = FALSE
+                               ,first.testing.date = testing.period$first.date
+                               ,last.testing.date = testing.period.$lastdate
+                               ,description = description
+                               ,best.model.index = best.model.index
+                               ,training.days = ModelIndexToTrainingDays(best.model.index)
+                               )
+
+        if (is.null(all.row)) {
+            all.row <- next.row
+        } else {
+            all.row <- cbind(all.row, next.row)
+        }
+
+        if (verbose) {
+            print('testing period')
+            print(testing.period)
+            print('all.row')
+            print(all.row)
+        }
+
+    }
+
+    save( all.row
+         , file = paste0( control$dir.output
+                         ,control$me
+                         ,'-bmtp'
+                         ,'.rsave'
+                         )
+         )
+}
+
+
 Main <- function(control, transformed.data) {
     # execute one command, return NULL
     #cat('starting Main', control$what, control$which, nrow(transformed.data), '\n'); browser()
 
 
-    switch(control$what,
-           cv = Cv(control, transformed.data),
-           an = An(control, transformed.data),
-           plot = Plot(control, transformed.data))
+    switch( control$what
+           ,cv = Cv(control, transformed.data)
+           ,an = An(control, transformed.data)
+           ,bmpt = Bmtp(control, transformed.data)
+           )
 
     NULL
 }
@@ -227,7 +374,8 @@ Main <- function(control, transformed.data) {
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '02'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '03'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '04'))
-command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '05'))
+#command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '05'))
+command.args <- CommandArgs(ifR = list('--what', 'bmpt', '--choice', 'assessor'))
 control <- AugmentControlVariables(ParseCommandLineArguments(command.args))
 
 # initilize R
