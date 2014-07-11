@@ -1,8 +1,10 @@
-# compare-model-cv-chart.R
+# compare-model-chart.R
 # Main program to create charts from the results of running compare-models
 # driven by command line arguments, which have this syntax
-# Rscript compare-models.R --what cv   --choice NUM   --> 
+# Rscript compare-models.R --what cv   --choice NUM   -->  (OLD)
 #   produce file OUTPUT/compare-models-cv-chart-chart-NUM.pdf
+# Rscript compare-models-chart.R --what XXX -- choice YYY -->
+#   produce file OUTPUT/compare-models-chart-XXX-YYY.pdf
 
 library(ggplot2)
 
@@ -10,6 +12,7 @@ source('Require.R')  # read function definition file if function does not exist
 
 Require('CommandArgs')
 Require('InitializeR')
+Require('ParseCommandLine')
 Require('Printf')
 
 ParseCommandLineArguments <- function(cl) {
@@ -17,21 +20,11 @@ ParseCommandLineArguments <- function(cl) {
     # ARGS
     # cl : chr vector of arguments in form --KEYWORD value
     #cat('starting ParseCommandLine\n'); browser()
-    result <- list()
-    cl.index <- 1
-    while (cl.index < length(cl)) {
-        keyword <- cl[[cl.index]]
-        value <- cl[[cl.index + 1]]
-        if (keyword == '--what') {
-            result$what <- value
-        } else if (keyword == '--choice') {
-            result$choice <- as.numeric(value)
-        } else {
-            # to facilite debugging via source(), allow unexpected arguments
-            cat('unexpected argument and its value skipped', keyword, '\n')
-        }
-        cl.index <- cl.index + 2
-    }
+    result <- ParseCommandLine( cl
+                               ,keywords = c('what', 'choice')
+                               ,ignoreUnexpected = TRUE
+                               ,verbose = TRUE
+                               )
     result
 }
 
@@ -39,7 +32,7 @@ AugmentControlVariables <- function(control) {
     # add additional control variables to list of control variables
     #cat('starting AugmentControlVariables\n'); browser()
     result <- control
-    result$me <- 'compare-models-cv-chart'
+    result$me <- 'compare-models-chart'
 
     # input/output
     result$dir.output <- '../data/v6/output/'
@@ -48,7 +41,7 @@ AugmentControlVariables <- function(control) {
         paste0(result$dir.output,
                program.name,
                '-', control$what,
-               '-', sprintf('%02d', control$choice))
+               '-', control$choice)
     }
 
     prefix.in <- Prefix('compare-models')
@@ -262,15 +255,29 @@ Cv <- function(control) {
     result
 }
 
+Bmpt <- function(control) {
+    # create scatter plot: change in median price vs. # training days
+    cat('starting Bmpt', control$choice, '\n'); browser()
+
+    all.row <- NULL
+    variables.loaded <- load(control$path.in.driver.result)
+    stopifnot(!is.null(all.row))
+    result <- BmptChart(all.row)
+    result
+}
+
+
 
 Main <- function(control) {
     # execute one command, return NULL
     #cat('starting Main', control$what, '\n'); browser()
 
-    switch(control$what,
-           cv = Cv(control))
-
-    NULL
+    driver <- switch( control$what
+                     ,cv = Cv
+                     ,bmpt = Bmpt
+                     )
+    stopifnot(!is.null(driver))
+    driver(control)
 }
 
 
@@ -280,6 +287,7 @@ Main <- function(control) {
 
 # handle command line and setup control variables
 command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '05'))
+command.args <- CommandArgs(ifR = list('--what', 'bmpt', '--choice', 'assessor'))
 
 control <- AugmentControlVariables(ParseCommandLineArguments(command.args))
 
