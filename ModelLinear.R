@@ -41,6 +41,21 @@ ModelLinear <- function(data,
         browser()
     }
 
+    DropFeaturesWithOneUniqueValue <- function(data, feature.names) {
+        # return list of feature names, dropping any features that are factors and have one level
+        #cat('starting DropFactorsWithOneUniqueValue\n'); browser()
+
+        Keep <- function(feature.name) {
+            # return list of feature.names with more than one unique value
+            num.uniques <- length(unique(data[[feature.name]]))
+            result <- num.uniques > 1
+            result
+        }
+
+        result <- Filter(Keep, feature.names)
+        result
+    }
+
     Lm <- function(is.visible) {
         # return list $predictions $actuals
         #cat('starting ModelLinear::Lm', sum(is.visible), '\n'); browser()
@@ -52,9 +67,13 @@ ModelLinear <- function(data,
         num.training.samples <- sum(selected.for.training)
         stopifnot(sum(selected.for.training) > 0)
 
-        the.formula <- Formula(features$response, features$predictors)
+        training.data <- data[selected.for.training,]
+        reduced.predictors <- DropFeaturesWithOneUniqueValue(training.data, features$predictors)
 
-        fitted <- lm(data = data[selected.for.training,],
+        the.formula <- Formula(features$response, reduced.predictors)
+
+        #cat('in Lm about to call lm()\n'); browser()
+        fitted <- lm(data = training.data,
                      formula = the.formula)
         if (verbose.model) {
             print(summary(fitted))
@@ -123,8 +142,13 @@ ModelLinear <- function(data,
                 data$saleDate <= my.training.period$last.date
                
             selected.for.training <- training.indices & in.training.period
+            training.data <- data[selected.for.training,]
 
-            fitted <- lm(data[selected.for.training,],
+            reduced.predictors <- DropFeaturesWithOneUniqueValue(training.data, features$predictors)
+
+            the.formula <- Formula(features$response, reduced.predictors)
+
+            fitted <- lm(training.data,
                          formula = the.formula)
             newdata <- data[index,]
             actual <- data[index, 'price']
