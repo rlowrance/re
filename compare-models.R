@@ -119,7 +119,9 @@ TestingPeriods <- function() {
              first.date <- as.Date(sprintf('%4d-%2d-%2d', year, month, 1))
              last.date <- first.date + DaysInMonth(year, month) - 1
              result <- ListAppend(result, 
-                                  list( first.date = first.date
+                                  list( year = year
+                                       ,month = month
+                                       ,first.date = first.date
                                        ,last.date = last.date
                                        )
                                   )
@@ -134,10 +136,14 @@ TestingPeriods.test <- function() {
     stopifnot(length(testing.periods) == 23)
 
     first <- testing.periods[[1]]
+    stopifnot(first$year == 2008)
+    stopifnot(first$month == 1)
     stopifnot(first$first.date == as.Date('2008-01-01'))
     stopifnot(first$last.date == as.Date('2008-01-31'))
 
     last <- testing.periods[[length(testing.periods)]]
+    stopifnot(last$year == 2009)
+    stopifnot(last$month == 11)
     stopifnot(last$first.date == as.Date('2009-11-01'))
     stopifnot(last$last.date == as.Date('2009-11-30'))
 }
@@ -301,8 +307,14 @@ Bmtp <- function(control, transformed.data) {
     all.row <- NULL
     testing.period.index <- 0
     for (testing.period in TestingPeriods()) {
+        cat('in BMPT at top of loop\n'); browser()
         testing.period.index <- testing.period.index + 1
-        mdti <- Driver(testing.period, transformed.data)
+
+        testing.period.dates <- list( first.date = testing.period$first.date
+                                     ,last.date = testing.period$last.date
+                                     )
+
+        mdti <- Driver(testing.period.dates, transformed.data)
         Model <- mdti$Model
         ModelIndexToTrainingDays <- mdti$ModelIndexToTrainingDays
 
@@ -317,11 +329,13 @@ Bmtp <- function(control, transformed.data) {
                                    ,experiment = experiment.name
                                    )
 
+        cat('in Bmpt after cv.result\n'); browser()
         best.model.index <- cv.result$best.model.index
-        next.row <- data.frame( stringsAsFactor = FALSE
+        next.row <- data.frame( stringsAsFactors = FALSE
                                ,first.testing.date = testing.period$first.date
-                               ,last.testing.date = testing.period.$lastdate
-                               ,description = description
+                               ,last.testing.date = testing.period$last.date
+                               ,year = testing.period$year
+                               ,month = testing.period$month
                                ,best.model.index = best.model.index
                                ,training.days = ModelIndexToTrainingDays(best.model.index)
                                )
