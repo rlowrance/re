@@ -24,7 +24,7 @@ CompareModelsCv01 <- function(testing.period, transformed.data) {
     #                   $passed     : logical scalar, TRUE or FALSE
     #                   $support    : any object, provides evidence for $passed
 
-    cat('starting CompareModelsCv01', testing.period$first.date, testing.period$last.date, nrow(transformed.data), '\n'); browser()
+    #cat('starting CompareModelsCv01', testing.period$first.date, testing.period$last.date, nrow(transformed.data), '\n'); browser()
 
     Require('PredictorsChopraCenteredLogAssessor')
     Require('MakeTestBestModelIndex')
