@@ -22,7 +22,8 @@ MakeModelLinear <- function(scenario, testing.period, data, num.training.days,
         #cat('starting MakeModelLinear::Model\n'); browser()
         MyTrainingPeriodAssessor <- function() {
             #cat('starting MyTrainingPeriodAssessor\n'); browser()
-            first.assessor.mailing.date <- as.Date('2007-10-01')
+            # allow 91 days from mailing date to assessment date
+            first.assessor.mailing.date <- testing.period$first.date - 91
             last.training.date = first.assessor.mailing.date - 1
             my.training.period <- list(first.date = last.training.date - num.training.days,
                                        last.date  = last.training.date)
