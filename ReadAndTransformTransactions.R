@@ -48,7 +48,7 @@ ReadAndTransformTransactions <- function(path.in, nrows, verbose) {
   #
   # In addition to Chopra's features, also return these features
   # SALE.DAY, SALE.MONTH, SALE.YEAR
-    cat('reading all transactions\n')
+    cat('starting ReadAndTransformTransactions\n'); browser()
     raw <- read.table(path.in,
                       header=TRUE,
                       sep="\t",
@@ -144,7 +144,7 @@ ReadAndTransformTransactions <- function(path.in, nrows, verbose) {
                centered.improvement.value = Center(raw$IMPROVEMENT.VALUE.CALCULATED),
 
                factor.parking.type = raw$PARKING.TYPE.CODE,
-               factor.has.pool = has.pool,
+               factor.has.pool = as.factor(has.pool),
                factor.foundation.type = raw$FOUNDATION.CODE,
                factor.roof.type = raw$ROOF.TYPE.CODE,
                factor.heating.code = raw$HEATING.CODE,
