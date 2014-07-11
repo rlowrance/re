@@ -55,6 +55,7 @@ CrossValidate <- function(data, nfolds, Models, Assess, experiment = NULL) {
             model.result <- Model(data, is.training, is.testing)
             this.assessment <- Assess(model.result)
             #cat('examine this.assessment in CrossValidate\n'); browser()
+            stopifnot(is.list(this.assessment))
 
             # the first assessment is the one we use to decide the best model
             #cat('in CV, checking assessment\n'); browser()
