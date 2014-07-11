@@ -87,6 +87,7 @@ CompareModelsCvLinear <- function(testing.period, transformed.data, model.form, 
     TrainingPeriodAssessor <- function(model.index) {
         # train for model.index months before the cutoff date
         assessor.mailing.date <- as.Date('2008-10-1')
+        stop('bad assessor mailing date: should be in 2007')
         last.assessor.analysis.date <- assessor.mailing.date - 1
         days.before <- DaysBefore(model.index)
         training.period <- list(first.date = last.assessor.analysis.date - days.before,
