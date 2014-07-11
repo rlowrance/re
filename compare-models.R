@@ -14,6 +14,7 @@ Require('CrossValidate')
 Require('ExecutableName')
 Require('InitializeR')
 Require('ListAppend')
+Require('ParseCommandLine')
 Require('Printf')
 Require('ReadAndTransformTransactions')
 Require('Rmse')
@@ -26,23 +27,10 @@ ParseCommandLineArguments <- function(cl) {
     # ARGS
     # cl : chr vector of arguments in form --KEYWORD value
     #cat('starting ParseCommandLineArguments\n'); browser()
-    result <- list()
-    cl.index <- 1
-    while (cl.index < length(cl)) {
-        keyword <- cl[[cl.index]]
-        value <- cl[[cl.index + 1]]
-        if (keyword == '--what') {
-            result$what <- value
-        } else if (keyword == '--choice') {
-            result$choice <- value
-        } else {
-            # to facilite debugging via source(), allow unexpected arguments
-            cat('unexpected keyword and its value skipped\n')
-            cat(' keyword = ', keyword, '\n')
-            cat(' value   = ', valye, '\n')
-        }
-        cl.index <- cl.index + 2
-    }
+    result <- ParseCommandLine( cl
+                               ,keywords = c('what', 'choice')
+                               ,ignoreUnexpected = TRUE
+                               ,verbose = TRUE)  # show unexpected args
     result
 }
 
@@ -307,7 +295,7 @@ Bmtp <- function(control, transformed.data) {
     all.row <- NULL
     testing.period.index <- 0
     for (testing.period in TestingPeriods()) {
-        cat('in BMPT at top of loop\n'); browser()
+        #cat('in BMPT at top of loop\n'); browser()
         testing.period.index <- testing.period.index + 1
 
         testing.period.dates <- list( first.date = testing.period$first.date
@@ -343,7 +331,7 @@ Bmtp <- function(control, transformed.data) {
         if (is.null(all.row)) {
             all.row <- next.row
         } else {
-            all.row <- cbind(all.row, next.row)
+            all.row <- rbind(all.row, next.row)
         }
 
         if (verbose) {
@@ -359,6 +347,7 @@ Bmtp <- function(control, transformed.data) {
          , file = paste0( control$dir.output
                          ,control$me
                          ,'-bmtp'
+                         ,control$choice
                          ,'.rsave'
                          )
          )
