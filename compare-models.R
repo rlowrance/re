@@ -67,12 +67,24 @@ AugmentControlVariables <- function(control) {
 
 ## suppport functions
 
+DivisibleBy <- function(n, k) {
+    # return TRUE iff n is exaclty divisible by k
+    0 == (n %% k)   # %% is mod
+}
+
+DivisibleBy.test <- function() {
+    stopifnot(DivisibleBy(2008, 4))
+    stopifnot(!DivisibleBy(2009, 4))
+}
+
+DivisibleBy.test()
+
 DaysInMonth <- function(year, month) {
     # return number of days in month, accounting for leap years
     #cat('starting DaysInMonth', year, month, '\n'); browser()
 
     result.no.leap.year <- c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)[[month]]
-    is.leap.year <- DivisibleBy(year, 4) & (!DivisiblyBy(year, 100))
+    is.leap.year <- DivisibleBy(year, 4) & (!DivisibleBy(year, 100))
     result <- ifelse(is.leap.year & month == 2, 29, result.no.leap.year)
     result
 }
@@ -85,17 +97,6 @@ DaysInMonth.test <- function() {
 }
 
 DaysInMonth.test()
-DivisibleBy <- function(n, k) {
-    # return TRUE iff n is exaclty divisible by k
-    0 == (n %% k)   # %% is mod
-}
-
-DivisibleBy.test <- function() {
-    stopifnot(DivisibleBy(2008, 4))
-    stopifnot(!DivisibleBy(2009, 4))
-}
-
-DivisibleBy.test()
 
 TestingPeriods <- function() {
     # return list of testing period, each element a list (first.date, last.date)
@@ -317,7 +318,7 @@ Bmtp <- function(control, transformed.data) {
                                    ,experiment = experiment.name
                                    )
 
-        cat('in Bmpt after cv.result\n'); browser()
+        #cat('in Bmpt after cv.result\n'); browser()
         best.model.index <- cv.result$best.model.index
         next.row <- data.frame( stringsAsFactors = FALSE
                                ,first.testing.date = testing.period$first.date
@@ -346,7 +347,7 @@ Bmtp <- function(control, transformed.data) {
     save( all.row
          , file = paste0( control$dir.output
                          ,control$me
-                         ,'-bmtp'
+                         ,'-bmtp-'
                          ,control$choice
                          ,'.rsave'
                          )
@@ -373,12 +374,13 @@ Main <- function(control, transformed.data) {
 ###############################################################################
 
 # handle command line and setup control variables
+command.args <- CommandArgs(ifR = list('--what', 'an', '--choice', '01'))
+#command.args <- CommandArgs(ifR = list('--what', 'bmpt', '--choice', 'assessor'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '01'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '02'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '03'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '04'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '05'))
-command.args <- CommandArgs(ifR = list('--what', 'bmpt', '--choice', 'assessor'))
 control <- AugmentControlVariables(ParseCommandLineArguments(command.args))
 
 # initilize R
