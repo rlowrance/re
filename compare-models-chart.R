@@ -419,7 +419,7 @@ Bmtp <- function(control) {
 
 
 
-ain <- function(control) {
+Main <- function(control) {
     # execute one command, return NULL
     #cat('starting Main', control$what, '\n'); browser()
 
