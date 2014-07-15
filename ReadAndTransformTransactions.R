@@ -48,7 +48,7 @@ ReadAndTransformTransactions <- function(path.in, nrows, verbose) {
   #
   # In addition to Chopra's features, also return these features
   # SALE.DAY, SALE.MONTH, SALE.YEAR
-    cat('starting ReadAndTransformTransactions\n'); browser()
+    #cat('starting ReadAndTransformTransactions\n'); browser()
     raw <- read.table(path.in,
                       header=TRUE,
                       sep="\t",
