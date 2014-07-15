@@ -240,7 +240,7 @@ Cv <- function(control, transformed.data) {
 An <- function(control, transformed.data) {
     # perform one analysis
     control$choice <- 1  # while developing, select the first analysis
-    #cat('starting An', control$choice, nrow(transformed.data), '\n'); browser()
+    cat('starting An', control$choice, nrow(transformed.data), '\n'); browser()
 
     Require('CompareModelsAn01')
 
@@ -344,13 +344,15 @@ Bmtp <- function(control, transformed.data) {
 
     }
 
+
+    file = paste0( control$dir.output
+                  ,control$me
+                  ,'-bmtp-'
+                  ,control$choice
+                  ,'.rsave'
+                  )
     save( all.row
-         , file = paste0( control$dir.output
-                         ,control$me
-                         ,'-bmtp-'
-                         ,control$choice
-                         ,'.rsave'
-                         )
+         ,file = file
          )
 }
 
@@ -374,8 +376,8 @@ Main <- function(control, transformed.data) {
 ###############################################################################
 
 # handle command line and setup control variables
-command.args <- CommandArgs(ifR = list('--what', 'an', '--choice', '01'))
-#command.args <- CommandArgs(ifR = list('--what', 'bmpt', '--choice', 'assessor'))
+#command.args <- CommandArgs(ifR = list('--what', 'an', '--choice', '01'))
+command.args <- CommandArgs(ifR = list('--what', 'bmpt', '--choice', 'assessor'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '01'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '02'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '03'))
