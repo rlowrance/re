@@ -1,36 +1,27 @@
-# main program to create file transactions-subset-sale.year.rsave
+# main program to create file transactions-subset-price.rsave
 
-source('FileInput.R')
-source('FileOutput.R')
 source('InitializeR.R')
+source('Require.R')
+source('SplitDate.R')
+source('SplitSubset1Column.R')
 
 control <- list( testing = FALSE
-                ,path.in =          FileInput('../data/v6/output/transactions-subset1.csv.gz')
-                ,path.out.result = FileOutput('../data/v6/output/transactions-subset1-price.rsave')
-                ,path.out.log =               '../data/v6/output/transactions-subset1-price-log.txt'
+                ,path.out.log = '../data/v6/output/transactions-subset1-price-log.txt'
                 )
+print(control)
 
 InitializeR(duplex.output.to = control$path.out.log)
 
-print('control variables')
+Transform <- function(current.value) {
+    #cat('starting Transform', length(current.value), '\n'); browser()
+    result <- current.value  # just rename 
+    result
+}
+
+SplitSubset1Column( current.name = 'SALE.AMOUNT'
+                   ,new.name     = 'price'
+                   ,transform    = Transform
+                   ,testing      = control$testing
+                   )
 print(control)
-
-raw <- read.table( control$path.in
-                  ,header=TRUE
-                  ,sep="\t"
-                  ,quote=""
-                  ,comment=""
-                  ,stringsAsFactors=TRUE
-                  ,na.strings="NA"
-                  ,nrows=ifelse(control$testing, 1000, -1)
-                  )
-
-data <- data.frame(price = raw$SALE.AMOUNT)
-
-save(data, file = control$path.out.result)
-cat('number of rows written', nrow(data), '\n')
-
-print('control variables')
-print(control)
-
-print('done')
+cat('done\n')

@@ -5,45 +5,90 @@
 #
 
 OUTPUT=../data/v6/output
-TRANSACTIONS=$(OUTPUT)/transactions-subset1.csv.gz
-AN01=$(OUTPUT)/compare-models-an-01.pdf
-CV01=$(OUTPUT)/compare-models-cv-01.rsave
-CV02=$(OUTPUT)/compare-models-cv-02.rsave
-CV03=$(OUTPUT)/compare-models-cv-03.rsave
-CV04=$(OUTPUT)/compare-models-cv-04.rsave
-TARGETS=$(AN01) $(CV01) $(CV02) $(CV03) $(CV04)
+SUBSET1=$(OUTPUT)/transactions-subset1.csv.gz
 
-SOURCES=$(wildcard *.R)
+# splits of subset1
+PRICE=$(SUBSET1)-price.rsave
+SALE_DAY=$(SUBSET1)-sale.day.rsave
+SALE_MONTH=$(SUBSET1)-sale.month.rsave
+SALE_YEAR=$(SUBSET1)-sale.year.rsave
+
+SPLITS= $(PRICE) $(SALE_DAY) $(SALE_MONTH) $(SALE_YEAR)
+
+# also produces ...compare-models-an-01.pdf
+AN01=$(OUTPUT)/an-01.rsave
+
+BMTPASSESSOR=$(OUTPUT)/compare-models-bmtp-assessor.rsave
+BMTPASSESSORCHART1=$(OUTPUT)/compare-models-chart-bmtp-assessor-chart-1.rsave
+
+CV01=$(OUTPUT)/compare-models-cv-01.rsave
+CV01CHART1=$(OUTPUT)/compare-models-chart-cv-01-chart-1.pdf
+
+CV02=$(OUTPUT)/compare-models-cv-02.rsave
+CV02CHART1=$(OUTPUT)/compare-models-chart-cv-02-chart-1.pdf
+
+CV03=$(OUTPUT)/compare-models-cv-03.rsave
+CV03CHART1=$(OUTPUT)/compare-models-chart-cv-03-chart-1.pdf
+
+CV04=$(OUTPUT)/compare-models-cv-04.rsave
+CV04CHART1=$(OUTPUT)/compare-models-chart-cv-04-chart-1.pdf
+
+CV05=$(OUTPUT)/compare-models-cv-05.rsave
+CV05CHART1=$(OUTPUT)/compare-models-chart-cv-05-chart-1.pdf
+
+TARGETS=$(AN01) $(SPLITS)
+#		$(BMTPASSESSOR) $(BMTPASSESSORCHART1) 
+#		$(CV01) $(CV01CHART1) \
+#		$(CV02) $(CV02CHART1) \
+#		$(CV03) $(CV03CHART1) \
+#		$(CV04) $(CV04CHART1) \
+#		$(CV05) $(CV05CHART1)
+
+#SOURCES=$(wildcard *.R)
 
 $(warning TARGETS is $(TARGETS))
 $(warning SOURCES is $(SOURCES))
 
-include dependencies-in-R-sources.generated
+#include dependencies-in-R-sources.generated
 
 .PHONY: all
-all: $(AN01) $(CV01) dependencies-in-R-sources.makefile
+all: $(TARGETS) #dependencies-in-R-sources.makefile
 
-.PHONY: AN01
-AN01: $(AN01)
+# subset1 splits
+$(PRICE): transactions-subset1-price.R $(SUBSET1)
+	Rscript transactions-subset1-price.R
 
-.PHONY: CV01
-CVO1: $(CV01)
+$(SALE_DAY): transactions-subset1-sale.day.R $(SUBSET1)
+	Rscript transactions-subset1-sale.day.R
 
-.PHONY: CV02
-CV02: $(CV02)
+$(SALE_MONTH): transactions-subset1-sale.month.R $(SUBSET1)
+	Rscript transactions-subset1-sale.month.R
 
-.PHONY: CV03
-CV03: $(CV03)
+$(SALE_YEAR): transactions-subset1-sale.year.R $(SUBSET1)
+	Rscript transactions-subset1-sale.year.R
 
-.PHONY: CV04
-CV04: $(CV04)
+# experiment: analyses
+$(AN01): an-01.R FileInput.R FileOutput.R InitializeR.R LoadColumns.R \
+	$(TRANSACTIONS_PRICE) $(TRANSACTIONS_SALE_YEAR) $(TRANSACTIONS_SALE_MONTH)
+	Rscript an-01.R
+	Rscript an-01-chart.R
 
-# analyses
-$(AN01): compare-models.R CompareModelsAn01.R $(TRANSACTIONS)
-	Rscript compare-models.R --what an --choice 01
+#$(AN01): compare-models.R CompareModelsAn01.R $(TRANSACTIONS)
+#	Rscript compare-models.R --what an --choice 01
 
+# experiment: bmtp (best model for test period)
+$(warning BMTPASSESSOR is $(BMTPASSESSOR))
+$(warning TRANSACTIONS is $(TRANSACTIONS))
+$(warning AN01 is $(AN01))
+$(warning BMTPASSESSORCHART1 is $(BMTPASSESSORCHART1))
 
-# experiments
+$(BMTPASSESSOR): compare-models.R CompareModelsCv01.R $(TRANSACTIONS)
+	Rscript compare-models.R --what bmtp --choice assessor
+
+$(BMTPASSESSORCHART1): compare-models-chart.R $(AN01) $(BMTPASSESSOR)
+	Rscript compare-models-chart.R --what bmtp --choice assessor
+
+# cros-validation driven experiments
 $(CV01): compare-models.R CompareModelsCv01.R $(TRANSACTIONS) 
 	Rscript compare-models.R --what cv --choice 01
 
