@@ -5,15 +5,11 @@
 #
 
 OUTPUT=../data/v6/output
-SUBSET1=$(OUTPUT)/transactions-subset1.csv.gz
+TRANSACTIONS_SUBSET1=$(OUTPUT)/transactions-subset1.csv.gz
+SUBSET1=$(OUTPUT)/transactions-subset1
 
-# splits of subset1
-PRICE=$(SUBSET1)-price.rsave
-SALE_DAY=$(SUBSET1)-sale.day.rsave
-SALE_MONTH=$(SUBSET1)-sale.month.rsave
-SALE_YEAR=$(SUBSET1)-sale.year.rsave
-
-SPLITS= $(PRICE) $(SALE_DAY) $(SALE_MONTH) $(SALE_YEAR)
+# splits of subset1; use -anp as a proxy for all of them
+SPLIT_APN=$(SUBSET1)-apn.rsave
 
 # also produces ...compare-models-an-01.pdf
 AN01=$(OUTPUT)/an-01.rsave
@@ -36,7 +32,7 @@ CV04CHART1=$(OUTPUT)/compare-models-chart-cv-04-chart-1.pdf
 CV05=$(OUTPUT)/compare-models-cv-05.rsave
 CV05CHART1=$(OUTPUT)/compare-models-chart-cv-05-chart-1.pdf
 
-TARGETS=$(AN01) $(SPLITS)
+TARGETS=$(AN01) $(SPLIT_APN)
 #		$(BMTPASSESSOR) $(BMTPASSESSORCHART1) 
 #		$(CV01) $(CV01CHART1) \
 #		$(CV02) $(CV02CHART1) \
@@ -55,17 +51,8 @@ $(warning SOURCES is $(SOURCES))
 all: $(TARGETS) #dependencies-in-R-sources.makefile
 
 # subset1 splits
-$(PRICE): transactions-subset1-price.R $(SUBSET1)
-	Rscript transactions-subset1-price.R
-
-$(SALE_DAY): transactions-subset1-sale.day.R $(SUBSET1)
-	Rscript transactions-subset1-sale.day.R
-
-$(SALE_MONTH): transactions-subset1-sale.month.R $(SUBSET1)
-	Rscript transactions-subset1-sale.month.R
-
-$(SALE_YEAR): transactions-subset1-sale.year.R $(SUBSET1)
-	Rscript transactions-subset1-sale.year.R
+$(SPLIT_APN): transactions-subset1-SPLIT.R $(TRANSACTIONS_SUBSET1)
+	Rscript transactions-subset1-SPLIT.R
 
 # experiment: analyses
 $(AN01): an-01.R FileInput.R FileOutput.R InitializeR.R LoadColumns.R \
