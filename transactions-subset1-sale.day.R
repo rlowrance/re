@@ -1,4 +1,4 @@
-# main program to create file transactions-subset-sale.day.rsave
+# main program to create file transactions-subset-sale.day.R
 
 source('InitializeR.R')
 source('Require.R')
