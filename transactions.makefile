@@ -1,5 +1,6 @@
 # Makefile
 # create OUTPUT/transactions-subset1.csv.gz and its predecessors
+# create OUTPUT/transactions-subset1-SPLIT.rsave files
 
 OUTPUT=../data/v6/output
 
@@ -9,6 +10,7 @@ PARCELS=$(OUTPUT)/parcels-sfr.csv.gz
 PARCELS_DERIVED_FEATURES=$(OUTPUT)/parcels-derived-features-zip5.csv
 TRANSACTIONS=$(OUTPUT)/transactions-al-sfr.csv.gz
 SUBSET1=$(OUTPUT)/transactions-subset1.csv.gz
+SPLIT_EXAMPLE=$(OUTPUT)/transactions-subset1-apn.rsave
  
 # These rules come from
 # https://github.com/yihui/knitr/blob/master/inst/doc/Makefile
@@ -20,7 +22,7 @@ SUBSET1=$(OUTPUT)/transactions-subset1.csv.gz
 	Rscript -e "if (getRversion() < '3.0.0') knitr::knit2html('$*.Rmd')"
 
 .PHONY: all
-all: $(CENSUS) $(DEEDS) $(PARCELS) $(PARCELSDERIVEDFEATURES) $(SUBSET1) $(TRANSACTIONS) 
+all: $(CENSUS) $(DEEDS) $(PARCELS) $(PARCELSDERIVEDFEATURES) $(SUBSET1) $(TRANSACTIONS) $(SPLIT_EXAMPLE)
 $(CENSUS): census.R InitializeR.R
 	Rscript census.R
 
@@ -42,3 +44,6 @@ $(TRANSACTIONS): transactions-al-sfr.R \
 	InitializeR.R BestApns.R \
 	$(CENSUS) $(DEEDS) $(PARCELS) $(PARCELSDERIVEDFEATURES)
 	Rscript transactions-al-sfr.R
+
+$(SPLIT_EXAMPLE): transactions-subset1-SPLIT.R $(SUBSET1)
+	Rscript transactions-subset1-SPLIT.R
