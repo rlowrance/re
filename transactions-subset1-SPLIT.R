@@ -63,9 +63,22 @@ Center <- function(current.value) {
     result
 }
 
+HasPool <- function(POOL.FLAG) {
+    #cat('starting HasPool\n'); browser()
+    result <- as.factor(ifelse(is.na(POOL.FLAG), FALSE, POOL.FLAG == 'Y'))
+    result
+}
+
 IsNewConstruction <- function(current.value) {
     #cat('starting IsNewConstruction', length(current.value), '\n'); browser()
     result <- factor(current.value == 'N')
+    result
+}
+
+Int2Date <- function(current.value) {
+    # convert integer YYYYYMMDD to a Date
+    #cat('starting YYYYMMDD2Date', length(current.value), '\n'); browser()
+    result <- as.Date(as.character(current.value), format = '%Y%m%d')
     result
 }
 
@@ -93,9 +106,10 @@ Main <- function(control) {
          (raw$IMPROVEMENT.VALUE.CALCULATED + raw$LAND.VALUE.CALCULATED))
 
     Split <- function(new.name, Transform, current.name) {
-        cat('starting Split', new.name, current.name, '\n')
+        #cat('starting Split', new.name, current.name, '\n')
         #browser()
         current.value <- raw[[current.name]]
+        stopifnot(!is.null(current.value))
         new.value <- Transform(current.value)
         stopifnot(length(current.value) == length(new.value))
         data <- data.frame(new.value)
@@ -113,7 +127,7 @@ Main <- function(control) {
     Split('sale.month', SplitDateMonth, 'transaction.date')
     Split('sale.year', SplitDateYear, 'transaction.date')
 
-    Split('recordingDate', Identity, 'RECORDING.DATE')
+    Split('recordingDate', Int2Date, 'RECORDING.DATE')
 
     Split('price', Identity, 'SALE.AMOUNT')
     Split('log.price', Log, 'SALE.AMOUNT')
@@ -147,7 +161,7 @@ Main <- function(control) {
     Split('centered.improvement.value', Center, 'IMPROVEMENT.VALUE.CALCULATED')
 
     Split('factor.parking.type', Identity, 'PARKING.TYPE.CODE')
-    Split('factor.has.pool', as.factor, 'has.pool')
+    Split('factor.has.pool', HasPool, 'POOL.FLAG')
     Split('factor.foundation.type', Identity, 'FOUNDATION.CODE')
     Split('factor.roof.type', Identity, 'ROOF.TYPE.CODE')
     Split('factor.heating.code', Identity, 'HEATING.CODE')
@@ -156,6 +170,10 @@ Main <- function(control) {
     Split('avg.commute.time', Identity, 'avg.commute')
     Split('centered.avg.commute.time', Center, 'avg.commute')
 
+    Split('fraction.owner.occupied', Identity, 'fraction.owner.occupied')
+    Split('centered.log.fraction.owner.occupied', CenterLog, 'fraction.owner.occupied')
+    Split('centered.fraction.owner.occupied', Center, 'fraction.owner.occupied')
+    
     Split('median.household.income', Identity, 'median.household.income')
     Split('centered.log.median.household.income', CenterLog, 'median.household.income')
     Split('centered.median.household.income', Center, 'median.household.income')
