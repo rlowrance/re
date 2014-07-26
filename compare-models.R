@@ -4,21 +4,52 @@
 # Rscript compare-models.R --what cv   --choice NUM --> produce file OUTPUT/compare-models-NUM.txt
 #                          --what plot --choice NUM --> produce file OUTPUT/compare-models-plot-NUM.pdf
 
+
+#library(ggplot2)
+
+# must source Require.R first
 source('Require.R')  # read function definition file if function does not exist
 
-library(ggplot2)
+source('Assess.R')
+source('CommandArgs.R')
 
-Require('Assess')
-Require('CommandArgs')
-Require('CrossValidate')
-Require('ExecutableName')
-Require('InitializeR')
-Require('ListAppend')
-Require('ParseCommandLine')
-Require('Printf')
-Require('ReadAndTransformTransactions')
-Require('Rmse')
-Require('WithinXPercent')
+source('CompareModelsAn01.R')
+source('CompareModelsCv01.R')
+source('CompareModelsCv02.R')
+source('CompareModelsCv03.R')
+source('CompareModelsCv04.R')
+source('CompareModelsCv05.R')
+
+
+source('CompareModelsSfpLinear.R')
+
+source('CrossValidate.R')
+source('DaysInMonth.R')
+source('DivisibleBy.R')
+
+source('ExecutableName.R')
+source('IfThenElse.R')
+source('InitializeR.R')
+
+source('ListAppend.R')
+source('MakeModelLinear.R')
+source('ModelLinear.R')
+source('ParseCommandLine.R')
+
+source('PredictorsChopraCenteredLevelAssessor.R')
+source('PredictorsChopraCenteredLevelAvm.R')
+source('PredictorsChopraCenteredLevelMortgage.R')
+source('PredictorsChopraCenteredLogAssessor.R')
+source('PredictorsChopraCenteredLogAvm.R')
+source('PredictorsChopraCenteredLogMortgage.R')
+
+source('Printf.R')
+source('ReadAndTransformTransactions.R')
+source('ReadSplit.R')
+source('Rmse.R')
+
+source('TestingPeriods.R')
+source('WithinXPercent.R')
 
 ## handle command line, explicit and implicit
 
@@ -28,7 +59,7 @@ ParseCommandLineArguments <- function(cl) {
     # cl : chr vector of arguments in form --KEYWORD value
     #cat('starting ParseCommandLineArguments\n'); browser()
     result <- ParseCommandLine( cl
-                               ,keywords = c('what', 'choice')
+                               ,keywords = c('what', 'choice', 'index')
                                ,ignoreUnexpected = TRUE
                                ,verbose = TRUE)  # show unexpected args
     result
@@ -43,7 +74,9 @@ AugmentControlVariables <- function(control) {
     # input/output
     result$dir.output <- '../data/v6/output/'
 
-    result$path.in.subset1 <- paste0(result$dir.output, 'transactions-subset1.csv.gz')
+    result$path.in.base <- paste0(result$dir.output, 'transactions-subset1')
+    result$path.in.subset1 <- paste0(result$path.in.base, '.csv.gz')
+
 
     prefix <- paste0(result$dir.output, 
                      result$me, 
@@ -64,80 +97,6 @@ AugmentControlVariables <- function(control) {
     result$testing <- FALSE
     result
 }
-
-## suppport functions
-
-DivisibleBy <- function(n, k) {
-    # return TRUE iff n is exaclty divisible by k
-    0 == (n %% k)   # %% is mod
-}
-
-DivisibleBy.test <- function() {
-    stopifnot(DivisibleBy(2008, 4))
-    stopifnot(!DivisibleBy(2009, 4))
-}
-
-DivisibleBy.test()
-
-DaysInMonth <- function(year, month) {
-    # return number of days in month, accounting for leap years
-    #cat('starting DaysInMonth', year, month, '\n'); browser()
-
-    result.no.leap.year <- c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)[[month]]
-    is.leap.year <- DivisibleBy(year, 4) & (!DivisibleBy(year, 100))
-    result <- ifelse(is.leap.year & month == 2, 29, result.no.leap.year)
-    result
-}
-
-DaysInMonth.test <- function() {
-    stopifnot(DaysInMonth(2008,1) == 31)
-    stopifnot(DaysInMonth(2008,2) == 29)
-    stopifnot(DaysInMonth(2008,12) == 31)
-    stopifnot(DaysInMonth(2009, 2) == 28)
-}
-
-DaysInMonth.test()
-
-TestingPeriods <- function() {
-    # return list of testing period, each element a list (first.date, last.date)
-    #cat('starting TestingPeriods\n'); browser()
-    result <- NULL
-    for (year in c(2008, 2009)) {
-         last.month <- ifelse(year == 2008, 12, 11)
-         for (month in 1:last.month) {
-             first.date <- as.Date(sprintf('%4d-%2d-%2d', year, month, 1))
-             last.date <- first.date + DaysInMonth(year, month) - 1
-             result <- ListAppend(result, 
-                                  list( year = year
-                                       ,month = month
-                                       ,first.date = first.date
-                                       ,last.date = last.date
-                                       )
-                                  )
-         }
-    }
-    result
-}
-
-TestingPeriods.test <- function() {
-    #cat('starting TestingPeriods.test\n'); browser()
-    testing.periods <- TestingPeriods()
-    stopifnot(length(testing.periods) == 23)
-
-    first <- testing.periods[[1]]
-    stopifnot(first$year == 2008)
-    stopifnot(first$month == 1)
-    stopifnot(first$first.date == as.Date('2008-01-01'))
-    stopifnot(first$last.date == as.Date('2008-01-31'))
-
-    last <- testing.periods[[length(testing.periods)]]
-    stopifnot(last$year == 2009)
-    stopifnot(last$month == 11)
-    stopifnot(last$first.date == as.Date('2009-11-01'))
-    stopifnot(last$last.date == as.Date('2009-11-30'))
-}
-
-TestingPeriods.test()
 
 ## control$what implementations
 
@@ -194,11 +153,6 @@ Cv <- function(control, transformed.data) {
         test.results
     }
 
-    Require('CompareModelsCv01')
-    Require('CompareModelsCv02')
-    Require('CompareModelsCv03')
-    Require('CompareModelsCv04')
-    Require('CompareModelsCv05')
 
     Driver <-
         switch( as.numeric(control$choice)
@@ -242,7 +196,6 @@ An <- function(control, transformed.data) {
     control$choice <- 1  # while developing, select the first analysis
     cat('starting An', control$choice, nrow(transformed.data), '\n'); browser()
 
-    Require('CompareModelsAn01')
 
     Driver <- 
         switch(control$choice,
@@ -273,19 +226,15 @@ An <- function(control, transformed.data) {
     }
 }
 
-
 Bmtp <- function(control, transformed.data) {
     # determine best model for each testing period in scenario control$choice
     # the testing periods are the months 2008-Jan, 2008-Feb, ..., 2009-Nov
     # follow the protocol from Cv as much as possible
 
-    cat('starting Bmtp', control$choice, nrow(transformed.data), '\n'); browser()
+    #cat('starting Bmtp', control$choice, nrow(transformed.data), '\n'); browser()
 
     verbose <- TRUE
 
-    Require('CompareModelsCv01')
-    Require('CompareModelsCv02')
-    Require('CompareModelsCv03')
     Driver <- switch( control$choice
                      ,assessor = CompareModelsCv01
                      ,avm      = CompareModelsCv02
@@ -328,12 +277,7 @@ Bmtp <- function(control, transformed.data) {
                                ,best.model.index = best.model.index
                                ,training.days = ModelIndexToTrainingDays(best.model.index)
                                )
-
-        if (is.null(all.row)) {
-            all.row <- next.row
-        } else {
-            all.row <- rbind(all.row, next.row)
-        }
+        all.row <- IfThenElse(is.null(all.row), next.row, rbind(all.row, next.row))
 
         if (verbose) {
             print('testing period')
@@ -357,6 +301,14 @@ Bmtp <- function(control, transformed.data) {
 }
 
 
+SfpLinear <- function(control, transformed.data) {
+    # dispatch based on control$choice
+
+    result <- CompareModelsSfpLinear(control, transformed.data)
+    result
+}
+
+
 Main <- function(control, transformed.data) {
     # execute one command, return NULL
     #cat('starting Main', control$what, control$which, nrow(transformed.data), '\n'); browser()
@@ -366,6 +318,7 @@ Main <- function(control, transformed.data) {
            ,cv = Cv(control, transformed.data)
            ,an = An(control, transformed.data)
            ,bmpt = Bmtp(control, transformed.data)
+           ,sfpLinear = SfpLinear(control, transformed.data)
            )
 
     NULL
@@ -377,12 +330,24 @@ Main <- function(control, transformed.data) {
 
 # handle command line and setup control variables
 #command.args <- CommandArgs(ifR = list('--what', 'an', '--choice', '01'))
-command.args <- CommandArgs(ifR = list('--what', 'bmpt', '--choice', 'assessor'))
+#command.args <- CommandArgs(ifR = list('--what', 'bmpt', '--choice', 'assessor'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '01'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '02'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '03'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '04'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '05'))
+command.args <- CommandArgs(ifR = list( '--what',       'sfpLinear'
+                                       ,'--choice',     'shard'
+                                       ,'--index',      '2'
+                                       )
+)
+#command.args <- CommandArgs(ifR = list( '--what',       'sfpLinear'
+#                                       ,'--choice',     'combine'
+#                                       )
+#)
+print('command.args')
+print(command.args) 
+
 control <- AugmentControlVariables(ParseCommandLineArguments(command.args))
 
 # initilize R
@@ -393,9 +358,42 @@ InitializeR(start.JIT = FALSE,
 force.refresh.transformed.data <- FALSE 
 #force.refresh.transformed.data <- TRUE
 if(force.refresh.transformed.data | !exists('transformed.data')) {
-    transformed.data <- ReadAndTransformTransactions(control$path.in.subset1,
-                                                     ifelse(control$testing, 1000, -1),
-                                                     TRUE)  # TRUE --> verbose
+    if (control$what == 'sfpLinear') {
+        ReadSplits <- function() {
+            cat('building transformed data for sfpLinear\n')
+            #browser()
+            split.names <- c( 'saleDate'  # dates are used to select testing and training data
+                             ,'recordingDate'
+                             ,'price'
+                             ,'log.price'
+                             ,PredictorsChopraCenteredLevelAssessor()
+                             ,PredictorsChopraCenteredLevelAvm()
+                             ,PredictorsChopraCenteredLevelMortgage()
+                             ,PredictorsChopraCenteredLogAssessor()
+                             ,PredictorsChopraCenteredLogAvm()
+                             ,PredictorsChopraCenteredLogMortgage()
+                             )
+            split.names.unique <- unique(split.names)
+            transformed.data <- NULL
+            for (split.name in split.names.unique) {
+                new.column <- ReadSplit( path.in = control$path.in.base
+                                        ,split.name = split.name
+                                        ,nrow = ifelse(control$testing, 1000, -1)
+                                        ,verbose = TRUE
+                                        )
+                cat('new.column', split.name, '\n')
+                if (is.null(transformed.data)) {transformed.data <- new.column}
+                else                           {transformed.data <- cbind(transformed.data, new.column)}
+            }
+            #cat('transformed.data\n'); browser()
+            transformed.data
+        }
+        transformed.data <- ReadSplits()
+    } else {
+        transformed.data <- ReadAndTransformTransactions(control$path.in.subset1,
+                                                         ifelse(control$testing, 1000, -1),
+                                                         TRUE)  # TRUE --> verbose
+    }
 }
 
 
