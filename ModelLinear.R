@@ -68,8 +68,9 @@ ModelLinear <- function(data,
         stopifnot(sum(selected.for.training) > 0)
 
         training.data <- data[selected.for.training,]
-        reduced.predictors <- DropFeaturesWithOneUniqueValue(training.data, features$predictors)
 
+        # Do not use predictors that have only one unique value
+        reduced.predictors <- DropFeaturesWithOneUniqueValue(training.data, features$predictors)
         the.formula <- Formula(features$response, reduced.predictors)
 
         #cat('in Lm about to call lm()\n'); browser()
