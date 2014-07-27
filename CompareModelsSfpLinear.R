@@ -28,7 +28,6 @@ CompareModelsSfpLinear <- function(control, transformed.data, TestingPeriods) {
         result
     }
 
-    result <- NULL
     result <- 
         switch( control$choice
                ,combine = CompareModelsSfpLinearCombine( control = control
@@ -41,7 +40,7 @@ CompareModelsSfpLinear <- function(control, transformed.data, TestingPeriods) {
                                                     ,transformed.data = transformed.data
                                                     ,PathShard = PathShard
                                                     )
+               ,stop(sprintf('bad choice: %s', control$choice))
                )
-    stopifnot(!is.null(result))
     result
 }
