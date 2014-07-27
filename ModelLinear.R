@@ -120,9 +120,9 @@ ModelLinear <- function(data,
         result
     }
 
-    Mortgage <- function() {
+    MortgageVersion1 <- function() {
         # return list $prediction $actuals for the mortgage scenario
-        # NOTE: another design choice is to implement a local model for each testing transaction
+        # implement a local model for each test transaction
         #cat('starting ModelLinear::Mortgage\n'); browser()
 
         the.formula <- Formula(features$response, features$predictors)
@@ -174,6 +174,89 @@ ModelLinear <- function(data,
         prediction <- sapply(result, function(x) x$prediction)
         result2 <- list(actual = actual, prediction = prediction, num.training.samples = 0)
         result2
+    }
+
+    Mortgage <- function() {
+        # return list $prediction $actuals for the mortgage scenario
+        # implement a local model for each test transaction
+        #cat('starting ModelLinear::Mortgage\n'); browser()
+        verbose <- FALSE
+
+        # select samples in test period
+        in.testing.period <- 
+            data$saleDate >= testing.period$first.date &
+            data$saleDate <= testing.period$last.date
+        selected.for.testing <- testing.indices & in.testing.period
+        stopifnot(sum(selected.for.testing) > 0)
+
+
+        FitModel <- function(test.index) {
+            # fit model for sale date of the test.index transaction
+            #cat('FitModel', test.index, '\n'); browser()
+            my.training.period <- training.period(data$saleDate[[test.index]]) # training period for the date
+
+            in.training.period <- 
+                data$saleDate >= my.training.period$first.date &
+                data$saleDate <= my.training.period$last.date
+
+               
+            selected.for.training <- training.indices & in.training.period
+            training.data <- data[selected.for.training,]
+
+            reduced.predictors <- DropFeaturesWithOneUniqueValue(training.data, features$predictors)
+
+            the.formula <- Formula(features$response, reduced.predictors)
+
+            fitted <- lm(training.data,
+                         formula = the.formula)
+            fitted
+        }
+
+        Predict <- function(fitted, test.index) {
+            # return prediction for the test.index transaction
+            #cat('Predict', test.index, '\n'); browser()
+            newdata <- data[test.index,]
+            actual <- data[test.index, 'price']
+            prediction <- predict.lm(fitted, newdata = newdata)
+            prediction.returned <- ifelse(features$response == 'log.price', exp(prediction), prediction)
+
+            result <- list(actual = actual, prediction = prediction.returned)
+            if (verbose.model) {
+                Printf('mortgage index %d actual %7.0f prediction %7.0f\n',
+                       index, result$actual, result$prediction)
+            }
+            result  
+        }
+
+        # predict each test sample using a model just for the sample
+        testing.indices <- which(selected.for.testing)
+        if (verbose.model) {
+            Printf('mortgage has %d testing indices\n', length(testing.indices))
+        }
+
+        # build list of predictions
+        # memoize fitted models
+        #cat('ModelLinear::Mortgage memorize\n'); browser()
+        fitted.models <- list()
+        actual.prediction <- NULL
+        for (testing.index in testing.indices) {
+            saleDate <- as.character(data$saleDate[[testing.index]])
+            if(is.null(fitted.models[[saleDate]])) {
+                fitted <- FitModel(testing.index)
+                fitted.models[[saleDate]] <- fitted
+            } else {
+                if (verbose) {
+                    cat('reused memoized fitted model', saleDate, '\n')
+                }
+            }
+            fitted <- fitted.models[[saleDate]]
+            actual.prediction <- ListAppend(actual.prediction, Predict(fitted, testing.index))
+        }
+
+        actual <- sapply(actual.prediction, function(x) x$actual)
+        prediction <- sapply(actual.prediction, function(x) x$prediction)
+        result <- list(actual = actual, prediction = prediction, num.training.samples = 0)
+        result
     }
 
     # determine $actuals $predictors
