@@ -311,8 +311,7 @@ SfpLinear <- function(control, transformed.data) {
 
 Main <- function(control, transformed.data) {
     # execute one command, return NULL
-    cat('starting Main', control$what, control$which, nrow(transformed.data), '\n'); browser()
-    stopifnot(control$index == '01')
+    #cat('starting Main', control$what, control$which, nrow(transformed.data), '\n'); browser()
 
 
     switch( control$what
