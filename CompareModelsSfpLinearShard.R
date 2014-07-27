@@ -63,6 +63,10 @@ CompareModelsSfpLinearShard <- function(control, transformed.data, PathShard) {
         num.models <- 10
         Models <- lapply(1:num.models, MyModel)
 
+        if (DEBUGGING) {
+            print('DEBUGGING 2 folds RERUN')
+            control$nfolds <- 2
+        }
         cv.result <- CrossValidate( data = transformed.data
                                    ,nfolds = control$nfolds
                                    ,Models = Models
@@ -118,7 +122,8 @@ CompareModelsSfpLinearShard <- function(control, transformed.data, PathShard) {
 
     # BODY BEGINS HERE
 
-    cat('starting CompareModelsSfpLinearShard\n'); browser()
+    #cat('starting CompareModelsSfpLinearShard\n'); browser()
+    DEBUGGING <- FALSE
     all.row <- NULL
     testing.period.index <- 0
     control.index <- as.numeric(control$index)  # convert from chr
@@ -135,6 +140,14 @@ CompareModelsSfpLinearShard <- function(control, transformed.data, PathShard) {
                                 scenario.name, response.name, predictors.name, 
                                 testing.period$first.date, testing.period$last.date)
                     Printf('experiment: %s\n', experiment.name)
+                    if (DEBUGGING) {
+                        if (scenario.name != 'mortgage' |
+                            response.name != 'log' |
+                            predictors.name != 'log') {
+                            print('DEBUGGING ONLY mortgage log log: RERUN')
+                            next
+                        }
+                    }
                     #cat('in SpfLinearShard\n'); browser()
 
                     best.num.training.days <- 
@@ -174,7 +187,7 @@ CompareModelsSfpLinearShard <- function(control, transformed.data, PathShard) {
         }
     }
 
-    path.out <- PathShard(control, control$index)
+    path.out <- PathShard(control, control.index)
     save(all.row, file=path.out)
     cat('wrote', path.out)
 }
