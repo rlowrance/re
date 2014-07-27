@@ -32,7 +32,71 @@ CV04CHART1=$(OUTPUT)/compare-models-chart-cv-04-chart-1.pdf
 CV05=$(OUTPUT)/compare-models-cv-05.rsave
 CV05CHART1=$(OUTPUT)/compare-models-chart-cv-05-chart-1.pdf
 
-TARGETS=$(AN01) $(SPLIT_APN)
+SFPLINEAR_SHARD_01=$(OUTPUT)/compare-models-sfplinear-shard-01.rsave
+SFPLINEAR_SHARD_02=$(OUTPUT)/compare-models-sfplinear-shard-02.rsave
+SFPLINEAR_SHARD_03=$(OUTPUT)/compare-models-sfplinear-shard-03.rsave
+SFPLINEAR_SHARD_04=$(OUTPUT)/compare-models-sfplinear-shard-04.rsave
+SFPLINEAR_SHARD_05=$(OUTPUT)/compare-models-sfplinear-shard-05.rsave
+SFPLINEAR_SHARD_06=$(OUTPUT)/compare-models-sfplinear-shard-06.rsave
+SFPLINEAR_SHARD_07=$(OUTPUT)/compare-models-sfplinear-shard-07.rsave
+SFPLINEAR_SHARD_08=$(OUTPUT)/compare-models-sfplinear-shard-08.rsave
+SFPLINEAR_SHARD_09=$(OUTPUT)/compare-models-sfplinear-shard-09.rsave
+SFPLINEAR_SHARD_10=$(OUTPUT)/compare-models-sfplinear-shard-10.rsave
+SFPLINEAR_SHARD_11=$(OUTPUT)/compare-models-sfplinear-shard-11.rsave
+SFPLINEAR_SHARD_12=$(OUTPUT)/compare-models-sfplinear-shard-12.rsave
+SFPLINEAR_SHARD_13=$(OUTPUT)/compare-models-sfplinear-shard-13.rsave
+SFPLINEAR_SHARD_14=$(OUTPUT)/compare-models-sfplinear-shard-14.rsave
+SFPLINEAR_SHARD_15=$(OUTPUT)/compare-models-sfplinear-shard-15.rsave
+SFPLINEAR_SHARD_16=$(OUTPUT)/compare-models-sfplinear-shard-16.rsave
+SFPLINEAR_SHARD_17=$(OUTPUT)/compare-models-sfplinear-shard-17.rsave
+SFPLINEAR_SHARD_18=$(OUTPUT)/compare-models-sfplinear-shard-18.rsave
+SFPLINEAR_SHARD_19=$(OUTPUT)/compare-models-sfplinear-shard-19.rsave
+SFPLINEAR_SHARD_20=$(OUTPUT)/compare-models-sfplinear-shard-20.rsave
+SFPLINEAR_SHARD_21=$(OUTPUT)/compare-models-sfplinear-shard-21.rsave
+SFPLINEAR_SHARD_22=$(OUTPUT)/compare-models-sfplinear-shard-22.rsave
+SFPLINEAR_SHARD_23=$(OUTPUT)/compare-models-sfplinear-shard-23.rsave
+
+
+SFPLINEAR = \
+  $(SFPLINEAR_SHARD_01) \
+  $(SFPLINEAR_SHARD_02) \
+  $(SFPLINEAR_SHARD_03) \
+  $(SFPLINEAR_SHARD_04) \
+  $(SFPLINEAR_SHARD_05) \
+  $(SFPLINEAR_SHARD_06) \
+  $(SFPLINEAR_SHARD_07) \
+  $(SFPLINEAR_SHARD_08) \
+  $(SFPLINEAR_SHARD_09) \
+  $(SFPLINEAR_SHARD_10) \
+  $(SFPLINEAR_SHARD_11) \
+  $(SFPLINEAR_SHARD_12) \
+  $(SFPLINEAR_SHARD_13) \
+  $(SFPLINEAR_SHARD_14) \
+  $(SFPLINEAR_SHARD_15) \
+  $(SFPLINEAR_SHARD_16) \
+  $(SFPLINEAR_SHARD_17) \
+  $(SFPLINEAR_SHARD_18) \
+  $(SFPLINEAR_SHARD_19) \
+  $(SFPLINEAR_SHARD_20) \
+  $(SFPLINEAR_SHARD_21) \
+  $(SFPLINEAR_SHARD_22) \
+  $(SFPLINEAR_SHARD_23) 
+
+SFPLINEAR = \
+  $(SFPLINEAR_SHARD_01) \
+  $(SFPLINEAR_SHARD_02) \
+  $(SFPLINEAR_SHARD_03) \
+  $(SFPLINEAR_SHARD_04) \
+  $(SFPLINEAR_SHARD_05) \
+  $(SFPLINEAR_SHARD_06) \
+  $(SFPLINEAR_SHARD_07) \
+  $(SFPLINEAR_SHARD_08) \
+  $(SFPLINEAR_SHARD_09) \
+  $(SFPLINEAR_SHARD_10) \
+  $(SFPLINEAR_SHARD_11) \
+  $(SFPLINEAR_SHARD_12) 
+
+TARGETS=$(AN01) $(SPLIT_APN) $(SFPLINEAR)
 #		$(BMTPASSESSOR) $(BMTPASSESSORCHART1) 
 #		$(CV01) $(CV01CHART1) \
 #		$(CV02) $(CV02CHART1) \
@@ -49,6 +113,43 @@ $(warning SOURCES is $(SOURCES))
 
 .PHONY: all
 all: $(TARGETS) #dependencies-in-R-sources.makefile
+
+# sfplinear
+$(SFPLINEAR_SHARD_01): CompareModelsSfpLinearShard.R
+	Rscript compare-models.R --what sfpLinear --choice shard --index 01
+
+$(SFPLINEAR_SHARD_02): CompareModelsSfpLinearShard.R
+	Rscript compare-models.R --what sfpLinear --choice shard --index 02
+
+$(SFPLINEAR_SHARD_03): CompareModelsSfpLinearShard.R
+	Rscript compare-models.R --what sfpLinear --choice shard --index 03
+
+$(SFPLINEAR_SHARD_04): CompareModelsSfpLinearShard.R
+	Rscript compare-models.R --what sfpLinear --choice shard --index 04
+
+$(SFPLINEAR_SHARD_05): CompareModelsSfpLinearShard.R
+	Rscript compare-models.R --what sfpLinear --choice shard --index 05
+
+$(SFPLINEAR_SHARD_06): CompareModelsSfpLinearShard.R
+	Rscript compare-models.R --what sfpLinear --choice shard --index 06
+
+$(SFPLINEAR_SHARD_07): CompareModelsSfpLinearShard.R
+	Rscript compare-models.R --what sfpLinear --choice shard --index 07
+
+$(SFPLINEAR_SHARD_08): CompareModelsSfpLinearShard.R
+	Rscript compare-models.R --what sfpLinear --choice shard --index 08
+
+$(SFPLINEAR_SHARD_09): CompareModelsSfpLinearShard.R
+	Rscript compare-models.R --what sfpLinear --choice shard --index 09
+
+$(SFPLINEAR_SHARD_10): CompareModelsSfpLinearShard.R
+	Rscript compare-models.R --what sfpLinear --choice shard --index 10
+
+$(SFPLINEAR_SHARD_11): CompareModelsSfpLinearShard.R
+	Rscript compare-models.R --what sfpLinear --choice shard --index 11
+
+$(SFPLINEAR_SHARD_12): CompareModelsSfpLinearShard.R
+	Rscript compare-models.R --what sfpLinear --choice shard --index 12
 
 # subset1 splits
 $(SPLIT_APN): transactions-subset1-SPLIT.R $(TRANSACTIONS_SUBSET1)
