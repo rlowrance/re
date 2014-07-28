@@ -56,8 +56,9 @@ SFPLINEAR_SHARD_21=$(OUTPUT)/compare-models-sfplinear-shard-21.rsave
 SFPLINEAR_SHARD_22=$(OUTPUT)/compare-models-sfplinear-shard-22.rsave
 SFPLINEAR_SHARD_23=$(OUTPUT)/compare-models-sfplinear-shard-23.rsave
 
+SFPLINEAR_COMBINE=$(OUTPUT)/compare-models-sfplinear-combine.rsave
 
-SFPLINEAR = \
+SFPLINEAR_SHARDS = \
   $(SFPLINEAR_SHARD_01) \
   $(SFPLINEAR_SHARD_02) \
   $(SFPLINEAR_SHARD_03) \
@@ -82,6 +83,8 @@ SFPLINEAR = \
   $(SFPLINEAR_SHARD_22) \
   $(SFPLINEAR_SHARD_23) 
 
+SFPLINEAR = $(SFPLINEAR_SHARDS) $(SFPLINEAR_COMBINE)
+
 TARGETS=$(AN01) $(SPLIT_APN) $(SFPLINEAR)
 #		$(BMTPASSESSOR) $(BMTPASSESSORCHART1) 
 #		$(CV01) $(CV01CHART1) \
@@ -101,6 +104,9 @@ $(warning SOURCES is $(SOURCES))
 all: $(TARGETS) #dependencies-in-R-sources.makefile
 
 # sfplinear
+$(SFPLINEAR_COMBINE): CompareModelsSfpLinearCombine.R
+	Rscript compare-models.R --what sfpLinear --choice combine 
+
 $(SFPLINEAR_SHARD_01): CompareModelsSfpLinearShard.R
 	Rscript compare-models.R --what sfpLinear --choice shard --index 01
 

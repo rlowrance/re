@@ -10,7 +10,7 @@ CompareModelsSfpLinear <- function(control, transformed.data) {
         result <- paste0( control$dir.output
                          ,control$me
                          ,'-', 'sfplinear'
-                         ,'-', 'combined'
+                         ,'-', 'combine'
                          ,'.rsave'
                          )
         result
