@@ -82,20 +82,6 @@ SFPLINEAR = \
   $(SFPLINEAR_SHARD_22) \
   $(SFPLINEAR_SHARD_23) 
 
-SFPLINEAR = \
-  $(SFPLINEAR_SHARD_01) \
-  $(SFPLINEAR_SHARD_02) \
-  $(SFPLINEAR_SHARD_03) \
-  $(SFPLINEAR_SHARD_04) \
-  $(SFPLINEAR_SHARD_05) \
-  $(SFPLINEAR_SHARD_06) \
-  $(SFPLINEAR_SHARD_07) \
-  $(SFPLINEAR_SHARD_08) \
-  $(SFPLINEAR_SHARD_09) \
-  $(SFPLINEAR_SHARD_10) \
-  $(SFPLINEAR_SHARD_11) \
-  $(SFPLINEAR_SHARD_12) 
-
 TARGETS=$(AN01) $(SPLIT_APN) $(SFPLINEAR)
 #		$(BMTPASSESSOR) $(BMTPASSESSORCHART1) 
 #		$(CV01) $(CV01CHART1) \
@@ -150,6 +136,39 @@ $(SFPLINEAR_SHARD_11): CompareModelsSfpLinearShard.R
 
 $(SFPLINEAR_SHARD_12): CompareModelsSfpLinearShard.R
 	Rscript compare-models.R --what sfpLinear --choice shard --index 12
+
+$(SFPLINEAR_SHARD_13): CompareModelsSfpLinearShard.R
+	Rscript compare-models.R --what sfpLinear --choice shard --index 13
+
+$(SFPLINEAR_SHARD_14): CompareModelsSfpLinearShard.R
+	Rscript compare-models.R --what sfpLinear --choice shard --index 14
+
+$(SFPLINEAR_SHARD_15): CompareModelsSfpLinearShard.R
+	Rscript compare-models.R --what sfpLinear --choice shard --index 15
+
+$(SFPLINEAR_SHARD_16): CompareModelsSfpLinearShard.R
+	Rscript compare-models.R --what sfpLinear --choice shard --index 16
+
+$(SFPLINEAR_SHARD_17): CompareModelsSfpLinearShard.R
+	Rscript compare-models.R --what sfpLinear --choice shard --index 17
+
+$(SFPLINEAR_SHARD_18): CompareModelsSfpLinearShard.R
+	Rscript compare-models.R --what sfpLinear --choice shard --index 18
+
+$(SFPLINEAR_SHARD_19): CompareModelsSfpLinearShard.R
+	Rscript compare-models.R --what sfpLinear --choice shard --index 19
+
+$(SFPLINEAR_SHARD_20): CompareModelsSfpLinearShard.R
+	Rscript compare-models.R --what sfpLinear --choice shard --index 20
+
+$(SFPLINEAR_SHARD_21): CompareModelsSfpLinearShard.R
+	Rscript compare-models.R --what sfpLinear --choice shard --index 21
+
+$(SFPLINEAR_SHARD_22): CompareModelsSfpLinearShard.R
+	Rscript compare-models.R --what sfpLinear --choice shard --index 22
+
+$(SFPLINEAR_SHARD_23): CompareModelsSfpLinearShard.R
+	Rscript compare-models.R --what sfpLinear --choice shard --index 23
 
 # subset1 splits
 $(SPLIT_APN): transactions-subset1-SPLIT.R $(TRANSACTIONS_SUBSET1)
