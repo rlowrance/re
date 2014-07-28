@@ -1,7 +1,7 @@
 source('CompareModelsSfpLinearCombine.R')
 source('CompareModelsSfpLinearShard.R')
 
-CompareModelsSfpLinear <- function(control, transformed.data, TestingPeriods) {
+CompareModelsSfpLinear <- function(control, transformed.data) {
     # execute the SfpLinear command as part of the compare-models main program
 
 
@@ -28,6 +28,7 @@ CompareModelsSfpLinear <- function(control, transformed.data, TestingPeriods) {
         result
     }
 
+    #cat('starting CompareModelsSfpLinear\n'); browser()
     result <- 
         switch( control$choice
                ,combine = CompareModelsSfpLinearCombine( control = control
