@@ -336,15 +336,15 @@ Main <- function(control, transformed.data) {
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '03'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '04'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '05'))
-command.args <- CommandArgs(defaultArgs = list( '--what',       'sfpLinear'
-                                               ,'--choice',     'shard'
-                                               ,'--index',      '2'
-                                               )
-)
-#command.args <- CommandArgs(ifR = list( '--what',       'sfpLinear'
-#                                       ,'--choice',     'combine'
-#                                       )
+#command.args <- CommandArgs(defaultArgs = list( '--what',       'sfpLinear'
+#                                               ,'--choice',     'shard'
+#                                               ,'--index',      '2'
+#                                               )
 #)
+command.args <- CommandArgs(defaultArg = list( '--what',       'sfpLinear'
+                                              ,'--choice',     'combine'
+                                              )
+)
 print('command.args')
 print(command.args) 
 
