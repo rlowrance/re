@@ -45,6 +45,12 @@ Log <- function(current.value) {
     result
 }
 
+Log1p <- function(current.value) {
+    #cat('starting Log1p', length(current.value), '\n'); browser()
+    result <- log1p(current.value)
+    result
+}
+
 CenterLog <- function(current.value) {
     #cat('starting CenterLog', length(current.value), '\n'); browser()
     result <- LibraryCenter(log(current.value))
@@ -133,30 +139,37 @@ Main <- function(control) {
     Split('log.price', Log, 'SALE.AMOUNT')
 
     Split('land.square.footage', Identity, 'LAND.SQUARE.FOOTAGE')
+    Split('log.land.square.footage', Log, 'LAND.SQUARE.FOOTAGE')
     Split('centered.log.land.square.footage', CenterLog, 'LAND.SQUARE.FOOTAGE')
     Split('centered.land.square.footage', Center, 'LAND.SQUARE.FOOTAGE')
 
     Split('living.area', Identity, 'LIVING.SQUARE.FEET')
+    Split('log.living.area', Log, 'LIVING.SQUARE.FEET')
     Split('centered.log.living.area', CenterLog, 'LIVING.SQUARE.FEET')
     Split('centered.living.area', Center, 'LIVING.SQUARE.FEET')
 
     Split('bedrooms', Identity, 'BEDROOMS')
+    Split('log1p.bedrooms', Log1p, 'BEDROOMS')
     Split('centered.log1p.bedrooms', CenterLog1p, 'BEDROOMS')
     Split('centered.bedrooms', Center, 'BEDROOMS')
 
     Split('bathrooms', Identity, 'TOTAL.BATHS.CALCULATED')
+    Split('log1p.bathrooms', Log1p, 'TOTAL.BATHS.CALCULATED')
     Split('centered.log1p.bathrooms', CenterLog1p, 'TOTAL.BATHS.CALCULATED')
     Split('centered.bathrooms', Center, 'TOTAL.BATHS.CALCULATED')
 
     Split('parking.spaces', Identity, 'PARKING.SPACES')
+    Split('log1p.parking.spaces', Log1p, 'PARKING.SPACES')
     Split('centered.log1p.parking.spaces', CenterLog1p, 'PARKING.SPACES')
     Split('centered.parking.spaces', Center, 'PARKING.SPACES')
 
     Split('land.value', Identity, 'LAND.VALUE.CALCULATED')
+    Split('log.land.value', Log, 'LAND.VALUE.CALCULATED')
     Split('centered.log.land.value', CenterLog, 'LAND.VALUE.CALCULATED')
     Split('centered.land.value', Center, 'LAND.VALUE.CALCULATED')
 
     Split('improvement.value', Identity, 'IMPROVEMENT.VALUE.CALCULATED')
+    Split('log.improvement.value', Log, 'IMPROVEMENT.VALUE.CALCULATED')
     Split('centered.log.improvement.value', CenterLog, 'IMPROVEMENT.VALUE.CALCULATED')
     Split('centered.improvement.value', Center, 'IMPROVEMENT.VALUE.CALCULATED')
 
