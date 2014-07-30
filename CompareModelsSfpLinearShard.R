@@ -3,18 +3,17 @@ CompareModelsSfpLinearShard <- function(control, transformed.data, PathShard) {
     
     MyPredictors <- function(scenario.name, predictors.name) {
         result <- switch( scenario.name
-                         ,avm      = switch( predictors.name
-                                            ,level = PredictorsChopraCenteredLevelAvm()
-                                            ,log   = PredictorsChopraCenteredLogAvm()
-                                            )
-                         ,assessor = switch( predictors.name
-                                            ,level = PredictorsChopraCenteredLevelAssessor()
-                                            ,log   = PredictorsChopraCenteredLogAssessor()
-                                            )
-                         ,mortgage = switch( predictors.name
-                                            ,level = PredictorsChopraCenteredLevelMortgage()
-                                            ,log   = PredictorsChopraCenteredLogMortgage()
-                                            )
+                         ,mortgage =  # fall through 
+                         ,avm      = Predictors( set = 'Chopra'
+                                                ,form = predictors.name
+                                                ,center = FALSE
+                                                ,useAssessment = TRUE
+                                                )
+                         ,assessor  = Predictors( set = 'Chopra'
+                                                ,form = predictors.name
+                                                ,center = FALSE
+                                                ,useAssessment = FALSE
+                                                )
                          )
         result
     }
@@ -141,10 +140,10 @@ CompareModelsSfpLinearShard <- function(control, transformed.data, PathShard) {
                                 testing.period$first.date, testing.period$last.date)
                     Printf('experiment: %s\n', experiment.name)
                     if (DEBUGGING) {
-                        if (scenario.name != 'mortgage' |
+                        if (scenario.name != 'avm' |
                             response.name != 'log' |
-                            predictors.name != 'log') {
-                            print('DEBUGGING ONLY mortgage log log: RERUN')
+                            predictors.name != 'level') {
+                            print('DEBUGGING ONLY assessor log level: RERUN')
                             next
                         }
                     }
