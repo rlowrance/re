@@ -35,13 +35,7 @@ source('ListAppend.R')
 source('MakeModelLinear.R')
 source('ModelLinear.R')
 source('ParseCommandLine.R')
-
-source('PredictorsChopraCenteredLevelAssessor.R')
-source('PredictorsChopraCenteredLevelAvm.R')
-source('PredictorsChopraCenteredLevelMortgage.R')
-source('PredictorsChopraCenteredLogAssessor.R')
-source('PredictorsChopraCenteredLogAvm.R')
-source('PredictorsChopraCenteredLogMortgage.R')
+source('Predictors.R')
 
 source('Printf.R')
 source('ReadAndTransformTransactions.R')
@@ -336,15 +330,15 @@ Main <- function(control, transformed.data) {
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '03'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '04'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '05'))
-#command.args <- CommandArgs(defaultArgs = list( '--what',       'sfpLinear'
-#                                               ,'--choice',     'shard'
-#                                               ,'--index',      '2'
-#                                               )
-#)
-command.args <- CommandArgs(defaultArg = list( '--what',       'sfpLinear'
-                                              ,'--choice',     'combine'
-                                              )
+command.args <- CommandArgs(defaultArgs = list( '--what',       'sfpLinear'
+                                               ,'--choice',     'shard'
+                                               ,'--index',      '1'
+                                               )
 )
+#command.args <- CommandArgs(defaultArg = list( '--what',       'sfpLinear'
+#                                              ,'--choice',     'combine'
+#                                              )
+#)
 print('command.args')
 print(command.args) 
 
@@ -361,17 +355,19 @@ if(force.refresh.transformed.data | !exists('transformed.data')) {
     if (control$what == 'sfpLinear') {
         ReadSplits <- function() {
             cat('building transformed data for sfpLinear\n')
-            #browser()
+            browser()
             split.names <- c( 'saleDate'  # dates are used to select testing and training data
                              ,'recordingDate'
                              ,'price'
                              ,'log.price'
-                             ,PredictorsChopraCenteredLevelAssessor()
-                             ,PredictorsChopraCenteredLevelAvm()
-                             ,PredictorsChopraCenteredLevelMortgage()
-                             ,PredictorsChopraCenteredLogAssessor()
-                             ,PredictorsChopraCenteredLogAvm()
-                             ,PredictorsChopraCenteredLogMortgage()
+                             ,Predictors('Chopra', form = 'log', center = TRUE, useAssessment = TRUE)
+                             ,Predictors('Chopra', form = 'log', center = FALSE, useAssessment = TRUE)
+                             ,Predictors('Chopra', form = 'level', center = TRUE, useAssessment = TRUE)
+                             ,Predictors('Chopra', form = 'level', center = FALSE, useAssessment = TRUE)
+                             ,Predictors('Chopra', form = 'log', center = TRUE, useAssessment = FALSE)
+                             ,Predictors('Chopra', form = 'log', center = FALSE, useAssessment = FALSE)
+                             ,Predictors('Chopra', form = 'level', center = TRUE, useAssessment = FALSE)
+                             ,Predictors('Chopra', form = 'level', center = FALSE, useAssessment = FALSE)
                              )
             split.names.unique <- unique(split.names)
             transformed.data <- NULL
@@ -382,8 +378,9 @@ if(force.refresh.transformed.data | !exists('transformed.data')) {
                                         ,verbose = TRUE
                                         )
                 cat('new.column', split.name, '\n')
-                if (is.null(transformed.data)) {transformed.data <- new.column}
-                else                           {transformed.data <- cbind(transformed.data, new.column)}
+                transformed.data <- IfThenElse(is.null(transformed.data),
+                                               new.column,
+                                               cbind(transformed.data, new.column))
             }
             #cat('transformed.data\n'); browser()
             transformed.data
