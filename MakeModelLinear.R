@@ -30,6 +30,7 @@ MakeModelLinear <- function(scenario, testing.period, data, num.training.days,
     }
 
     MyTrainingPeriodAssessor <- function(testing.period.first.date) {
+        # training period is n days ending 92 days before the testing period starts
         #cat('starting MyTrainingPeriodAssessor\n'); browser()
         # allow 91 days from mailing date to assessment date
         first.assessor.mailing.date <- testing.period.first.date - 91
@@ -39,15 +40,20 @@ MakeModelLinear <- function(scenario, testing.period, data, num.training.days,
         my.training.period
     }
 
-    MyTrainingPeriodAvm <- function(testing.period.first.date) {
-        #cat('starting MyTrainingPeriodAvm\n'); browser()
-        last.training.date = testing.period$first.date - 1
-        my.training.period <- list(first.date = last.training.date - num.training.days,
-                                   last.date  = last.training.date)
-        my.training.period
+    MyTrainingPeriodAvm <- function() {
+        # training period is n days just before the transaction
+        TrainingPeriodAvm <- function(testing.date) {
+            #cat('starting TrainingPeriodAvm\n'); browser()
+            training.period <- list(first.date = testing.date - num.training.days - 1,
+                                    last.date = testing.date - 1)
+            training.period
+        }
+
+        TrainingPeriodAvm
     }
 
     MyTrainingPeriodMortgage <- function() {
+        # training period is n days around the date of the sale transaction
         #cat('starting MyTrainingPeriodMortgage\n'); browser()
         TrainingPeriodMortgage <- function(testing.date) {
             #cat('starting TrainingPeriodMortgage', testing.date, '\n'); browser()
@@ -66,7 +72,8 @@ MakeModelLinear <- function(scenario, testing.period, data, num.training.days,
     my.training.period <- 
         switch( scenario
                ,assessor = MyTrainingPeriodAssessor(testing.period$first.date)
-               ,avm      = MyTrainingPeriodAvm(testing.period$first.date)
+               ,avm      = MyTrainingPeriodAvm()  # return a function(testing.date) --> training.period
+
                ,mortgage = MyTrainingPeriodMortgage()  # return a function(testing.date) --> training.period
                )
     stopifnot(!is.null(my.training.period))

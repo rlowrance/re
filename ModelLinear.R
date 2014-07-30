@@ -56,14 +56,14 @@ ModelLinear <- function(data,
         result
     }
 
-    Lm <- function(is.visible) {
-        # return list $predictions $actuals
-        #cat('starting ModelLinear::Lm', sum(is.visible), '\n'); browser()
+    Assessor <- function() {
+        #cat('starting ModelLinear::Assessor\n'); browser()
+        visible.to.assessor <- data$recordingDate <= training.period$last.date
 
         in.training.period <- 
             data$saleDate >= training.period$first.date &
             data$saleDate <= training.period$last.date
-        selected.for.training <- training.indices & in.training.period & is.visible
+        selected.for.training <- training.indices & in.training.period & visible.to.assessor
         num.training.samples <- sum(selected.for.training)
         stopifnot(sum(selected.for.training) > 0)
 
@@ -73,7 +73,6 @@ ModelLinear <- function(data,
         reduced.predictors <- DropFeaturesWithOneUniqueValue(training.data, features$predictors)
         the.formula <- Formula(features$response, reduced.predictors)
 
-        #cat('in Lm about to call lm()\n'); browser()
         fitted <- lm(data = training.data,
                      formula = the.formula)
         if (verbose.model) {
@@ -90,6 +89,14 @@ ModelLinear <- function(data,
         newdata <- data[selected.for.testing,]
         actual <- newdata$price
         prediction <- predict.lm(fitted, newdata)
+        DEBUGGING <- FALSE
+        if (DEBUGGING) {
+            cat('debugging ModelLinear\n'); browser()
+            has.large.error <- 73731
+            has.large.error <- 2543
+            newdata2 <- data[has.large.error,]  # transaction with error 1.4 million
+            prediction2 <- predict.lm(fitted, newdata2)
+        }
 
         # adjust log.price to price
         if (features$response == 'log.price') {
@@ -104,93 +111,112 @@ ModelLinear <- function(data,
         result
     }
 
-    Assessor <- function() {
-        # return list $predictions $actuals for the assessor scenario
-        #cat('starting ModelLinear::Assessor\n'); browser()
-        visible.to.assessor <- data$recordingDate <= training.period$last.date
-        result <- Lm(visible.to.assessor)
-        result
-    }
-
-    Avm <- function() {
-        # return list $predictions $actuals for the AVM scenario
-        #cat('starting ModelLinear::Avm\n'); browser()
-        visible.to.avm <- data$recordingDate <= training.period$last.date
-        result <- Lm(visible.to.avm)
-        result
-    }
-
-    MortgageVersion1 <- function() {
-        # return list $prediction $actuals for the mortgage scenario
-        # implement a local model for each test transaction
-        #cat('starting ModelLinear::Mortgage\n'); browser()
-
-        the.formula <- Formula(features$response, features$predictors)
-
-        # select samples in test period
+    SelectedForTesting <- function(data, testing.indices, testing.period) {
+        #cat('starting SelectedForTesting\n'); browser()
         in.testing.period <- 
             data$saleDate >= testing.period$first.date &
             data$saleDate <= testing.period$last.date
         selected.for.testing <- testing.indices & in.testing.period
         stopifnot(sum(selected.for.testing) > 0)
-
-        # predict for the sample data[index] (a local model)
-        Test1Mortgage <- function(index) {
-            #cat('starting ModelLinear::Test1Mortgage', index, '\n'); browser()
-            my.training.period <- training.period(data$saleDate[[index]])
-            in.training.period <- 
-                data$saleDate >= my.training.period$first.date &
-                data$saleDate <= my.training.period$last.date
-               
-            selected.for.training <- training.indices & in.training.period
-            training.data <- data[selected.for.training,]
-
-            reduced.predictors <- DropFeaturesWithOneUniqueValue(training.data, features$predictors)
-
-            the.formula <- Formula(features$response, reduced.predictors)
-
-            fitted <- lm(training.data,
-                         formula = the.formula)
-            newdata <- data[index,]
-            actual <- data[index, 'price']
-            prediction <- predict.lm(fitted, newdata = newdata)
-            prediction.returned <- ifelse(features$response == 'log.price', exp(prediction), prediction)
-
-            result <- list(actual = actual, prediction = prediction.returned)
-            if (verbose.model) {
-                Printf('mortgage index %d actual %7.0f prediction %7.0f\n',
-                       index, result$actual, result$prediction)
-            }
-            result
-        }
-
-        # predict each test sample using a model just for the sample
-        testing.indices <- which(selected.for.testing)
-        if (verbose.model) {
-            Printf('mortgage has %d testing indices\n', length(testing.indices))
-        }
-        result <- lapply(testing.indices, Test1Mortgage)
-        actual <- sapply(result, function(x) x$actual)
-        prediction <- sapply(result, function(x) x$prediction)
-        result2 <- list(actual = actual, prediction = prediction, num.training.samples = 0)
-        result2
+        selected.for.testing
     }
+
+    FitModel <- function(in.training.period) {
+        #cat('startingFitModel\n'); browser()
+        selected.for.training <- training.indices & in.training.period
+        training.data <- data[selected.for.training,]
+
+        reduced.predictors <- DropFeaturesWithOneUniqueValue(training.data, features$predictors)
+
+        the.formula <- Formula(features$response, reduced.predictors)
+
+        fitted <- lm(training.data,
+                     formula = the.formula)
+        fitted
+    }
+
+    Predict <- function(fitted, test.index) {
+        # return prediction for the test.index transaction
+        #cat('starting Predict', test.index, '\n'); browser()
+        newdata <- data[test.index,]
+        actual <- data[test.index, 'price']
+        prediction <- predict.lm(fitted, newdata = newdata)
+        prediction.returned <- ifelse(features$response == 'log.price', exp(prediction), prediction)
+
+        result <- list(actual = actual, prediction = prediction.returned)
+        if (verbose.model) {
+            Printf('mortgage index %d actual %7.0f prediction %7.0f\n',
+                   test.index, result$actual, result$prediction)
+        }
+        result  
+    }
+
+    Avm <- function() {
+    # ARGS:
+    # data             : data.frame
+    # training.indices : selector vector; only these observations in data can be used for training
+    # testing.indices  : selector vector; only these observations in data can be used for testing
+    # scenario         : chr scalar, one of 'assessor', 'avm', 'mortgage'
+    # training.period  : list of Date, $first.date, $last.date or
+    #                    function(transaction.date) --> training.period for the transaction date
+    # testing.period   : list of Date, $first.date, $last.date
+    # features         : list of $response (chr scalar) $predictors (chr vector)
+    # verbose.model    : logical, if true, print as we go
+        FitModelAvm <- function(test.index) {
+            # fit model for sale date of the test.index transaction
+            #cat('ModelLinear::Avm::FitModel', test.index, '\n'); browser()
+            my.training.period <- training.period(data$saleDate[[test.index]]) # training period for the date
+
+            in.training.period <- 
+                data$recordingDate >= my.training.period$first.date &
+                data$recordingDate <= my.training.period$last.date
+
+            FitModel(in.training.period)
+        }
+
+        # BODY STARTS HERE
+        #cat('starting ModelLinear::Avm\n'); browser()
+        verbose <- TRUE
+
+        selected.for.testing <- SelectedForTesting( data = data
+                                                ,testing.indices = testing.indices
+                                                ,testing.period = testing.period
+                                                )
+        testing.indices <- which(selected.for.testing)
+        if (verbose) {
+            Printf('avm model has %d testing indices\n', length(testing.indices))
+        }
+
+        # Accumulate the actual prediction for each testing index
+        fitted.models <- list()
+        actual.prediction <- NULL
+        for (testing.index in testing.indices) {
+            saleDate <- as.character(data$saleDate[[testing.index]])
+            if(is.null(fitted.models[[saleDate]])) {
+                fitted <- FitModelAvm(testing.index)
+                fitted.models[[saleDate]] <- fitted
+            } else {
+                if (verbose) {
+                    cat('reused memoized fitted model', saleDate, '\n')
+                }
+            }
+            fitted <- fitted.models[[saleDate]]
+            actual.prediction <- ListAppend(actual.prediction, Predict(fitted, testing.index))
+        }
+
+        # Build lists for actuals and predicted values
+        actual <- sapply(actual.predition, function(x) x$actual)
+        prediction <- sapply(actual.prediction, function(x) x$prediction)
+        result <- list(actual = actual, prediction = prediction, num.training.samples = 0)
+        result
+    }
+
 
     Mortgage <- function() {
         # return list $prediction $actuals for the mortgage scenario
         # implement a local model for each test transaction
-        #cat('starting ModelLinear::Mortgage\n'); browser()
-        verbose <- FALSE
 
-        # select samples in test period
-        in.testing.period <- 
-            data$saleDate >= testing.period$first.date &
-            data$saleDate <= testing.period$last.date
-        selected.for.testing <- testing.indices & in.testing.period
-        stopifnot(sum(selected.for.testing) > 0)
-
-
-        FitModel <- function(test.index) {
+        FitModelMortgage <- function(test.index) {
             # fit model for sale date of the test.index transaction
             #cat('FitModel', test.index, '\n'); browser()
             my.training.period <- training.period(data$saleDate[[test.index]]) # training period for the date
@@ -199,39 +225,21 @@ ModelLinear <- function(data,
                 data$saleDate >= my.training.period$first.date &
                 data$saleDate <= my.training.period$last.date
 
-               
-            selected.for.training <- training.indices & in.training.period
-            training.data <- data[selected.for.training,]
-
-            reduced.predictors <- DropFeaturesWithOneUniqueValue(training.data, features$predictors)
-
-            the.formula <- Formula(features$response, reduced.predictors)
-
-            fitted <- lm(training.data,
-                         formula = the.formula)
-            fitted
+            FitModel(in.training.period)
         }
 
-        Predict <- function(fitted, test.index) {
-            # return prediction for the test.index transaction
-            #cat('Predict', test.index, '\n'); browser()
-            newdata <- data[test.index,]
-            actual <- data[test.index, 'price']
-            prediction <- predict.lm(fitted, newdata = newdata)
-            prediction.returned <- ifelse(features$response == 'log.price', exp(prediction), prediction)
 
-            result <- list(actual = actual, prediction = prediction.returned)
-            if (verbose.model) {
-                Printf('mortgage index %d actual %7.0f prediction %7.0f\n',
-                       test.index, result$actual, result$prediction)
-            }
-            result  
-        }
+        #cat('starting ModelLinear::Mortgage\n'); browser()
+        verbose <- FALSE
 
-        # predict each test sample using a model just for the sample
+        # select samples in test period
+        selected.for.testing <- SelectedForTesting( data = data
+                                                   ,testing.indices = testing.indices
+                                                   ,testing.period = testing.period
+                                                   )
         testing.indices <- which(selected.for.testing)
         if (verbose.model) {
-            Printf('mortgage has %d testing indices\n', length(testing.indices))
+            Printf('mortgage model has %d testing indices\n', length(testing.indices))
         }
 
         # build list of predictions
@@ -242,7 +250,7 @@ ModelLinear <- function(data,
         for (testing.index in testing.indices) {
             saleDate <- as.character(data$saleDate[[testing.index]])
             if(is.null(fitted.models[[saleDate]])) {
-                fitted <- FitModel(testing.index)
+                fitted <- FitModelMortgage(testing.index)
                 fitted.models[[saleDate]] <- fitted
             } else {
                 if (verbose) {
