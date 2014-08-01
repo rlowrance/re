@@ -176,7 +176,7 @@ ModelLinear <- function(data,
 
         # BODY STARTS HERE
         #cat('starting ModelLinear::Avm\n'); browser()
-        verbose <- TRUE
+        verbose <- FALSE 
 
         selected.for.testing <- SelectedForTesting( data = data
                                                 ,testing.indices = testing.indices
@@ -205,7 +205,7 @@ ModelLinear <- function(data,
         }
 
         # Build lists for actuals and predicted values
-        actual <- sapply(actual.predition, function(x) x$actual)
+        actual <- sapply(actual.prediction, function(x) x$actual)
         prediction <- sapply(actual.prediction, function(x) x$prediction)
         result <- list(actual = actual, prediction = prediction, num.training.samples = 0)
         result
