@@ -75,7 +75,7 @@ AugmentControlVariables <- function(control) {
     prefix <- paste0(result$dir.output, 
                      result$me, 
                      '-', 
-                     control$what, 
+                     tolower(control$what), 
                      '-', 
                      sprintf('%s', control$choice))
     result$path.out.log <- paste0(prefix, '-log.txt')
@@ -330,15 +330,15 @@ Main <- function(control, transformed.data) {
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '03'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '04'))
 #command.args <- CommandArgs(ifR = list('--what', 'cv', '--choice', '05'))
-command.args <- CommandArgs(defaultArgs = list( '--what',       'sfpLinear'
-                                               ,'--choice',     'shard'
-                                               ,'--index',      '1'
-                                               )
-)
-#command.args <- CommandArgs(defaultArg = list( '--what',       'sfpLinear'
-#                                              ,'--choice',     'combine'
-#                                              )
+#command.args <- CommandArgs(defaultArgs = list( '--what',       'sfpLinear'
+#                                               ,'--choice',     'shard'
+#                                               ,'--index',      '1'
+#                                               )
 #)
+command.args <- CommandArgs(defaultArg = list( '--what',       'sfpLinear'
+                                              ,'--choice',     'combine'
+                                              )
+)
 print('command.args')
 print(command.args) 
 
