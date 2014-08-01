@@ -104,7 +104,7 @@ $(warning SOURCES is $(SOURCES))
 all: $(TARGETS) #dependencies-in-R-sources.makefile
 
 # sfplinear
-$(SFPLINEAR_COMBINE): CompareModelsSfpLinearCombine.R
+$(SFPLINEAR_COMBINE): CompareModelsSfpLinearCombine.R $(SFPLINEAR_SHARDS)
 	Rscript compare-models.R --what sfpLinear --choice combine 
 
 $(SFPLINEAR_SHARD_01): CompareModelsSfpLinearShard.R
