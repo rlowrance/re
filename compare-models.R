@@ -355,7 +355,7 @@ if(force.refresh.transformed.data | !exists('transformed.data')) {
     if (control$what == 'sfpLinear') {
         ReadSplits <- function() {
             cat('building transformed data for sfpLinear\n')
-            browser()
+            #browser()
             split.names <- c( 'saleDate'  # dates are used to select testing and training data
                              ,'recordingDate'
                              ,'price'
