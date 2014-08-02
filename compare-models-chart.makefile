@@ -13,10 +13,9 @@ CV04=$(OUTPUT)/compare-models-chart-cv-04-chart-1.pdf
 CV05=$(OUTPUT)/compare-models-chart-cv-05-chart-1.pdf
 
 SFPLINEAR_01=$(OUTPUT)/compare-models-chart-sfplinear-combine-chart-01.pdf
+SFPLINEAR_02=$(OUTPUT)/compare-models-chart-sfplinear-combine-chart-02-1.pdf
 
-
-
-TARGETS=$(BMTP_ASSESSOR) $(CV01) $(CV02) $(CV03) $(CV04) $(CV05)  $(SFPLINEAR_01)
+TARGETS=$(BMTP_ASSESSOR) $(CV01) $(CV02) $(CV03) $(CV04) $(CV05)  $(SFPLINEAR_01) $(SFPLINEAR_02)
 
 $(warning TARGETS is $(TARGETS))
 
@@ -45,3 +44,7 @@ $(CV05): $(OUTPUT)/compare-models-cv-05.rsave CompareModelsChartCv.R
 
 $(SFPLINEAR_01): $(OUTPUT)/compare-models-sfplinear-combine.rsave CompareModelsChartSfpLinear.R
 	Rscript compare-models-chart.R --what sfpLinear --choice 01
+
+# product OUTPUT/compare-models-chart-sfplinear-combine-chart-01-N.pdf
+$(SFPLINEAR_02): $(OUTPUT)/compare-models-sfplinear-combine.rsave CompareModelsChartSfpLinear.R
+	Rscript compare-models-chart.R --what sfpLinear --choice 02
