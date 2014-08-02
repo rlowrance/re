@@ -1,5 +1,6 @@
 # main program to produce charts for from an-01.rsave
-# write files OUTPUT/an-01-chart-1.rsave
+# input file  OUTPUT/an-01.rsave
+# write files OUTPUT/an-01-chart-1.pdf
 #                    an-01-chart-log.txt
 
 source('FileInput.R')
@@ -14,7 +15,7 @@ library(ggplot2)
 control <- list( testing = FALSE
                 ,show.graph = FALSE
                 ,path.in         = FileInput ('../data/v6/output/an-01.rsave')
-                ,path.out.result = FileOutput('../data/v6/output/an-01-chart.pdf')
+                ,path.out.result = FileOutput('../data/v6/output/an-01-chart-1.pdf')
                 ,path.out.log    =            '../data/v6/output/an-01-chart-log.txt'
                 )
 
@@ -79,4 +80,4 @@ Main(control)
 print('control variables')
 print(control)
 
-cat('done')
+cat('done\n')
