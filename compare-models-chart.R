@@ -8,17 +8,16 @@
 
 library(ggplot2)
 
-source('Require.R')  # read function definition file if function does not exist
 
-Require('CommandArgs')
+source('CommandArgs.R')
 
-Require('CompareModelsChartBmtp')
-Require('CompareModelsChartCv')
-Require('CompareModelsChartSfpLinear')
+source('CompareModelsChartBmtp.R')
+source('CompareModelsChartCv.R')
+source('CompareModelsChartSfpLinear.R')
 
-Require('InitializeR')
-Require('ParseCommandLine')
-Require('Printf')
+source('InitializeR.R')
+source('ParseCommandLine.R')
+source('Printf.R')
 
 ParseCommandLineArguments <- function(cl) {
     # parse command line into a list
@@ -92,7 +91,8 @@ Main <- function(control) {
 # handle command line and setup control variables
 #command.args <- CommandArgs(defaultArgs = list('--what', 'cv', '--choice', '01'))
 #command.args <- CommandArgs(defaultArgs = list('--what', 'bmtp', '--choice', 'assessor'))
-command.args <- CommandArgs(defaultArgs = list('--what', 'sfpLinear', '--choice', '01'))
+#command.args <- CommandArgs(defaultArgs = list('--what', 'sfpLinear', '--choice', '01'))
+command.args <- CommandArgs(defaultArgs = list('--what', 'sfpLinear', '--choice', '02'))
 
 control <- AugmentControlVariables(ParseCommandLineArguments(command.args))
 
