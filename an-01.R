@@ -1,4 +1,8 @@
 # main program to run analysis 01 (median price by month)
+# input files OUTPUT/transactions-subset1-price.rsave
+#                                        -sale-year.rsave
+#                                        -sale-month.rsave
+#                         
 # write files OUTPUT/an-01.rsave
 #                    an-01-log.txt
 
@@ -66,4 +70,4 @@ Main(control)
 print('control variables')
 print(control)
 
-cat('done')
+cat('done\n')
