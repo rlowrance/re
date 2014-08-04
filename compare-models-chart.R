@@ -92,7 +92,8 @@ Main <- function(control) {
 #command.args <- CommandArgs(defaultArgs = list('--what', 'cv', '--choice', '01'))
 #command.args <- CommandArgs(defaultArgs = list('--what', 'bmtp', '--choice', 'assessor'))
 #command.args <- CommandArgs(defaultArgs = list('--what', 'sfpLinear', '--choice', '01'))
-command.args <- CommandArgs(defaultArgs = list('--what', 'sfpLinear', '--choice', '02'))
+#command.args <- CommandArgs(defaultArgs = list('--what', 'sfpLinear', '--choice', '02'))
+command.args <- CommandArgs(defaultArgs = list('--what', 'sfpLinear', '--choice', '03'))
 
 control <- AugmentControlVariables(ParseCommandLineArguments(command.args))
 
