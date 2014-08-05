@@ -1,5 +1,5 @@
-Require('Formula')
-Require('Printf')
+source('Formula.R')
+source('Printf.R')
 ModelLinear <- function(data, 
                         training.indices, 
                         testing.indices,
