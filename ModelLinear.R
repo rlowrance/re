@@ -105,9 +105,10 @@ ModelLinear <- function(data,
             prediction.returned <- prediction
         }
         
-        result <- list(actual = actual, 
-                       prediction = prediction.returned, 
-                       num.training.samples = num.training.samples)
+        result <- list( actual = actual
+                       ,prediction = prediction.returned
+                       ,num.training.samples = num.training.samples
+                       ,fitted = fitted)
         result
     }
 
