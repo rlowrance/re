@@ -1,5 +1,5 @@
-Require('Rmse')
-Require('WithinXPercent')
+source('Rmse.R')
+source('WithinXPercent.R')
 Assess <- function(model.result) {
     # return assessment of the model.result
     # ARG:
