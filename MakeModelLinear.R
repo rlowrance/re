@@ -46,7 +46,7 @@ MakeModelLinear <- function(scenario, testing.period, data, num.training.days,
         # training period is n days around the date of the sale transaction
         #cat('starting MyTrainingPeriodMortgage\n'); browser()
         TrainingPeriodMortgage <- function(testing.date) {
-            cat('starting TrainingPeriodMortgage', testing.date, '\n'); browser()
+            #cat('starting TrainingPeriodMortgage', testing.date, '\n'); browser()
             # TODO: find a way to make sure that testing.date is a Date
             # code below doesn't work because there is no function is.Date or isDate
             #stopifnot(isDate(testing.date))
@@ -63,8 +63,8 @@ MakeModelLinear <- function(scenario, testing.period, data, num.training.days,
         switch( scenario
                ,assessor = MyTrainingPeriodAssessor(testing.period$first.date)
                ,avm      = MyTrainingPeriodAvm()  # return a function(testing.date) --> training.period
-               ,avmnoa   = MyTrainingPeriodAvmnoa() # return a function(testing.date)--> training.period
                ,mortgage = MyTrainingPeriodMortgage()  # return a function(testing.date) --> training.period
+               ,stop('bad scenario value')
                )
     stopifnot(!is.null(my.training.period))
 
