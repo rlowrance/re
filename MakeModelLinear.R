@@ -33,7 +33,7 @@ MakeModelLinear <- function(scenario, testing.period, data, num.training.days,
     MyTrainingPeriodAvm <- function() {
         # training period is n days just before the transaction
         TrainingPeriodAvm <- function(testing.date) {
-            cat('starting TrainingPeriodAvm\n'); browser()
+            #cat('starting TrainingPeriodAvm\n'); browser()
             training.period <- list(first.date = testing.date - num.training.days - 1,
                                     last.date = testing.date - 1)
             training.period
