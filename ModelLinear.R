@@ -1,4 +1,5 @@
 source('Formula.R')
+source('ListAppend.R')
 source('Printf.R')
 ModelLinear <- function(data, 
                         training.indices, 
@@ -208,7 +209,11 @@ ModelLinear <- function(data,
         # Build lists for actuals and predicted values
         actual <- sapply(actual.prediction, function(x) x$actual)
         prediction <- sapply(actual.prediction, function(x) x$prediction)
-        result <- list(actual = actual, prediction = prediction, num.training.samples = 0)
+        result <- list( actual = actual
+                       ,prediction = prediction
+                       ,num.training.samples = 0
+                       ,fitted = fitted.models
+                       )
         result
     }
 
