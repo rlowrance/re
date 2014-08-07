@@ -56,7 +56,7 @@ ModelAvmLevelLevel <- function(data, testing.period, response, predictors, num.t
                                ,data = data
                                ,num.training.days = num.training.days
                                ,response = response
-                               ,predictors = predictors
+                               ,predictors = c(predictors, 'true.value')
                                ,verbose.model = FALSE
                                )
     ModelCv
@@ -153,6 +153,7 @@ Main <- function() {
         print('Actual coefficients\n'); print(coefficients)
     }
 
+    #Run('avmnoa level level', ModelAvmnoaLevelLevel)
     Run('assessor level level', ModelAssessorLevelLevel)
     Run('avm level level', ModelAvmLevelLevel)
     #Run('assessor log level', ModelAssessorLogLevel)
