@@ -25,67 +25,98 @@ TransformSizeToLog <- function(vars) {
 
 ModelAssessorLevelLevel <- function(data, testing.period, response, predictors, num.training.days) {
     #cat('start MakeAssessorLogLevel\n'); browser()
-    ModelCv <- MakeModelLinear( scenario = 'assessor'
-                               ,testing.period = testing.period
-                               ,data = data
-                               ,num.training.days = num.training.days
-                               ,response = response
-                               ,predictors = predictors
-                               ,verbose.model = FALSE
-                               )
-    ModelCv
+    MakeModelLinear( scenario = 'assessor'
+                    ,testing.period = testing.period
+                    ,data = data
+                    ,num.training.days = num.training.days
+                    ,response = response
+                    ,predictors = predictors
+                    ,verbose.model = FALSE
+                    )
 }
 
 ModelAssessorLogLevel <- function(data, testing.period, response, predictors, num.training.days) {
     #cat('start MakeAssessorLogLevel\n'); browser()
-    ModelCv <- MakeModelLinear( scenario = 'assessor'
-                               ,testing.period = testing.period
-                               ,data = data
-                               ,num.training.days = num.training.days
-                               ,response = PrefixLog(response)
-                               ,predictors = predictors
-                               ,verbose.model = FALSE
-                               )
-    ModelCv
+    MakeModelLinear( scenario = 'assessor'
+                    ,testing.period = testing.period
+                    ,data = data
+                    ,num.training.days = num.training.days
+                    ,response = PrefixLog(response)
+                    ,predictors = predictors
+                    ,verbose.model = FALSE
+                    )
 }
 
 ModelAvmLevelLevel <- function(data, testing.period, response, predictors, num.training.days) {
     #cat('start MakeAvmLevelLevel\n'); browser()
-    ModelCv <- MakeModelLinear( scenario = 'avm'
-                               ,testing.period = testing.period
-                               ,data = data
-                               ,num.training.days = num.training.days
-                               ,response = response
-                               ,predictors = c(predictors, 'true.value')
-                               ,verbose.model = FALSE
-                               )
-    ModelCv
+    MakeModelLinear( scenario = 'avm'
+                    ,testing.period = testing.period
+                    ,data = data
+                    ,num.training.days = num.training.days
+                    ,response = response
+                    ,predictors = c(predictors, 'true.value')
+                    ,verbose.model = FALSE
+                    )
+}
+
+ModelAvmLogLevel <- function(data, testing.period, response, predictors, num.training.days) {
+    #cat('start MakeAvmLevelLevel\n'); browser()
+    MakeModelLinear( scenario = 'avm'
+                    ,testing.period = testing.period
+                    ,data = data
+                    ,num.training.days = num.training.days
+                    ,response = PrefixLog(response)
+                    ,predictors = c(predictors, 'true.value')
+                    ,verbose.model = FALSE
+                    )
 }
 
 ModelAvmLevelLevelNoAssessment <- function(data, testing.period, response, predictors, num.training.days) {
     #cat('start MakeAvmLevelLevelNoAssessment\n'); browser()
-    ModelCv <- MakeModelLinear( scenario = 'avm'
-                               ,testing.period = testing.period
-                               ,data = data
-                               ,num.training.days = num.training.days
-                               ,response = response
-                               ,predictors = predictors
-                               ,verbose.model = FALSE
-                               )
-    ModelCv
+    MakeModelLinear( scenario = 'avm'
+                    ,testing.period = testing.period
+                    ,data = data
+                    ,num.training.days = num.training.days
+                    ,response = response
+                    ,predictors = predictors
+                    ,verbose.model = FALSE
+                    )
+}
+
+ModelAvmLogLevelNoAssessment <- function(data, testing.period, response, predictors, num.training.days) {
+    #cat('start MakeAvmLevelLevelNoAssessment\n'); browser()
+    MakeModelLinear( scenario = 'avm'
+                    ,testing.period = testing.period
+                    ,data = data
+                    ,num.training.days = num.training.days
+                    ,response = PrefixLog(response)
+                    ,predictors = predictors
+                    ,verbose.model = FALSE
+                    )
 }
 
 ModelMortgageLevelLevel <- function(data, testing.period, response, predictors, num.training.days) {
     #cat('start MakeMortgageLevelLevel\n'); browser()
-    ModelCv <- MakeModelLinear( scenario = 'mortgage'
-                               ,testing.period = testing.period
-                               ,data = data
-                               ,num.training.days = num.training.days
-                               ,response = response
-                               ,predictors = c(predictors, 'true.value')
-                               ,verbose.model = FALSE
-                               )
-    ModelCv
+    MakeModelLinear( scenario = 'mortgage'
+                    ,testing.period = testing.period
+                    ,data = data
+                    ,num.training.days = num.training.days
+                    ,response = response
+                    ,predictors = c(predictors, 'true.value')
+                    ,verbose.model = FALSE
+                    )
+}
+
+ModelMortgageLogLevel <- function(data, testing.period, response, predictors, num.training.days) {
+    #cat('start MakeMortgageLevelLevel\n'); browser()
+    MakeModelLinear( scenario = 'mortgage'
+                    ,testing.period = testing.period
+                    ,data = data
+                    ,num.training.days = num.training.days
+                    ,response = PrefixLog(response)
+                    ,predictors = c(predictors, 'true.value')
+                    ,verbose.model = FALSE
+                    )
 }
 
 ModelResult <- function(ModelMaker, testing.period, response, predictors, num.training.days, data) {
@@ -193,9 +224,13 @@ Main <- function() {
 
     all.results <- 
         Reduce( Accumulate
-               ,list( list('assessor level level', ModelAssessorLevelLevel)
-                     ,list('avm level level', ModelAvmLevelLevel)
+               ,list( list('assessor log level', ModelAssessorLogLevel)
+                     ,list('avm log level no assessment', ModelAvmLogLevelNoAssessment)
+                     ,list('avm log level', ModelAvmLogLevel)
+                     ,list('mortgage log level', ModelMortgageLogLevel)
+                     ,list('assessor level level', ModelAssessorLevelLevel)
                      ,list('avm level level no assessment', ModelAvmLevelLevelNoAssessment)
+                     ,list('avm level level', ModelAvmLevelLevel)
                      ,list('mortgage level level', ModelMortgageLevelLevel)
                      )
                ,NULL
