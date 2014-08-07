@@ -50,8 +50,34 @@ ModelAssessorLogLevel <- function(data, testing.period, response, predictors, nu
 }
 
 ModelAvmLevelLevel <- function(data, testing.period, response, predictors, num.training.days) {
-    #cat('start MakeAssessorLogLevel\n'); browser()
+    #cat('start MakeAvmLevelLevel\n'); browser()
     ModelCv <- MakeModelLinear( scenario = 'avm'
+                               ,testing.period = testing.period
+                               ,data = data
+                               ,num.training.days = num.training.days
+                               ,response = response
+                               ,predictors = c(predictors, 'true.value')
+                               ,verbose.model = FALSE
+                               )
+    ModelCv
+}
+
+ModelAvmLevelLevelNoAssessment <- function(data, testing.period, response, predictors, num.training.days) {
+    #cat('start MakeAvmLevelLevelNoAssessment\n'); browser()
+    ModelCv <- MakeModelLinear( scenario = 'avm'
+                               ,testing.period = testing.period
+                               ,data = data
+                               ,num.training.days = num.training.days
+                               ,response = response
+                               ,predictors = predictors
+                               ,verbose.model = FALSE
+                               )
+    ModelCv
+}
+
+ModelMortgageLevelLevel <- function(data, testing.period, response, predictors, num.training.days) {
+    #cat('start MakeMortgageLevelLevel\n'); browser()
+    ModelCv <- MakeModelLinear( scenario = 'mortgage'
                                ,testing.period = testing.period
                                ,data = data
                                ,num.training.days = num.training.days
@@ -84,7 +110,7 @@ Main <- function() {
     first.date <- as.Date('2007-01-01')
     last.date <- as.Date('2008-12-31')
     obs.per.day <- 10
-    obs.per.day <- 1; cat('TESTING\n')
+    #obs.per.day <- 1; cat('TESTING\n')
     ds <- DataSynthetic( obs.per.day = obs.per.day
                         ,first.date = first.date
                         ,last.date = last.date
@@ -99,6 +125,7 @@ Main <- function() {
     num.training.days <- 60
     
     Run <- function(name, ModelMaker) {
+        # return RMSE for trained and tested ModelMaker
         PrintFitted <- function(fitted) {
             CoefficientsToString <- function(one.fitted) {
                 # return string
@@ -125,7 +152,7 @@ Main <- function() {
                 Printf('%s: %s\n', as.character(name), CoefficientsToString(one.fitted))
             }
 
-            cat('start PrintFitted\n'); browser()
+            #cat('start PrintFitted\n'); browser()
             if (is.null(fitted$coefficients)) {
                 # a nested structure with many fitted models
                 Map(PrintDateCoefficients, names(fitted))
@@ -134,7 +161,7 @@ Main <- function() {
             }
         }
 
-        cat('start Run\n'); browser()
+        #cat('start Run\n'); browser()
         model.result <- ModelResult( ModelMaker = ModelMaker
                                     ,testing.period = testing.period
                                     ,response = response
@@ -151,15 +178,38 @@ Main <- function() {
         #print(model.result)
         PrintFitted(fitted)
         print('Actual coefficients\n'); print(coefficients)
+
+        list( name = name
+             ,rmse = assess$rmse
+             )
     }
 
-    #Run('avmnoa level level', ModelAvmnoaLevelLevel)
-    Run('assessor level level', ModelAssessorLevelLevel)
-    Run('avm level level', ModelAvmLevelLevel)
-    #Run('assessor log level', ModelAssessorLogLevel)
+    Accumulate <- function(left, right) {
+        name <- right[[1]]
+        Model <- right[[2]]
+        run <- Run(name, Model)
+        ListAppend(left, run)
+    }
 
-    cat('end of Main\n'); browser()
-    # examine coefficients of trained model
+    all.results <- 
+        Reduce( Accumulate
+               ,list( list('assessor level level', ModelAssessorLevelLevel)
+                     ,list('avm level level', ModelAvmLevelLevel)
+                     ,list('avm level level no assessment', ModelAvmLevelLevelNoAssessment)
+                     ,list('mortgage level level', ModelMortgageLevelLevel)
+                     )
+               ,NULL
+               )
+
+    PrintResult <- function(result) {
+        Printf('use case: %40s  RMSE: %.0f\n', result$name, result$rmse)
+    }
+
+    #cat('about to PrintResults\n'); browser()
+    Map(PrintResult, all.results)
+    
+
+    #cat('end of Main\n'); browser()
 }
 
 InitializeR()
