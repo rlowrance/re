@@ -158,8 +158,6 @@ ModelLinear <- function(data,
     # data             : data.frame
     # training.indices : selector vector; only these observations in data can be used for training
     # testing.indices  : selector vector; only these observations in data can be used for testing
-    # scenario         : chr scalar, one of 'assessor', 'avm', 'mortgage'
-    # training.period  : list of Date, $first.date, $last.date or
     #                    function(transaction.date) --> training.period for the transaction date
     # testing.period   : list of Date, $first.date, $last.date
     # features         : list of $response (chr scalar) $predictors (chr vector)
