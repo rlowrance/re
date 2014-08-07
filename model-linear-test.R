@@ -6,6 +6,7 @@ source('Assess.R')
 source('DataSynthetic.R')
 source('InitializeR.R')
 source('MakeModelLinear.R')
+source('Printf.R')
 
 PrefixLog <- function(var) {
     #cat('start PrefixLog', var, '\n'); browser()
@@ -78,7 +79,6 @@ ModelResult <- function(ModelMaker, testing.period, response, predictors, num.tr
     model.result
 }
 
-
 Main <- function() {
     #cat('start Main\n'); browser()
     first.date <- as.Date('2007-01-01')
@@ -99,6 +99,41 @@ Main <- function() {
     num.training.days <- 60
     
     Run <- function(name, ModelMaker) {
+        PrintFitted <- function(fitted) {
+            CoefficientsToString <- function(one.fitted) {
+                # return string
+                #cat('start CoefficientsToString\n'); print(str(one.fitted)); browser()
+                coefficients <- one.fitted$coefficients
+                ToString <- function(name) {
+                    value <- coefficients[[name]]
+                    result <- 
+                        switch( name
+                               ,"(Intercept)" = sprintf('%s %7.0f', name, value)
+                               ,has.poolTRUE = sprintf('%s %5f', name, value)
+                               ,sprintf('%s %7.1f', name, value)
+                               )
+                    result
+                }
+
+                s <- Map(ToString, names(coefficients))
+                reduction <- Reduce(paste, s, '')
+                reduction
+            }
+            PrintDateCoefficients <- function(name) {
+                #cat('start PrintDateCoefficients\n'); print(name); browser()
+                one.fitted <- fitted[[name]]
+                Printf('%s: %s\n', as.character(name), CoefficientsToString(one.fitted))
+            }
+
+            cat('start PrintFitted\n'); browser()
+            if (is.null(fitted$coefficients)) {
+                # a nested structure with many fitted models
+                Map(PrintDateCoefficients, names(fitted))
+            } else {
+                Printf('%s\n', CoefficientsToString(fitted))
+            }
+        }
+
         cat('start Run\n'); browser()
         model.result <- ModelResult( ModelMaker = ModelMaker
                                     ,testing.period = testing.period
@@ -114,11 +149,11 @@ Main <- function() {
         cat('mean price', mean(data$price), '\n')
         print(str(assess))
         #print(model.result)
-        print(summary(fitted))
+        PrintFitted(fitted)
         print('Actual coefficients\n'); print(coefficients)
     }
 
-    #Run('assessor level level', ModelAssessorLevelLevel)
+    Run('assessor level level', ModelAssessorLevelLevel)
     Run('avm level level', ModelAvmLevelLevel)
     #Run('assessor log level', ModelAssessorLogLevel)
 
