@@ -8,134 +8,6 @@ source('InitializeR.R')
 source('MakeModelLinear.R')
 source('Printf.R')
 
-PrefixLog <- function(var) {
-    #cat('start PrefixLog', var, '\n'); browser()
-    result <- sprintf('log.%s', var)
-    result
-}
-
-TransformSizeToLog <- function(vars) {
-    #cat('start TransformSizeToLog\n'); browser()
-    Transform <- function(var) {
-        IfThenElse(var == 'land.size', PrefixLog(var), var)
-    }
-    result <- Map(Transform, vars)
-    result
-}
-
-ModelAssessorLevelLevel <- function(data, testing.period, response, predictors, num.training.days) {
-    #cat('start MakeAssessorLogLevel\n'); browser()
-    MakeModelLinear( scenario = 'assessor'
-                    ,testing.period = testing.period
-                    ,data = data
-                    ,num.training.days = num.training.days
-                    ,response = response
-                    ,predictors = predictors
-                    ,verbose.model = FALSE
-                    )
-}
-
-ModelAssessorLogLevel <- function(data, testing.period, response, predictors, num.training.days) {
-    #cat('start MakeAssessorLogLevel\n'); browser()
-    MakeModelLinear( scenario = 'assessor'
-                    ,testing.period = testing.period
-                    ,data = data
-                    ,num.training.days = num.training.days
-                    ,response = PrefixLog(response)
-                    ,predictors = predictors
-                    ,verbose.model = FALSE
-                    )
-}
-
-ModelAvmLevelLevel <- function(data, testing.period, response, predictors, num.training.days) {
-    #cat('start MakeAvmLevelLevel\n'); browser()
-    MakeModelLinear( scenario = 'avm'
-                    ,testing.period = testing.period
-                    ,data = data
-                    ,num.training.days = num.training.days
-                    ,response = response
-                    ,predictors = c(predictors, 'true.value')
-                    ,verbose.model = FALSE
-                    )
-}
-
-ModelAvmLogLevel <- function(data, testing.period, response, predictors, num.training.days) {
-    #cat('start MakeAvmLevelLevel\n'); browser()
-    MakeModelLinear( scenario = 'avm'
-                    ,testing.period = testing.period
-                    ,data = data
-                    ,num.training.days = num.training.days
-                    ,response = PrefixLog(response)
-                    ,predictors = c(predictors, 'true.value')
-                    ,verbose.model = FALSE
-                    )
-}
-
-ModelAvmLevelLevelNoAssessment <- function(data, testing.period, response, predictors, num.training.days) {
-    #cat('start MakeAvmLevelLevelNoAssessment\n'); browser()
-    MakeModelLinear( scenario = 'avm'
-                    ,testing.period = testing.period
-                    ,data = data
-                    ,num.training.days = num.training.days
-                    ,response = response
-                    ,predictors = predictors
-                    ,verbose.model = FALSE
-                    )
-}
-
-ModelAvmLogLevelNoAssessment <- function(data, testing.period, response, predictors, num.training.days) {
-    #cat('start MakeAvmLevelLevelNoAssessment\n'); browser()
-    MakeModelLinear( scenario = 'avm'
-                    ,testing.period = testing.period
-                    ,data = data
-                    ,num.training.days = num.training.days
-                    ,response = PrefixLog(response)
-                    ,predictors = predictors
-                    ,verbose.model = FALSE
-                    )
-}
-
-ModelMortgageLevelLevel <- function(data, testing.period, response, predictors, num.training.days) {
-    #cat('start MakeMortgageLevelLevel\n'); browser()
-    MakeModelLinear( scenario = 'mortgage'
-                    ,testing.period = testing.period
-                    ,data = data
-                    ,num.training.days = num.training.days
-                    ,response = response
-                    ,predictors = c(predictors, 'true.value')
-                    ,verbose.model = FALSE
-                    )
-}
-
-ModelMortgageLogLevel <- function(data, testing.period, response, predictors, num.training.days) {
-    #cat('start MakeMortgageLevelLevel\n'); browser()
-    MakeModelLinear( scenario = 'mortgage'
-                    ,testing.period = testing.period
-                    ,data = data
-                    ,num.training.days = num.training.days
-                    ,response = PrefixLog(response)
-                    ,predictors = c(predictors, 'true.value')
-                    ,verbose.model = FALSE
-                    )
-}
-
-ModelResult <- function(ModelMaker, testing.period, response, predictors, num.training.days, data) {
-    ModelCv <- ModelMaker( data = data
-                          ,testing.period = testing.period
-                          ,response = response
-                          ,predictors = predictors
-                          ,num.training.days = num.training.days
-                          )
-
-    training.indices <- 1:nrow(data)
-    testing.indices <- 1:nrow(data)
-    model.result <- ModelCv( data = data
-                            ,training.indices = training.indices
-                            ,testing.indices = testing.indices
-                            )
-    model.result
-}
-
 Main <- function() {
     #cat('start Main\n'); browser()
     first.date <- as.Date('2007-01-01')
@@ -149,14 +21,10 @@ Main <- function() {
     data <- ds$data
     coefficients <- ds$coefficients
 
-    cat('in Main\n'); browser()
-    testing.period <- list(first.date = as.Date('2008-01-01'), last.date = as.Date('2008-01-31'))
-    response = 'price'
-    predictors = c('recordingDate', 'land.size', 'latitude', 'has.pool')
-    num.training.days <- 60
+    #cat('in Main\n'); browser()
     
-    Run <- function(name, ModelMaker) {
-        # return RMSE for trained and tested ModelMaker
+    Run <- function(name, ModelCv) {
+        # return RMSE for trained and tested ModelCv (that uses the CrossValidate API)
         PrintFitted <- function(fitted) {
             CoefficientsToString <- function(one.fitted) {
                 # return string
@@ -193,13 +61,10 @@ Main <- function() {
         }
 
         #cat('start Run\n'); browser()
-        model.result <- ModelResult( ModelMaker = ModelMaker
-                                    ,testing.period = testing.period
-                                    ,response = response
-                                    ,predictors = predictors
-                                    ,num.training.days = num.training.days
-                                    ,data = data
-                                    )
+        model.result <- ModelCv( data = data
+                                ,training.indices = 1:nrow(data)
+                                ,testing.indices = 1:nrow(data)
+                                )
         assess <- Assess(model.result)
         fitted <- model.result$fitted
 
@@ -215,27 +80,69 @@ Main <- function() {
              )
     }
 
-    Accumulate <- function(left, right) {
-        name <- right[[1]]
-        Model <- right[[2]]
-        run <- Run(name, Model)
-        ListAppend(left, run)
+    ParseAndRun <- function(lst) {
+        #cat('start ParseAndRun\n'); print(lst); browser()
+        Run(lst$name, lst$Model)
     }
 
-    all.results <- 
-        Reduce( Accumulate
-               ,list( list('assessor log level', ModelAssessorLogLevel)
-                     ,list('avm log level no assessment', ModelAvmLogLevelNoAssessment)
-                     ,list('avm log level', ModelAvmLogLevel)
-                     ,list('mortgage log level', ModelMortgageLogLevel)
-                     ,list('assessor level level', ModelAssessorLevelLevel)
-                     ,list('avm level level no assessment', ModelAvmLevelLevelNoAssessment)
-                     ,list('avm level level', ModelAvmLevelLevel)
-                     ,list('mortgage level level', ModelMortgageLevelLevel)
-                     )
-               ,NULL
-               )
+    NameAndModel <- function(scenario, response.name, predictors.name) {
 
+        Response <- function(response.name) {
+            switch( response.name
+                   ,level = 'price'
+                   ,log = 'log.price'
+                   ,stop('bad response.name')
+                   )
+        }
+
+        Predictors <- function(predictors.name) {
+            #cat('start Predictors', predictors.name, '\n'); browser()
+            switch( predictors.name
+                   ,level = c('land.size', 'latitude', 'has.pool')
+                   ,levelAssessment = c('land.size', 'latitude', 'has.pool', 'true.value')
+                   ,log = c('log.land.size', 'latitude', 'has.pool')
+                   ,logAssessment = c('log.land.size', 'latitude', 'has.pool', 'log.true.value')
+                   ,stop('bad predictors.name')
+                   )
+        }
+        
+        testing.period <- list(first.date = as.Date('2008-01-01'), last.date = as.Date('2008-01-31'))
+        num.training.days <- 60
+        list( name = paste(scenario, response.name, predictors.name)
+             ,Model = MakeModelLinear( scenario = scenario
+                                      ,response = Response(response.name)
+                                      ,predictors = Predictors(predictors.name)
+                                      ,testing.period = testing.period
+                                      ,data = data
+                                      ,num.training.days = num.training.days
+                                      ,verbose.model = TRUE
+                                      )
+             )
+    }
+    
+    all.results <- 
+        Map( ParseAndRun
+            ,list( NameAndModel('assessor', 'log', 'level')
+                  ,NameAndModel('avm', 'log', 'levelAssessment')
+                  ,NameAndModel('avm', 'log', 'level')
+                  ,NameAndModel('mortgage', 'log', 'levelAssessment')
+
+                  ,NameAndModel('assessor', 'log', 'log')
+                  ,NameAndModel('avm', 'log', 'logAssessment')
+                  ,NameAndModel('avm', 'log', 'log')
+                  ,NameAndModel('mortgage', 'log', 'logAssessment')
+
+                  ,NameAndModel('assessor', 'level', 'level')
+                  ,NameAndModel('avm', 'level', 'levelAssessment')
+                  ,NameAndModel('avm', 'level', 'level')
+                  ,NameAndModel('mortgage', 'level', 'levelAssessment')
+
+                  ,NameAndModel('assessor', 'level', 'log')
+                  ,NameAndModel('avm', 'level', 'logAssessment')
+                  ,NameAndModel('avm', 'level', 'log')
+                  ,NameAndModel('mortgage', 'level', 'logAssessment')
+                  )
+            )
     PrintResult <- function(result) {
         Printf('use case: %40s  RMSE: %.0f\n', result$name, result$rmse)
     }
