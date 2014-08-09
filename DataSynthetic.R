@@ -1,5 +1,5 @@
 source('IfThenElse.R')
-DataSynthetic <- function(obs.per.day, first.date, last.date) {
+DataSynthetic <- function(obs.per.day, first.date, last.date, inflation.annual.rate) {
     # generate random synthetic data set
     # RETURNS list
     # $data : data.frame
@@ -12,7 +12,9 @@ DataSynthetic <- function(obs.per.day, first.date, last.date) {
     # call set.seed() before calling me, if you want reproducability
     #cat('starting DataSynthetic\n'); browser()
     
-    inflation.rate.yearly <- .1  # percent per 365 days
+    stopifnot(inflation.annual.rate >= 0)
+    stopifnot(inflation.annual.rate <= 1)
+
     coefficients <- list( intercept = 10000
                          ,land.size = 100
                          ,latitude = 20
@@ -34,7 +36,7 @@ DataSynthetic <- function(obs.per.day, first.date, last.date) {
         elapsed.days <- saleDate - first.date
         days.per.year <- 365
         inflation.factor <- 
-            (1 + inflation.rate.yearly) ^ as.numeric(elapsed.days / days.per.year)
+            (1 + inflation.annual.rate) ^ as.numeric(elapsed.days / days.per.year)
         true.value.inflated <- inflation.factor * true.value.no.inflation
 
         true.value.inflated
@@ -44,6 +46,7 @@ DataSynthetic <- function(obs.per.day, first.date, last.date) {
     #cat('start of loop\n'); browser()
     all.rows <- NULL  # a data.frame   
     elapsed.days <- last.date - first.date + 1
+    set.seed(123)
     for (day.number in 1:elapsed.days) {
         for (obs in 1:obs.per.day) {
             saleDate <- as.Date(day.number, origin = first.date)
@@ -66,21 +69,51 @@ DataSynthetic <- function(obs.per.day, first.date, last.date) {
         }
     }
 
-    # add in normalized errors
+    # price := true.value + market.error
+    # assessment := price + assessment.error
     #cat('after loop\n'); browser()
     mean.true.value <- mean(all.rows$true.value)
-    error <- rnorm( n = nrow(all.rows)
-                    ,mean = 0
-                    ,sd = mean.true.value * .1
-                    )
-    price <- all.rows$true.value + error
+    market.error <- rnorm( n = nrow(all.rows)
+                   ,mean = 0
+                   ,sd = mean.true.value * .1
+                   )
+    price <- all.rows$true.value + market.error
     log.price <- log(price)
 
+    mean.price <- mean(price)
+    assessment.error <- rnorm( n = nrow(all.rows)
+                              ,mean = 0
+                              ,sd = mean.price * .1 
+                              )
+    assessment <- price + assessment.error
+
+
+
+
     data <- cbind( all.rows
-                    ,error = error
-                    ,price = price
-                    ,log.price = log.price
+                  ,price = price
+                  ,log.price = log.price
+                  ,assessment = assessment
+                  )
+
+    # check how accurate the assessments are vs. the prices
+    if (FALSE) {
+        model <- lm( formula = price ~ assessment + 0
+                    ,data = data
                     )
+        print(summary(model))
+        predicted <- predict(model, data)
+        actual <- data$price
+        error <- predicted - actual
+    }
+    if (FALSE) {
+        # determine how close the assessments are to actual prices
+        error <- assessment - price
+        relative.abs.error <- abs(error / price)
+        is.close <- relative.abs.error < .10
+        fraction.is.close <- sum(is.close) / length(price)
+        cat('fraction of assessments within 10 percent', fraction.is.close, '\n')
+    }
 
     result <- list( data = data
                    ,coefficients = coefficients
@@ -92,7 +125,20 @@ DataSynthetic.test <- function() {
     # test for run to completion for now
     #cat('starting DataSynthetic.test\n'); browser()
     #data <- DataSynthetic(10, as.Date('2007-01-01'), as.Date('2008-12-31'))  # big test set
-    data <- DataSynthetic(1, as.Date('2007-01-01'), as.Date('2007-01-01'))  # tiny test set
+
+    if (FALSE) { # big test set
+        data <- DataSynthetic( obs.per.day = 10
+                              ,first.date = as.Date('2007-01-01')
+                              ,last.date =  as.Date('2008-01-01')
+                              ,inflation.annual.rate = .1
+                              )
+    }
+
+    data <- DataSynthetic( obs.per.day = 1
+                          ,first.date = as.Date('2007-01-01')
+                          ,last.date =  as.Date('2007-01-01')
+                          ,inflation.annual.rate = .1
+                          )  # tiny test set
 }
 
 DataSynthetic.test()
