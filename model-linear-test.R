@@ -11,12 +11,13 @@ source('Printf.R')
 Main <- function() {
     #cat('start Main\n'); browser()
     first.date <- as.Date('2007-01-01')
-    last.date <- as.Date('2008-12-31')
+    last.date <- as.Date('2008-01-31')
     obs.per.day <- 10
     #obs.per.day <- 1; cat('TESTING\n')
     ds <- DataSynthetic( obs.per.day = obs.per.day
                         ,first.date = first.date
                         ,last.date = last.date
+                        ,inflation.annual.rate = 0
                         )
     data <- ds$data
     coefficients <- ds$coefficients
@@ -82,7 +83,13 @@ Main <- function() {
 
     ParseAndRun <- function(lst) {
         #cat('start ParseAndRun\n'); print(lst); browser()
-        Run(lst$name, lst$Model)
+        run <- Run(lst$name, lst$Model)
+        list( scenario = lst$scenario
+             ,response.name = lst$response.name
+             ,predictors.name = lst$predictors.name
+             ,name = run$name
+             ,rmse = run$rmse
+             )
     }
 
     NameAndModel <- function(scenario, response.name, predictors.name) {
@@ -99,9 +106,9 @@ Main <- function() {
             #cat('start Predictors', predictors.name, '\n'); browser()
             switch( predictors.name
                    ,level = c('land.size', 'latitude', 'has.pool')
-                   ,levelAssessment = c('land.size', 'latitude', 'has.pool', 'true.value')
+                   ,levelAssessment = c('land.size', 'latitude', 'has.pool', 'assessment')
                    ,log = c('log.land.size', 'latitude', 'has.pool')
-                   ,logAssessment = c('log.land.size', 'latitude', 'has.pool', 'log.true.value')
+                   ,logAssessment = c('log.land.size', 'latitude', 'has.pool', 'log.assessment')
                    ,stop('bad predictors.name')
                    )
         }
@@ -109,6 +116,9 @@ Main <- function() {
         testing.period <- list(first.date = as.Date('2008-01-01'), last.date = as.Date('2008-01-31'))
         num.training.days <- 60
         list( name = paste(scenario, response.name, predictors.name)
+             ,scenario = scenario
+             ,response.name = response.name
+             ,predictors.name = predictors.name
              ,Model = MakeModelLinear( scenario = scenario
                                       ,response = Response(response.name)
                                       ,predictors = Predictors(predictors.name)
@@ -147,8 +157,58 @@ Main <- function() {
         Printf('use case: %40s  RMSE: %.0f\n', result$name, result$rmse)
     }
 
+    PrintTable <- function(all.results) {
+        #cat('start PrintTable\n'); browser()
+        cat('RMSE\n')
+
+        format.header <- '%19s | %15s %15s %15s %15s\n'
+        format.data <- '%19s | %15.0f %15.0f %15.0f %15.0f\n'
+
+        Printf(format.header, 'scenario', 'level-level', 'level-log', 'log-level', 'log-log')
+
+        Rmse <- function(scenario, response.name, predictors.name) {
+            for (result in all.results) {
+                if (result$scenario == scenario &&
+                    result$response.name == response.name &&
+                    result$predictors.name == predictors.name) {
+                    return(result$rmse)
+                }
+            }
+            cat('in Rmse; about to fail', scenario, response.name, predictors.name, '\n'); browser()
+            stop('bad')
+        }
+
+
+        Printf( format.data
+               ,'assessor'
+               ,Rmse('assessor', 'level', 'level'), Rmse('assessor', 'level', 'log')
+               ,Rmse('assessor', 'log', 'level'), Rmse('assessor', 'log', 'log')
+               )
+        Printf( format.data
+               ,'avm w/o assessment'
+               ,Rmse('avm', 'level', 'level'), Rmse('avm', 'level', 'log')
+               ,Rmse('avm', 'log', 'level'), Rmse('avm', 'log', 'log')
+               )
+        Printf( format.data
+               ,'avm w/ assessment'
+               ,Rmse('avm', 'level', 'levelAssessment'), Rmse('avm', 'level', 'logAssessment')
+               ,Rmse('avm', 'log', 'levelAssessment'), Rmse('avm', 'log', 'logAssessment')
+               )
+        Printf( format.data
+               ,'mortgage'
+               ,Rmse('mortgage', 'level', 'levelAssessment'), Rmse('mortgage', 'level', 'logAssessment')
+               ,Rmse('mortgage', 'log', 'levelAssessment'), Rmse('mortgage', 'log', 'logAssessment')
+               )
+        
+
+    }
+
+
+
     #cat('about to PrintResults\n'); browser()
+    cat('\n\n\n************* SUMMARY ******************\n')
     Map(PrintResult, all.results)
+    PrintTable(all.results)
     
 
     #cat('end of Main\n'); browser()
