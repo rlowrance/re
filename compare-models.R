@@ -14,6 +14,9 @@ source('Assess.R')
 source('CommandArgs.R')
 
 source('CompareModelsAn01.R')
+
+source('CompareModelsAvmVariants.R')
+
 source('CompareModelsCv01.R')
 source('CompareModelsCv02.R')
 source('CompareModelsCv03.R')
@@ -302,6 +305,13 @@ SfpLinear <- function(control, transformed.data) {
     result
 }
 
+AvmVariants <- function(control, transformed.data) {
+    # dispatch based on control$choice
+
+    result <- CompareModelsAvmVariants(control, transformed.data)
+    result
+}
+
 
 Main <- function(control, transformed.data) {
     # execute one command, return NULL
@@ -313,6 +323,7 @@ Main <- function(control, transformed.data) {
            ,an = An(control, transformed.data)
            ,bmpt = Bmtp(control, transformed.data)
            ,sfpLinear = SfpLinear(control, transformed.data)
+           ,avmVariants = AvmVariants(control, transformed.data)
            )
 
     NULL
@@ -335,8 +346,12 @@ Main <- function(control, transformed.data) {
 #                                               ,'--index',      '1'
 #                                               )
 #)
-command.args <- CommandArgs(defaultArg = list( '--what',       'sfpLinear'
-                                              ,'--choice',     'combine'
+#command.args <- CommandArgs(defaultArg = list( '--what',       'sfpLinear'
+#                                              ,'--choice',     'combine'
+#                                              )
+#)
+command.args <- CommandArgs(defaultArg = list( '--what',       'avmVariants'
+                                              ,'--choice',     'NONE'
                                               )
 )
 print('command.args')
