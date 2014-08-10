@@ -147,7 +147,7 @@ ModelLinear <- function(data,
 
         result <- list(actual = actual, prediction = prediction.returned)
         if (verbose.model) {
-            Printf('mortgage index %d actual %7.0f prediction %7.0f\n',
+            Printf('index %d actual %7.0f prediction %7.0f\n',
                    test.index, result$actual, result$prediction)
         }
         result  
