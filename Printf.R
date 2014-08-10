@@ -1,4 +1,4 @@
 # Printf.R
-Printf <- function(...) {
-    cat(sprintf(...))
+Printf <- function(..., file = '') {
+    cat(sprintf(...), file = file)
 }
