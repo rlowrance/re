@@ -2,7 +2,7 @@ source('IfThenElse.R')
 Predictors <- function(set, form, center, useAssessment) {
     # return set of predictors
     # ARGS
-    # set : always 'Cjjjhopra' for now
+    # set : always 'Chopra' for now
     # form : 'log' or 'level'
     # center : TRUE or FALSE
     # useAssessment: TRUE or FALSE
