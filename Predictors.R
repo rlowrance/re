@@ -43,27 +43,45 @@ Predictors <- function(set, form, center, useAssessment) {
 
     #cat('starting Predictors\n', set, form, center, '\n'); browser()
 
-    stopifnot(set == 'Chopra')
-
-    chopra <- c( ContinuousSizePositive('land.square.footage')
-                ,ContinuousSizePositive('living.area')
-                ,ContinuousSizeNonnegative('bedrooms')
-                ,ContinuousSizeNonnegative('bathrooms')
-                ,ContinuousSizeNonnegative('parking.spaces')
-                ,IfThenElse(useAssessment, ContinuousSizePositive('improvement.value'), NULL)
-                ,IfThenElse(useAssessment, ContinuousSizePositive('land.value'), NULL)
-                ,ContinuousNonsize('median.household.income')
-                ,ContinuousNonsize('year.built')
-                ,ContinuousNonsize('fraction.owner.occupied')
-                ,ContinuousNonsize('avg.commute.time')
-                ,ContinuousNonsize('latitude')
-                ,ContinuousNonsize('longitude')
-                ,IfThenElse(useAssessment, ContinuousNonsize('fraction.improvement.value'), NULL)
-                ,Discrete('factor.is.new.construction')
-                ,Discrete('factor.has.pool')
-                )
-
-    chopra
+    predictors <- 
+        switch( set
+               ,Chopra = 
+                   c( ContinuousSizePositive('land.square.footage')
+                     ,ContinuousSizePositive('living.area')
+                     ,ContinuousSizeNonnegative('bedrooms')
+                     ,ContinuousSizeNonnegative('bathrooms')
+                     ,ContinuousSizeNonnegative('parking.spaces')
+                     ,IfThenElse(useAssessment, ContinuousSizePositive('improvement.value'), NULL)
+                     ,IfThenElse(useAssessment, ContinuousSizePositive('land.value'), NULL)
+                     ,ContinuousNonsize('median.household.income')
+                     ,ContinuousNonsize('year.built')
+                     ,ContinuousNonsize('fraction.owner.occupied')
+                     ,ContinuousNonsize('avg.commute.time')
+                     ,ContinuousNonsize('latitude')
+                     ,ContinuousNonsize('longitude')
+                     ,IfThenElse(useAssessment, ContinuousNonsize('fraction.improvement.value'), NULL)
+                     ,Discrete('factor.is.new.construction')
+                     ,Discrete('factor.has.pool')
+                     )
+               ,ChopraNoGeocoding = 
+                   c( ContinuousSizePositive('land.square.footage')
+                     ,ContinuousSizePositive('living.area')
+                     ,ContinuousSizeNonnegative('bedrooms')
+                     ,ContinuousSizeNonnegative('bathrooms')
+                     ,ContinuousSizeNonnegative('parking.spaces')
+                     ,IfThenElse(useAssessment, ContinuousSizePositive('improvement.value'), NULL)
+                     ,IfThenElse(useAssessment, ContinuousSizePositive('land.value'), NULL)
+                     ,ContinuousNonsize('median.household.income')
+                     ,ContinuousNonsize('year.built')
+                     ,ContinuousNonsize('fraction.owner.occupied')
+                     ,ContinuousNonsize('avg.commute.time')
+                     ,IfThenElse(useAssessment, ContinuousNonsize('fraction.improvement.value'), NULL)
+                     ,Discrete('factor.is.new.construction')
+                     ,Discrete('factor.has.pool')
+                     )
+               ,stop('bad set')
+               )
+    predictors
 
 }
 
