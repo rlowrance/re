@@ -1,7 +1,5 @@
 # compare-models.makefile
 # USAGE
-# make -file compare-models.makefile depend
-# make -file compare-models.makefile all
 #
 
 OUTPUT=../data/v6/output
@@ -13,6 +11,8 @@ SPLIT_APN=$(SUBSET1)-apn.rsave
 
 # also produces ...compare-models-an-01.pdf
 AN01=$(OUTPUT)/an-01.rsave
+
+AVMVARIANTS=$(OUTPUT)/compare-models-avmvariants-NONE.rsave
 
 BMTPASSESSOR=$(OUTPUT)/compare-models-bmtp-assessor.rsave
 BMTPASSESSORCHART1=$(OUTPUT)/compare-models-chart-bmtp-assessor-chart-1.rsave
@@ -85,7 +85,7 @@ SFPLINEAR_SHARDS = \
 
 SFPLINEAR = $(SFPLINEAR_SHARDS) $(SFPLINEAR_COMBINE)
 
-TARGETS=$(AN01) $(SPLIT_APN) $(SFPLINEAR)
+TARGETS=$(AN01) $(AVMVARIANTS) $(SPLIT_APN) $(SFPLINEAR)
 #		$(BMTPASSESSOR) $(BMTPASSESSORCHART1) 
 #		$(CV01) $(CV01CHART1) \
 #		$(CV02) $(CV02CHART1) \
@@ -102,6 +102,9 @@ $(warning SOURCES is $(SOURCES))
 
 .PHONY: all
 all: $(TARGETS) #dependencies-in-R-sources.makefile
+
+$(AVMVARIANTS): CompareModelsAvmVariants.R $(SPLIT_APN)
+	Rscript compare-models.R --what avmVariants --choice NONE
 
 # sfplinear
 $(SFPLINEAR_COMBINE): CompareModelsSfpLinearCombine.R $(SFPLINEAR_SHARDS)
