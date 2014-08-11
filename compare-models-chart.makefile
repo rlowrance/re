@@ -4,7 +4,7 @@
 	
 OUTPUT=../data/v6/output
 
-
+AVMVARIANTS=$(OUTPUT)/compare-models-chart-avmvariants-chart1.txt
 
 BMTP_ASSESSOR=$(OUTPUT)/compare-models-chart-bmtp-assessor-chart-1.pdf
 
@@ -22,12 +22,20 @@ SFPLINEAR=$(SFPLINEAR_01) $(SFPLINEAR_02) $(SFPLINEAR_03)
 
 MODEL_LINEAR_TEST_CHART=$(OUTPUT)/model-linear-test-chart1.txt
 
-TARGETS=$(BMTP_ASSESSOR) $(CV01) $(CV02) $(CV03) $(CV04) $(CV05)  $(SFPLINEAR) $(MODEL_LINEAR_TEST_CHART)
+TARGETS= $(AVMVARIANTS) \
+  $(BMTP_ASSESSOR) \
+  $(CV01) $(CV02) $(CV03) $(CV04) $(CV05) \
+  $(MODEL_LINEAR_TEST_CHART) \
+  $(SFPLINEAR) 
 
 $(warning TARGETS is $(TARGETS))
 
 .PHONY: all
 all: $(TARGETS)
+
+$AVMVARIANTS): CompareModelsChartAvmvariants.R \
+	$(OUTPUT)/compare-models-avmvariants-NONE.rsave
+	Rscript compare-models-chart.R --what avmVariants --choice 01
 
 $(BMTP_ASSESSOR): CompareModelsChartBmtp.R \
 	$(OUTPUT)/compare-models-an-01.rsave \
