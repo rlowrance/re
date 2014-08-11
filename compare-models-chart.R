@@ -11,6 +11,7 @@ library(ggplot2)
 
 source('CommandArgs.R')
 
+source('CompareModelsChartAvmVariants.R')
 source('CompareModelsChartBmtp.R')
 source('CompareModelsChartCv.R')
 source('CompareModelsChartSfpLinear.R')
@@ -78,6 +79,7 @@ Main <- function(control) {
                      ,cv = CompareModelsChartCv
                      ,bmtp = CompareModelsChartBmtp
                      ,sfpLinear = CompareModelsChartSfpLinear
+                     ,avmVariants = CompareModelsChartAvmVariants
                      ,stop('bad control$what')
                      )
     driver(control)
@@ -93,7 +95,8 @@ Main <- function(control) {
 #command.args <- CommandArgs(defaultArgs = list('--what', 'bmtp', '--choice', 'assessor'))
 #command.args <- CommandArgs(defaultArgs = list('--what', 'sfpLinear', '--choice', '01'))
 #command.args <- CommandArgs(defaultArgs = list('--what', 'sfpLinear', '--choice', '02'))
-command.args <- CommandArgs(defaultArgs = list('--what', 'sfpLinear', '--choice', '03'))
+#command.args <- CommandArgs(defaultArgs = list('--what', 'sfpLinear', '--choice', '03'))
+command.args <- CommandArgs(defaultArgs = list('--what', 'avmVariants', '--choice', '01'))
 
 control <- AugmentControlVariables(ParseCommandLineArguments(command.args))
 
