@@ -354,7 +354,7 @@ command.args <- CommandArgs(defaultArg = list( '--what',       'avmVariants'
                                               ,'--choice',     'NONE'
                                               )
 )
-print('command.args')
+#print('command.args')
 print(command.args) 
 
 control <- AugmentControlVariables(ParseCommandLineArguments(command.args))
@@ -366,7 +366,7 @@ InitializeR(start.JIT = FALSE,
 # speed up debugging by caching the transformed data
 force.refresh.transformed.data <- FALSE 
 #force.refresh.transformed.data <- TRUE
-if(force.refresh.transformed.data | !exists('transformed.data')) {
+if(force.refresh.transformed.data || !exists('transformed.data')) {
     if (control$what == 'sfpLinear') {
         ReadSplits <- function() {
             cat('building transformed data for sfpLinear\n')
@@ -375,6 +375,7 @@ if(force.refresh.transformed.data | !exists('transformed.data')) {
                              ,'recordingDate'
                              ,'price'
                              ,'log.price'
+                             ,'apn'
                              ,Predictors('Chopra', form = 'log', center = TRUE, useAssessment = TRUE)
                              ,Predictors('Chopra', form = 'log', center = FALSE, useAssessment = TRUE)
                              ,Predictors('Chopra', form = 'level', center = TRUE, useAssessment = TRUE)
