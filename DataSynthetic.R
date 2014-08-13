@@ -13,13 +13,13 @@ DataSynthetic <- function( obs.per.day
     # $data         : data.frame
     # $coefficients : list of actual pre-inflation coefficients used to generate the data
     # ARGS
-    # obs.per.day                            : num, positive, number of observations in each day
-    # first.date                             : Date, first saleDate generated
-    # last.date                              : Date, last saleDate generated
-    # $market.bias                           : num, mean ratio of true value to market value
-    # $market.sd                             : num, market standard deviation as a fraction of mean true value
-    # assessment.relative.bias               : num
-    # assessment.relative.sd                 : num
+    # obs.per.day              : num, positive, number of observations in each day
+    # first.date               : Date, first saleDate generated
+    # last.date                : Date, last saleDate generated
+    # market.bias              : num, mean ratio of true value to market value
+    # market.sd                : num, market standard deviation as a fraction of mean true value
+    # assessment.bias          : num
+    # assessment.sd            : num, assessment standard deviation as a farction of the mean true value
     #
     # call set.seed() before calling me, if you want reproducability
 
@@ -48,6 +48,7 @@ DataSynthetic <- function( obs.per.day
                                       )
         many.obs.per.day <- data.frame( stringsAsFactors = FALSE
                                        ,saleDate = rep(one.obs.per.day$saleDate, obs.per.day)
+                                       ,recordingDate = rep(one.obs.per.day$saleDate + 14, obs.per.day)
                                        ,land.size = rep(one.obs.per.day$land.size, obs.per.day)
                                        ,latitude = rep(one.obs.per.day$latitude, obs.per.day)
                                        ,has.pool = rep(one.obs.per.day$has.pool, obs.per.day)
@@ -84,14 +85,17 @@ DataSynthetic <- function( obs.per.day
                                            )
     
     generated.true.values <- GenerateTrueValues(coefficients, generated.features)
-    generated.prices <- rnorm( length(generated.true.values)
-                              ,mean = generated.true.values * market.bias
-                              ,sd   = generated.true.values * market.sd
-                              )
-    generated.assessments <- rnorm( length(generated.true.values)
-                                   ,mean = generated.true.values * assessment.bias
-                                   ,sd   = generated.true.values * market.sd
-                                   )
+
+    GeneratePrices <- function(true.values, bias, sd) {
+        mean.true.values <- mean(true.values)
+        prices <- rnorm( length(true.values)
+                        ,mean = mean.true.values * bias
+                        ,sd = mean.true.values * sd)
+        prices
+    }
+
+    generated.prices <- GeneratePrices(generated.true.values, market.bias, market.sd)
+    generated.assessments <- GeneratePrices(generated.true.values, assessment.bias, assessment.sd)
 
     result <- cbind( generated.features
                     ,true.value = generated.true.values
