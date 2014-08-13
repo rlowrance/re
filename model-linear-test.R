@@ -9,8 +9,135 @@ source('MakeModelLinear.R')
 source('ModelLinearTestPrintAllResults.R')
 source('Printf.R')
 
+Experiment <- function(assessment.bias, relative.assessment.accuracy) {
+    # return data frame with these columns
+    # $scenario = name of scenario, in 'assessor', 'avm w/o assessment', 'avm w/ assessment', 'mortgage'
+    # $rmse = error from a log-log model, trained for 60 days and testing on Jan 2008 data
+    #cat('start Experiment', assessment.bias, relative.assessment.accuracy, '\n'); browser()
+
+    market.sd = .1
+    data <- DataSynthetic( obs.per.day = 10
+                          ,first.date = as.Date('2007-01-01')
+                          ,last.date = as.Date('2008-01-31')
+                          ,market.bias = 1
+                          ,market.sd = market.sd
+                          ,assessment.bias = switch( assessment.bias
+                                                    ,low = .8
+                                                    ,zero = 1
+                                                    )
+                          ,assessment.sd = switch( relative.assessment.accuracy
+                                                  ,more = .5 * market.sd
+                                                  ,same = market.sd
+                                                  ,less = 2 * market.sd
+                                                  )
+                          )
+
+    MakeModelLinearScenario <- function(scenario) {
+        # translate local scenario name into name used by MakeModelLinear
+        switch( scenario
+               ,'assessor' = scenario
+               ,'avm w/o assessment' = 'avmnoa'
+               ,'avm w/ assessment' = 'avm'
+               ,'mortgage' = scenario
+               )
+    }
+
+    Predictors <- function(scenario) {
+        switch( scenario
+               ,'assessor' =
+               ,'avm w/o assessment' = c('land.size', 'latitude', 'has.pool')
+               ,'avm w/ assessment' =
+               ,'mortgage' = c('land.size', 'latitude', 'has.pool', 'assessment')
+               ,stop('bad scenario')
+               )
+    }
+
+    all <- NULL
+    for (scenario in c('assessor', 'avm w/o assessment', 'avm w/ assessment', 'mortgage')) {
+        #cat('new scenario', scenario, '\n'); browser()
+        CvModel <- MakeModelLinear( scenario = MakeModelLinearScenario(scenario)
+                                   ,response = 'price'
+                                   ,predictors = Predictors(scenario)
+                                   ,testing.period = list( first.date = as.Date('2008-01-01')
+                                                          ,last.date = as.Date('2008-01-31')
+                                                          )
+                                   ,data = data
+                                   ,num.training.days = 60
+                                   ,verbose.model = TRUE
+                                   )
+        all.data.indices <- 1:nrow(data)
+        cv.result <- CvModel( data = data
+                             ,training.indices = all.data.indices
+                             ,testing.indices = all.data.indices
+                             )
+        assess <- Assess(cv.result)
+        next.row <- data.frame( stringsAsFactors = FALSE
+                               ,scenario = scenario
+                               ,rmse = assess$rmse
+                               )
+        all <- if (is.null(all)) next.row else rbind(all, next.row)
+    }
+
+    all
+    
+}
+
+Sweep <- function(f, list1, list2) {
+    # return data.frame containing a row for each element in cross product of list1 and list2
+    # and scenario and rmse for that scenario on appropriate synthetic data
+    #cat('Sweep\n'); browser()
+    all <- NULL
+    for (element1 in list1) {
+        for (element2 in list2) {
+            one <- f(element1, element2)
+            new.row <- data.frame( stringsAsFactors = FALSE
+                                  ,assessment.bias = element1
+                                  ,assessment.relative.error = element2
+                                  ,scenario = one$scenario
+                                  ,rmse = one$rmse
+                                  )
+            all <- if(is.null(all)) new.row else rbind(all, new.row)
+        }
+    }
+    all
+}
+
 Main <- function() {
-    #cat('start Main\n'); browser()
+    # Run experiments over cross product of situations, return df containing RMSE values
+    
+    cat('start Main\n'); browser()
+    result.df <- Sweep( Experiment
+                            ,c('low', 'zero')
+                            ,c('more', 'same', 'less')
+                            )
+    save(result.df, file = '../data/v6/output/model-linear-test.rsave')
+    ModelLinearTestPrintAllResults(result.df)
+
+
+    return(result.df)
+    
+    # OLD BELOW ME
+                    
+    experiment.result <- list( Experiment(bias = 'no', accuracy = 'perfect')
+                              ,Experiment(bias = 'no', accuracy = 'more')
+                              ,Experiment(bias = 'no', accuracy = 'equal')
+                              ,Experiment(bias = 'no', accuracy = 'less')
+
+                              ,Experiment(bias = 'less', accuracy = 'perfect')
+                              ,Experiment(bias = 'less', accuracy = 'more')
+                              ,Experiment(bias = 'less', accuracy = 'equal')
+                              ,Experiment(bias = 'less', accuracy = 'less')
+                              )
+
+    PrintExperimentResult <- function(experiment.result) {
+    }
+
+    Map(PrintExperimentResult, experiment.result)
+
+    save(experiment.result, file = '../data/v6/output/model-linear-test.rsave')
+
+
+
     first.date <- as.Date('2007-01-01')
     last.date <- as.Date('2008-01-31')
     obs.per.day <- 10
