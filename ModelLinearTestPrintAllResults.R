@@ -1,69 +1,57 @@
 ModelLinearTestPrintAllResults <- function(all.results, file='') {
     # write txt file using Printf()
+    cat('start ModelLinearTestPrintAllResults', file, '\n'); browser()
 
     if (file != '') {
         connection <- file(file, 'w')
     }
 
-
-    PrintTable <- function(all.results) {
-        #cat('start PrintTable\n'); browser()
-
-        format.header <- '%19s | %15s %15s %15s %15s\n'
-        format.data <- '%19s | %15.0f %15.0f %15.0f %15.0f\n'
-
-        P <- function(...) {
-            if (file == '') {
-                Printf(...) 
-            } else {
-                Printf(..., file = connection)  # append to cat file
-            }
+    P <- function(...) {
+        if (file == '') {
+            Printf(...) 
+        } else {
+            Printf(..., file = connection)  # append to cat file
         }
+    }
 
-        P('RMSE\n')
-        P( format.header
-          ,'scenario'
-          ,'level-level'
-          ,'level-log'
-          ,'log-level'
-          ,'log-log')
+    assessment.biases <- unique(all.results$assessment.bias)
 
-        Rmse <- function(scenario, response.name, predictors.name) {
-            for (result in all.results) {
-                if (result$scenario == scenario &&
-                    result$response.name == response.name &&
-                    result$predictors.name == predictors.name) {
-                    return(result$rmse)
-                }
-            }
-            cat('in Rmse; about to fail', scenario, response.name, predictors.name, '\n'); browser()
-            stop('bad')
+    format.header <- '%15s %15s %15s %15s %15s %15s\n'
+    format.data <-   '%15s %15s %15.0f %15.0f %15.0f %15.0f\n'
+
+    PrintHeader <- function(a,b,c,d,e,f) {
+        P(format.header, a, b, c, d, e, f)
+    }
+
+    PrintHeader(' ',          ' ',          ' ' ,       'RMSE',       'RMSE',       ' ')
+    PrintHeader(' ',          'assessment', ' ' ,       'avm',        'avm',        ' ' )
+    PrintHeader('assessment', 'relative',   'RMSE',     'w/o',        'w/',         'RMSE')
+    PrintHeader('bias',       'error',      'assessor', 'assessment', 'assessment', 'mortgage')
+    PrintHeader(' ',          ' ',          ' ',        ' ',          ' ',          ' ')
+
+    PrintData <- function(assessment.bias, assessment.relative.error) {
+        Rmse <- function(scenario) {
+            #cat('start Rmse', assessment.bias, assessment.relative.error, scenario, '\n'); browser()
+            all.results[all.results$assessment.bias == assessment.bias &
+                        all.results$assessment.relative.error == assessment.relative.error &
+                        all.results$scenario == scenario, 'rmse']
         }
-
-
         P( format.data
-          ,'assessor'
-          ,Rmse('assessor', 'level', 'level'), Rmse('assessor', 'level', 'log')
-          ,Rmse('assessor', 'log', 'level'), Rmse('assessor', 'log', 'log')
-          )
-        P( format.data
-          ,'avm w/o assessment'
-          ,Rmse('avm', 'level', 'level'), Rmse('avm', 'level', 'log')
-          ,Rmse('avm', 'log', 'level'), Rmse('avm', 'log', 'log')
-          )
-        P( format.data
-          ,'avm w/ assessment'
-          ,Rmse('avm', 'level', 'levelAssessment'), Rmse('avm', 'level', 'logAssessment')
-          ,Rmse('avm', 'log', 'levelAssessment'), Rmse('avm', 'log', 'logAssessment')
-          )
-        P( format.data
-          ,'mortgage'
-          ,Rmse('mortgage', 'level', 'levelAssessment'), Rmse('mortgage', 'level', 'logAssessment')
-          ,Rmse('mortgage', 'log', 'levelAssessment'), Rmse('mortgage', 'log', 'logAssessment')
+          ,assessment.bias
+          ,assessment.relative.error
+          ,Rmse('assessor')
+          ,Rmse('avm w/o assessment')
+          ,Rmse('avm w/ assessment')
+          ,Rmse('mortgage')
           )
     }
 
-    PrintTable(all.results)
+    for (assessment.bias in unique(all.results$assessment.bias)) {
+        for (assessment.relative.error in unique(all.results$assessment.relative.error)) {
+            PrintData(assessment.bias, assessment.relative.error)
+        }
+    }
+
     if (file != '') {
         close(connection)
     }
