@@ -6,13 +6,18 @@ CompareModelsAvmVariants <- function(control, transformed.data) {
     # form: log-level
     # time period: Jan 2008
 
-    cat('start CompareModelsAvmVariants'); print(control); browser()
-    stopifnot(control$choice == 'NONE')  # no variants for now
+    #cat('start CompareModelsAvmVariants'); print(control); browser()
+    # coding: RESPONSE.PREDICTORS.NFOLDS
+    option <- switch( control$choice
+                     ,loglevel10 = list(response = 'log.price', predictors = 'level', nfolds = 10)
+                     ,linearlinear10 = list(response = 'log', predictors = 'level', nfolds = 10)
+                     ,loglevel50 = list(response = 'log.price', predictors = 'level', nfolds = 50)
+                     ,stop('bad control$choice')
+                     )
 
     # setup call to CrossValidate to do the comparisons
     testing.period <- list(first.date = as.Date('2008-01-01'), last.date = as.Date('2008-01-31'))
     num.training.days <- 60
-    response = 'log.price'
 
     MakeAssessorModel <- function() {
         # return linear model for the assessor scenario
@@ -20,9 +25,9 @@ CompareModelsAvmVariants <- function(control, transformed.data) {
                                  ,testing.period = testing.period
                                  ,data = transformed.data
                                  ,num.training.days = num.training.days
-                                 ,response = response
-                                 ,predictors = Predictors( set = 'Chopra'
-                                                          ,form = 'level'
+                                 ,response = option$response
+                                 ,predictors = Predictors( set = 'ChopraNoGeocoding'
+                                                          ,form = option$predictors
                                                           ,center = FALSE
                                                           ,useAssessment = FALSE
                                                           )
@@ -36,9 +41,9 @@ CompareModelsAvmVariants <- function(control, transformed.data) {
                                  ,testing.period = testing.period
                                  ,data = transformed.data
                                  ,num.training.days = num.training.days
-                                 ,response = response
-                                 ,predictors = Predictors( set = 'Chopra'
-                                                          ,form = 'level'
+                                 ,response = option$response
+                                 ,predictors = Predictors( set = 'ChopraNoGeocoding'
+                                                          ,form = option$predictors
                                                           ,center = FALSE
                                                           ,useAssessment = use.assessment
                                                           )
@@ -52,9 +57,9 @@ CompareModelsAvmVariants <- function(control, transformed.data) {
                                  ,testing.period = testing.period
                                  ,data = transformed.data
                                  ,num.training.days = num.training.days
-                                 ,response = response
-                                 ,predictors = Predictors( set = 'Chopra'
-                                                          ,form = 'level'
+                                 ,response = option$response
+                                 ,predictors = Predictors( set = 'ChopraNoGeocoding'
+                                                          ,form = option$predictors
                                                           ,center = FALSE
                                                           ,useAssessment = FALSE
                                                           )
@@ -75,35 +80,48 @@ CompareModelsAvmVariants <- function(control, transformed.data) {
                                    ,'mortgage'
                                    )
              )
-    nfolds <- 10
-    #nfolds <- 2; print('TESTING')
              
     cv.result <-  # a list $best.model.index $all.assessment
         CrossValidate( data = transformed.data
-                      ,nfolds = nfolds
+                      ,nfolds = option$nfolds
                       ,Models = parallel$Models
                       ,Assess = Assess
                       ,experiment = parallel$experiment.names
                       )
 
     # report on results
-    cat('report CompareModelsAvmVariants\n'); browser()
+    #cat('report CompareModelsAvmVariants\n'); browser()
     
     fold.assessment <- cv.result$fold.assessment
 
     MeanRmse <- function(model.index) {
         #cat('start MeanRmse', model.index, '\n'); browser()
         in.model <- fold.assessment$model.index == model.index
-        fold.rmse <- fold.assessment$assessment.rmse[in.model]
-        result <- mean(fold.rmse)
+        fold.error <- fold.assessment$assessment.rmse[in.model]
+        result <- mean(fold.error)
+        result
+    }
+
+    MedianRmse <- function(model.index) {
+        #cat('start Median Rmse', model.index, '\n'); browser()
+        in.model <- fold.assessment$model.index == model.index
+        fold.error <- fold.assessment$assessment.root.median.squared.error[in.model]
+        result <- median(fold.error)
         result
     }
 
     experiment.result <- data.frame( stringsAsFactors = FALSE
                                     ,experiment.name = parallel$experiment.names
                                     ,mean.RMSE = sapply(1:length(parallel$Models), MeanRmse)
+                                    ,median.RMedianSE = sapply(1:length(parallel$Models), MedianRmse)
                                     )
-    print('Experiment Results\n')
+    Printf( 'Experiment Results for reponse variable %s predictors %s nfolds %d\n'
+           ,option$response
+           ,option$predictors
+           ,option$nfolds
+           )
+    
     print(experiment.result)
-    save(cv.result, experiment.result, file = control$path.out.driver.result)
+    description <- 'Cross Validation Result\nLog-Level model\nPredict Jan 2008 transactions using 60 days of training data'
+    save(description, control, cv.result, experiment.result, file = control$path.out.driver.result)
 }
