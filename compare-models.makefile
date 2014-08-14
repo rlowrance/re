@@ -12,7 +12,7 @@ SPLIT_APN=$(SUBSET1)-apn.rsave
 # also produces ...compare-models-an-01.pdf
 AN01=$(OUTPUT)/an-01.rsave
 
-AVMVARIANTS=$(OUTPUT)/compare-models-avmvariants-NONE.rsave
+AVMVARIANTS=$(OUTPUT)/compare-models-avmvariants-loglevel10.rsave
 
 BMTPASSESSOR=$(OUTPUT)/compare-models-bmtp-assessor.rsave
 BMTPASSESSORCHART1=$(OUTPUT)/compare-models-chart-bmtp-assessor-chart-1.rsave
@@ -104,7 +104,7 @@ $(warning SOURCES is $(SOURCES))
 all: $(TARGETS) #dependencies-in-R-sources.makefile
 
 $(AVMVARIANTS): CompareModelsAvmVariants.R $(SPLIT_APN)
-	Rscript compare-models.R --what avmVariants --choice NONE
+	Rscript compare-models.R --what avmVariants --choice loglevel10
 
 # sfplinear
 $(SFPLINEAR_COMBINE): CompareModelsSfpLinearCombine.R $(SFPLINEAR_SHARDS)
