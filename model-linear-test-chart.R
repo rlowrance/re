@@ -3,9 +3,7 @@
 # that program compares results on a synthetic data set
 
 source('InitializeR.R')
-source('ModelLinearTestPrintAllResults.R')
-source('Printf.R')
-
+source('ModelLinearTestMakeReport.R')
 
 Main <- function() {
     #cat('start Main\n'); browser()
@@ -15,12 +13,14 @@ Main <- function() {
 
     loaded.variables <- load(path.in)
     stopifnot(length(loaded.variables) == 1)
-    stopifnot(loaded.variables[[1]] == 'all.results')
+    stopifnot(loaded.variables[[1]] == 'result.df')
 
-    ModelLinearTestPrintAllResults( all.results
-                                   ,file = path.out.txt
-                                   )
-
+    report <- ModelLinearTestMakeReport(result.df)
+    
+    writeLines( text = report
+               ,sep  = '\n'
+               ,con  = path.out.txt
+               )
 }
 
 InitializeR()
