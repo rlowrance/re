@@ -4,7 +4,7 @@
 	
 OUTPUT=../data/v6/output
 
-AVMVARIANTS=$(OUTPUT)/compare-models-chart-avmvariants-chart1.txt
+AVMVARIANTS=$(OUTPUT)/compare-models-chart-avmvariants-loglevel10-chart1.txt
 
 BMTP_ASSESSOR=$(OUTPUT)/compare-models-chart-bmtp-assessor-chart-1.pdf
 
@@ -33,9 +33,9 @@ $(warning TARGETS is $(TARGETS))
 .PHONY: all
 all: $(TARGETS)
 
-$AVMVARIANTS): CompareModelsChartAvmvariants.R \
-	$(OUTPUT)/compare-models-avmvariants-NONE.rsave
-	Rscript compare-models-chart.R --what avmVariants --choice 01
+$(AVMVARIANTS): CompareModelsChartAvmVariants.R \
+	$(OUTPUT)/compare-models-avmvariants-loglevel10.rsave
+	Rscript compare-models-chart.R --what avmvariants --choice loglevel10
 
 $(BMTP_ASSESSOR): CompareModelsChartBmtp.R \
 	$(OUTPUT)/compare-models-an-01.rsave \
