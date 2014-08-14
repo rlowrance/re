@@ -153,6 +153,29 @@ ModelLinear <- function(data,
         result  
     }
 
+    LmDiagnose <- function(fitted, newdata) {
+        # print diagnostic
+        cat('start LmDiagnose\n'); browser()
+        stopifnot(nrow(newdata) == 1)
+        prediction <- predict.lm(fitted, newdata = newdata)
+        betas <- fitted$coefficients
+        features.used <- names(betas)
+        Printf('The training set had %d observations\n', nrow(fitted$model))
+        cat('contribution to prediction\n')
+
+        PrintRow <- function(feature.name) {
+            PrintContribution <- function(beta, value) {
+                #cat('start PrintContribution', feature.name, beta, value, '\n'); browser()
+                Printf('%26s: %15.6f x %11.2f = %8.2f\n', feature.name, beta, value, beta * value)
+            }
+            PrintContribution(betas[[feature.name]],
+                              if (feature.name == '(Intercept)') 1 else newdata[[feature.name]])
+        }
+
+        Map(PrintRow, features.used)
+        Printf('overall prediction %7.2f (exp = %f)\n', prediction, exp(prediction))
+    }
+
     Avm <- function() {
     # ARGS:
     # data             : data.frame
@@ -174,14 +197,20 @@ ModelLinear <- function(data,
             FitModel(in.training.period)
         }
 
+        IsSpecialApn <- function(apn) {
+            apn == '4470013020' || apn == '5561007004' || apn == '4451005012'
+        }
+
         # BODY STARTS HERE
         #cat('starting ModelLinear::Avm\n'); browser()
         verbose <- FALSE 
+        debugging <- TRUE
+        debugging <- FALSE
 
         selected.for.testing <- SelectedForTesting( data = data
-                                                ,testing.indices = testing.indices
-                                                ,testing.period = testing.period
-                                                )
+                                                   ,testing.indices = testing.indices
+                                                   ,testing.period = testing.period
+                                                   )
         testing.indices <- which(selected.for.testing)
         if (verbose) {
             Printf('avm model has %d testing indices\n', length(testing.indices))
@@ -191,6 +220,9 @@ ModelLinear <- function(data,
         fitted.models <- list()
         actual.prediction <- NULL
         for (testing.index in testing.indices) {
+            if (FALSE && debugging && testing.index == 220507) {cat('found it\n'); browser() }
+            apn <- data$apn[[testing.index]]
+            if (debugging && !IsSpecialApn(apn)) next
             saleDate <- as.character(data$saleDate[[testing.index]])
             if(is.null(fitted.models[[saleDate]])) {
                 fitted <- FitModelAvm(testing.index)
@@ -201,7 +233,32 @@ ModelLinear <- function(data,
                 }
             }
             fitted <- fitted.models[[saleDate]]
-            actual.prediction <- ListAppend(actual.prediction, Predict(fitted, testing.index))
+
+            next.actual.prediction <- Predict(fitted, testing.index)
+            if (FALSE && IsSpecialApn(apn)) {
+                cat( 'found special apn', apn
+                    ,'saleDate', data$saleDate[[testing.index]]
+                    ,'actual', next.actual.prediction$actual
+                    ,'prediction', next.actual.prediction$prediction
+                    ,'\n'
+                    )
+                LmDiagnose(fitted, data[testing.index,]) 
+                browser()
+            }
+            if (debugging) {
+                error <- next.actual.prediction$actual - next.actual.prediction$prediction
+                if (abs(error) > 10e6) {
+                    cat( 'large error', error
+                        ,'apn', data$apn[[testing.index]]
+                        ,'saleDate', data$saleDate[[testing.index]]
+                        ,'actual', next.actual.prediction$actual
+                        ,'prediction', next.actual.prediction$prediction
+                        ,'\n'
+                        )
+                    browser()
+                }
+            }
+            actual.prediction <- ListAppend(actual.prediction, next.actual.prediction)
         }
 
         # Build lists for actuals and predicted values
@@ -273,10 +330,13 @@ ModelLinear <- function(data,
 
     # determine $actuals $predictors
     actuals.predictors <- 
-        switch(scenario,
-               assessor = Assessor(),
-               avm = Avm(),
-               mortgage = Mortgage())
+        switch( scenario
+               ,assessor = Assessor()
+               ,avm = Avm()
+               ,avmnoa = Avm()
+               ,mortgage = Mortgage()
+               ,stop(paste('bad scenario', scenario))
+               )
     stopifnot(actuals.predictors != NULL)  # if NULL then scenario had unexpected value
     
     actuals.predictors
