@@ -1,6 +1,6 @@
 ModelLinearTestMakeReport <- function(all.results) {
     # return list of character lines that summarize results in all.result
-    cat('start ModelLinearTestMakeReport\n'); browser()
+    #cat('start ModelLinearTestMakeReport\n'); browser()
 
     # format of the header and data lines in the report
     format.header <- '%15s %15s %15s %15s %15s %15s'
