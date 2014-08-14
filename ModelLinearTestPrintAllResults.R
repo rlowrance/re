@@ -14,22 +14,21 @@ ModelLinearTestPrintAllResults <- function(all.results, file='') {
         }
     }
 
-    assessment.biases <- unique(all.results$assessment.bias)
 
-    format.header <- '%15s %15s %15s %15s %15s %15s\n'
-    format.data <-   '%15s %15s %15.0f %15.0f %15.0f %15.0f\n'
 
-    PrintHeader <- function(a,b,c,d,e,f) {
-        P(format.header, a, b, c, d, e, f)
+    PrintHeaders <- function(format.header) {
+        PrintHeader <- function(a,b,c,d,e,f) {
+            P(format.header, a, b, c, d, e, f)
+        }
+
+        PrintHeader(' ',          ' ',          ' ' ,       'RMSE',       'RMSE',       ' ')
+        PrintHeader(' ',          'assessment', ' ' ,       'avm',        'avm',        ' ' )
+        PrintHeader('assessment', 'relative',   'RMSE',     'w/o',        'w/',         'RMSE')
+        PrintHeader('bias',       'error',      'assessor', 'assessment', 'assessment', 'mortgage')
+        PrintHeader(' ',          ' ',          ' ',        ' ',          ' ',          ' ')
     }
 
-    PrintHeader(' ',          ' ',          ' ' ,       'RMSE',       'RMSE',       ' ')
-    PrintHeader(' ',          'assessment', ' ' ,       'avm',        'avm',        ' ' )
-    PrintHeader('assessment', 'relative',   'RMSE',     'w/o',        'w/',         'RMSE')
-    PrintHeader('bias',       'error',      'assessor', 'assessment', 'assessment', 'mortgage')
-    PrintHeader(' ',          ' ',          ' ',        ' ',          ' ',          ' ')
-
-    PrintData <- function(assessment.bias, assessment.relative.error) {
+    PrintData <- function(format.data, assessment.bias, assessment.relative.error) {
         Rmse <- function(scenario) {
             #cat('start Rmse', assessment.bias, assessment.relative.error, scenario, '\n'); browser()
             all.results[all.results$assessment.bias == assessment.bias &
@@ -46,9 +45,14 @@ ModelLinearTestPrintAllResults <- function(all.results, file='') {
           )
     }
 
+    # BODY STARTS HERE
+    format.header <- '%15s %15s %15s %15s %15s %15s\n'
+    format.data <-   '%15s %15s %15.0f %15.0f %15.0f %15.0f\n'
+
+    PrintHeaders(format.header)
     for (assessment.bias in unique(all.results$assessment.bias)) {
         for (assessment.relative.error in unique(all.results$assessment.relative.error)) {
-            PrintData(assessment.bias, assessment.relative.error)
+            PrintData(format.data, assessment.bias, assessment.relative.error)
         }
     }
 
