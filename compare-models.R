@@ -44,6 +44,7 @@ source('Printf.R')
 source('ReadAndTransformTransactions.R')
 source('ReadSplit.R')
 source('Rmse.R')
+source('RootMedianSquaredError.R')
 
 source('TestingPeriods.R')
 source('WithinXPercent.R')
@@ -82,7 +83,6 @@ AugmentControlVariables <- function(control) {
                      '-', 
                      sprintf('%s', control$choice))
     result$path.out.log <- paste0(prefix, '-log.txt')
-    result$path.out.driver.result <- paste0(prefix, '-', 'driver.result', '.rsave')
     result$path.out.driver.result <- paste0(prefix, '.rsave')
 
 
@@ -351,7 +351,7 @@ Main <- function(control, transformed.data) {
 #                                              )
 #)
 command.args <- CommandArgs(defaultArg = list( '--what',       'avmVariants'
-                                              ,'--choice',     'NONE'
+                                              ,'--choice',     'loglevel10'
                                               )
 )
 #print('command.args')
@@ -365,48 +365,42 @@ InitializeR(start.JIT = FALSE,
 
 # speed up debugging by caching the transformed data
 force.refresh.transformed.data <- FALSE 
-#force.refresh.transformed.data <- TRUE
+force.refresh.transformed.data <- TRUE
 if(force.refresh.transformed.data || !exists('transformed.data')) {
-    if (control$what == 'sfpLinear') {
-        ReadSplits <- function() {
-            cat('building transformed data for sfpLinear\n')
-            #browser()
-            split.names <- c( 'saleDate'  # dates are used to select testing and training data
-                             ,'recordingDate'
-                             ,'price'
-                             ,'log.price'
-                             ,'apn'
-                             ,Predictors('Chopra', form = 'log', center = TRUE, useAssessment = TRUE)
-                             ,Predictors('Chopra', form = 'log', center = FALSE, useAssessment = TRUE)
-                             ,Predictors('Chopra', form = 'level', center = TRUE, useAssessment = TRUE)
-                             ,Predictors('Chopra', form = 'level', center = FALSE, useAssessment = TRUE)
-                             ,Predictors('Chopra', form = 'log', center = TRUE, useAssessment = FALSE)
-                             ,Predictors('Chopra', form = 'log', center = FALSE, useAssessment = FALSE)
-                             ,Predictors('Chopra', form = 'level', center = TRUE, useAssessment = FALSE)
-                             ,Predictors('Chopra', form = 'level', center = FALSE, useAssessment = FALSE)
-                             )
-            split.names.unique <- unique(split.names)
-            transformed.data <- NULL
-            for (split.name in split.names.unique) {
-                new.column <- ReadSplit( path.in = control$path.in.base
-                                        ,split.name = split.name
-                                        ,nrow = ifelse(control$testing, 1000, -1)
-                                        ,verbose = TRUE
-                                        )
-                cat('new.column', split.name, '\n')
-                transformed.data <- IfThenElse(is.null(transformed.data),
-                                               new.column,
-                                               cbind(transformed.data, new.column))
-            }
-            #cat('transformed.data\n'); browser()
-            transformed.data
+    ReadSplits <- function() {
+        cat('building transformed data for sfpLinear\n')
+        #browser()
+        split.names <- c( 'saleDate'  # dates are used to select testing and training data
+                         ,'recordingDate'
+                         ,'price'
+                         ,'log.price'
+                         ,'apn'
+                         ,Predictors('Chopra', form = 'log', center = TRUE, useAssessment = TRUE)
+                         ,Predictors('Chopra', form = 'log', center = FALSE, useAssessment = TRUE)
+                         ,Predictors('Chopra', form = 'level', center = TRUE, useAssessment = TRUE)
+                         ,Predictors('Chopra', form = 'level', center = FALSE, useAssessment = TRUE)
+                         ,Predictors('Chopra', form = 'log', center = TRUE, useAssessment = FALSE)
+                         ,Predictors('Chopra', form = 'log', center = FALSE, useAssessment = FALSE)
+                         ,Predictors('Chopra', form = 'level', center = TRUE, useAssessment = FALSE)
+                         ,Predictors('Chopra', form = 'level', center = FALSE, useAssessment = FALSE)
+                         )
+        split.names.unique <- unique(split.names)
+        transformed.data <- NULL 
+        for (split.name in split.names.unique) {
+            new.column <- ReadSplit( path.in = control$path.in.base
+                                    ,split.name = split.name
+                                    ,nrow = ifelse(control$testing, 1000, -1)
+                                    ,verbose = TRUE
+                                    )
+            cat('new.column', split.name, '\n')
+            transformed.data <- IfThenElse(is.null(transformed.data),
+                                           new.column,
+                                           cbind(transformed.data, new.column))
         }
-        transformed.data <- ReadSplits()
-    } else {
-        transformed.data <- ReadAndTransformTransactions(control$path.in.subset1,
-                                                         ifelse(control$testing, 1000, -1),
-                                                         TRUE)  # TRUE --> verbose
+        #cat('transformed.data\n'); browser()
+        transformed.data
     }
+    transformed.data <- ReadSplits()
 }
 
 
