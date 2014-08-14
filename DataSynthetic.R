@@ -22,44 +22,34 @@ DataSynthetic <- function( obs.per.day
     # assessment.sd            : num, assessment standard deviation as a farction of the mean true value
     #
     # call set.seed() before calling me, if you want reproducability
+    # NOTE: set the coefficients to give an average price of about $500,000
 
-    GenerateFeatures <- function( coefficients
-                                 ,land.size.min, land.size.max
+    GenerateFeatures <- function( land.size.min, land.size.max
                                  ,latitude.min, latitude.max
                                  ,has.pool.frequency) {
         # return data frame
         #cat('start GeneratedFeatures\n'); browser()
         elapsed.days <- last.date - first.date + 1
-        one.obs.per.day <- data.frame( stringsAsFactors = FALSE
-                                      ,saleDate = first.date + 0:(elapsed.days - 1)
-                                      ,land.size = runif( elapsed.days
-                                                         ,min = land.size.min
-                                                         ,max = land.size.max
-                                                         )
-                                      ,latitude  = runif( elapsed.days
-                                                         ,min = latitude.min
-                                                         ,max = latitude.max
-                                                         )
-                                      ,has.pool  = 
-                                         ifelse( runif(elapsed.days, min = 0, max = 1) > has.pool.frequency
-                                                ,TRUE
-                                                ,FALSE
-                                                )
-                                      )
-        many.obs.per.day <- data.frame( stringsAsFactors = FALSE
-                                       ,saleDate = rep(one.obs.per.day$saleDate, obs.per.day)
-                                       ,recordingDate = rep(one.obs.per.day$saleDate + 14, obs.per.day)
-                                       ,land.size = rep(one.obs.per.day$land.size, obs.per.day)
-                                       ,latitude = rep(one.obs.per.day$latitude, obs.per.day)
-                                       ,has.pool = rep(one.obs.per.day$has.pool, obs.per.day)
-                                       )
-        many.obs.per.day
+        n <- elapsed.days * obs.per.day
+        result.1 <- data.frame( stringsAsFactors = FALSE
+                               ,saleDate = seq(from = first.date, to = last.date, length.out = n)
+                               ,land.size = runif(n, min = land.size.min, max = land.size.max)
+                               ,latitude  = runif(n, min = latitude.min,  max = latitude.max)
+                               ,has.pool  = ifelse( runif(n, min = 0, max = 1) > has.pool.frequency
+                                                   ,TRUE
+                                                   ,FALSE
+                                                   )
+                             )
+        result <- cbind( result.1
+                        ,recordingDate = result.1$saleDate + 14  # allow 2 weeks to record the deed
+                        )
+        result
     }
 
     GenerateTrueValues <- function(coefficients, features) {
         # return vector of true values
         #cat('start GenerateTrueValues\n'); browser()
-        true.value <- 
+        true.values <- 
             coefficients$intercept +
             coefficients$land.size * features$land.size +
             coefficients$latitude  * features$latitude +
@@ -70,51 +60,57 @@ DataSynthetic <- function( obs.per.day
     # MAIN BODY STARTS HERE
     #cat('starting DataSynthetic\n'); browser()
     
-    coefficients <- list( intercept = 10000
-                         ,land.size = 100
-                         ,latitude = 20
+    coefficients <- list( intercept = 0
+                         ,land.size = 10000
+                         ,latitude = 2000
                          ,has.pool = 20000
                          )
 
-    generated.features <- GenerateFeatures( coefficients
-                                           ,land.size.min = 1
-                                           ,land.size.max = 100
-                                           ,latitude.min = 0
-                                           ,latitude.max = 90
-                                           ,has.pool.frequency = .5
-                                           )
+    features <- GenerateFeatures( land.size.min = 1
+                                 ,land.size.max = 100
+                                 ,latitude.min = 0
+                                 ,latitude.max = 90
+                                 ,has.pool.frequency = .5
+                                 )
     
-    generated.true.values <- GenerateTrueValues(coefficients, generated.features)
+    true.values <- GenerateTrueValues(coefficients, features)
+    mean.true.value <- mean(true.values)
 
-    GeneratePrices <- function(true.values, bias, sd) {
-        mean.true.values <- mean(true.values)
-        prices <- rnorm( length(true.values)
-                        ,mean = mean.true.values * bias
-                        ,sd = mean.true.values * sd)
-        prices
+    GenerateFromTrueValues <- function(bias, sd) {
+        #cat('start GenerateFromTrueValues', bias, sd, '\n'); browser()
+        errors <- rnorm( length(true.values)
+                        ,mean = mean.true.value * (bias - 1)
+                        ,sd = mean.true.value * sd
+                        )
+        result <- true.values + errors
+        result
     }
 
-    generated.prices <- GeneratePrices(generated.true.values, market.bias, market.sd)
-    generated.assessments <- GeneratePrices(generated.true.values, assessment.bias, assessment.sd)
+    prices <- GenerateFromTrueValues(market.bias, market.sd)
+    assessments <- GenerateFromTrueValues(assessment.bias, assessment.sd)
 
-    result <- cbind( generated.features
-                    ,true.value = generated.true.values
-                    ,price = generated.prices
-                    ,log.price = log(generated.prices)
-                    ,assessment = generated.assessments
-                    )
+    is.valid.obs <- (prices > 0) & (assessments > 0)
+
+    df.valid <- cbind( features
+                      ,true.value = true.values
+                      ,price = prices
+                      ,assessment = assessments
+                      )[is.valid.obs,]
+    df.result <- cbind( df.valid
+                       ,log.prices = log(df.valid$price)
+                       )
 
     if (FALSE) {
         # check accuracy of market and assessment
-        assess.market <- Assess(list(actual = result$true.value, prediction = result$price))
-        assess.assessment <- Assess(list(actual = result$true.value, prediction = result$assessment))
+        assess.market <- Assess(list(actual = df.result$true.value, prediction = df.result$price))
+        assess.assessment <- Assess(list(actual = df.result$true.value, prediction = df.result$assessment))
         Printf('fraction of prices within 10 percent of true value = %f\n', 
                assess.market$within.10.percent)
         Printf('fraction of assessments within 10 percent of true value = %f\n', 
                assess.assessment$within.10.percent)
     }
 
-    result
+    result <- list(data = df.result, coefficients = coefficients)
 }
 
 DataSynthetic.test <- function() {
