@@ -70,8 +70,11 @@ Experiment <- function(assessment.bias, assessment.relative.error) {
 
         CheckCoefficients <- function(fitted.coefficients, actual.coefficients) {
             #cat('start CheckCoefficients\n'); browser()
-            print(fitted.coefficients)
-            print(actual.coefficients)
+            verbose <- FALSE
+            if (verbose) {
+                print(fitted.coefficients)
+                print(actual.coefficients)
+            }
             for (name in names(fitted.coefficients)) {
                 if (name != '(Intercept)') {
                     actual <- switch( name
@@ -167,8 +170,12 @@ Main <- function() {
                        ,assessment.relative.errors = c('lower', 'same', 'higher')
                        )
     save(result.df, file = '../data/v6/output/model-linear-test.rsave')
+
+    # write a report to the console
     report <- ModelLinearTestMakeReport(result.df)
-    print(report)
+    writeLines( text = report
+               ,sep  = '\n'
+               )
 
     return(result.df)
 }
