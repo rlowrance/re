@@ -1,6 +1,6 @@
 source('Require.R')
 Require('ListAppendEach')
-CrossValidate <- function(data, nfolds, Models, Assess, experiment = NULL) {
+CrossValidate <- function(data, nfolds, Models, Assess, experiment) {
     # perform cross validation
     # ARGS
     # data           : a data frame
@@ -14,9 +14,7 @@ CrossValidate <- function(data, nfolds, Models, Assess, experiment = NULL) {
     #                  yields evaluations of the actual and prediction results from a model
     #                  the best model is the one with the lowest <error rates>[[1]]
     #                  all <error rates> are returned in the data.frame all.result
-    # experiment     : chr scalar or NULL
-    #                  if not null, experiment name is printed when results are printed
-    #                  if null, runs without printing
+    # experiment     : chr scalar, vector of names for experiments
     # RETURNS a list
     # $best.model.index : index i of model with lowest error.rate
     # $all.assessment   : data.frame with $fold, $model.index, $error.rate $assessment.<Assess result name>
@@ -24,9 +22,8 @@ CrossValidate <- function(data, nfolds, Models, Assess, experiment = NULL) {
     #cat('starting CrossValidate', nrow(data), nfolds, length(Models), '\n'); browser()
 
     stopifnot(nfolds <= nrow(data))
-    stopifnot(is.null(experiment) || is.character(experiment))
 
-    verbose <- is.character(experiment)
+    verbose <- TRUE
 
     nmodels <- length(Models)
 
@@ -43,16 +40,29 @@ CrossValidate <- function(data, nfolds, Models, Assess, experiment = NULL) {
     all.assessment <- NULL
 
     # examine each fold and each model
+    debugging <- TRUE
+    debugging <- FALSE
     for (this.fold in 1:nfolds) {
+        if (debugging && this.fold != 5 && this.fold != 9) {
+            cat('skipping this.fold', this.fold, '\n');
+            next
+        }
         is.testing <- fold == this.fold
         is.training <- !is.testing
         for (this.model.index in 1:nmodels) {
+            if (debugging && this.model.index != 2 && this.model.index != 3) {
+                cat('skipping this.model.index', this.model.index, '\n')
+                next
+            }
+
             if (verbose) {
                 cat(sprintf('CrossValidate %s: determining error rate on model %d fold %d\n',
-                            experiment, this.model.index, this.fold))
+                            experiment[[this.model.index]], this.model.index, this.fold))
             }
+
             Model <- Models[[this.model.index]]
             model.result <- Model(data, is.training, is.testing)
+            #cat('model.result\n'); browser()
             this.assessment <- Assess(model.result)
             #cat('examine this.assessment in CrossValidate\n'); browser()
             stopifnot(is.list(this.assessment))
@@ -63,7 +73,7 @@ CrossValidate <- function(data, nfolds, Models, Assess, experiment = NULL) {
             stopifnot(length(this.error.rate) == 1)
             if (verbose) {
                 cat(sprintf('CrossValidate %s: error rate on model %d fold %d is %f\n',
-                            experiment, this.model.index, this.fold, this.error.rate))
+                            experiment[[this.model.index]], this.model.index, this.fold, this.error.rate))
             }
 
             # accumlate results
@@ -208,4 +218,4 @@ CrossValidate.test <- function() {
     HasName('assessment.coverage')
 }
 
-CrossValidate.test()
+#CrossValidate.test()
