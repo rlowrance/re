@@ -63,6 +63,7 @@ MakeModelLinear <- function(scenario, testing.period, data, num.training.days,
         switch( scenario
                ,assessor = MyTrainingPeriodAssessor(testing.period$first.date)
                ,avm      = MyTrainingPeriodAvm()  # return a function(testing.date) --> training.period
+               ,avmnoa   = MyTrainingPeriodAvm()  # return a function(testing.date) --> training.period
                ,mortgage = MyTrainingPeriodMortgage()  # return a function(testing.date) --> training.period
                ,stop('bad scenario value')
                )
