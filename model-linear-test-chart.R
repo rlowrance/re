@@ -2,7 +2,9 @@
 # main program to produce all charts associated with model-linear-test.R
 # that program compares results on a synthetic data set
 
-source('InitializeR.R')
+library(devtools)
+load_all('/Users/roy/Dropbox/lowranceutilitiesr')
+
 source('ModelLinearTestMakeReport.R')
 
 Main <- function() {
