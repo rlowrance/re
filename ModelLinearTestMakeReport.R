@@ -3,8 +3,8 @@ ModelLinearTestMakeReport <- function(all.results) {
     #cat('start ModelLinearTestMakeReport\n'); browser()
 
     # format of the header and data lines in the report
-    format.header <- '%15s %15s %15s %15s %15s %15s'
-    format.data <-   '%15s %15s %15.0f %15.0f %15.0f %15.0f'
+    format.header <- '%12s %12s %12s %12s %12s %12s'
+    format.data <-   '%12s %12s %12.0f %12.0f %12.0f %12.0f'
     
     Header <- function(a,b,c,d,e,f) {
         sprintf(format.header, a, b, c, d, e, f)
