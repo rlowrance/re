@@ -1,5 +1,3 @@
-source('Rmse.R')
-source('RootMedianSquaredError.R')
 source('WithinXPercent.R')
 Assess <- function(model.result) {
     # return assessment of the model.result
