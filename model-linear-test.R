@@ -2,12 +2,13 @@
 # main program to test ModelLinear
 # Approach: use synthetic data
 
+library(devtools)
+load_all('/Users/roy/Dropbox/lowranceutilitiesr')
+
 source('Assess.R')
 source('DataSynthetic.R')
-source('InitializeR.R')
 source('MakeModelLinear.R')
 source('ModelLinearTestMakeReport.R')
-source('Printf.R')
 
 Experiment <- function(assessment.bias, assessment.relative.error) {
     # return data frame with these columns
