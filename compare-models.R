@@ -6,9 +6,9 @@
 
 library(devtools)
 load_all('/Users/roy/Dropbox/lowranceutilitiesr')
-#load_all('/Users/roy/Dropbox/lowrancerealestater')
+load_all('/Users/roy/Dropbox/lowrancerealestater')
 
-
+if (FALSE) {
 # must source Require.R first
 #source('Require.R')  # read function definition file if function does not exist
 
@@ -50,6 +50,7 @@ source('ReadSplit.R')
 
 source('TestingPeriods.R')
 #source('WithinXPercent.R')
+}
 
 ## handle command line, explicit and implicit
 
