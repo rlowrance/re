@@ -54,7 +54,8 @@ e_avm_variants_splits = \
 
 $(warning e_avm_variants_splits is $(e_avm_variants_splits))
 
-targets = $(output)/e-avm-variants.rsave
+targets = $(output)/e-avm-variants.rsave \
+		  $(output)/e-avm-variants-synthetic-data.rsave
 
 $(warning targets is $(targets))
 
@@ -64,3 +65,8 @@ all: $(targets)
 
 $(output)/e-avm-variants.rsave: e-avm-variants.R $(e_avm_variants_splits)
 	Rscript e-avm-variants.R
+
+$(output)/e-avm-variants-synthetic-data.rsave: \
+	e-avm-variants-synthetic-data.R \
+	EAvmVariantsSyntheticDataReport.R
+	Rscript e-avm-variants-synthetic-data.R
