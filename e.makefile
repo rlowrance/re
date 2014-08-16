@@ -26,10 +26,9 @@ recording.date             = $(split)-recordingDate.rsave
 sale.date                  = $(split)-saleDate.rsave
 year.built                 = $(split)-year.built.rsave
 
-$(warning apn is $(apn))
-$(warning avg.commute.time is $(avg.commute.time))
+#$(warning apn is $(apn))
+#$(warning avg.commute.time is $(avg.commute.time))
 
-# DETERMINE RULES FOR $(NAME); when can I write $NAME
 e_avm_variants_splits = \
   $(apn) \
   $(avg.commute.time) \
@@ -52,7 +51,7 @@ e_avm_variants_splits = \
 
 #e_avm_variants_splits = $(apn) $(avg.commute.time)
 
-$(warning e_avm_variants_splits is $(e_avm_variants_splits))
+#$(warning e_avm_variants_splits is $(e_avm_variants_splits))
 
 targets = $(output)/e-avm-variants.rsave \
 		  $(output)/e-avm-variants-synthetic-data.rsave
