@@ -1,7 +1,7 @@
 # e.makefile
 # rerun, as necessary, all experiments e*.R
 
-output = ../data/v6/output/
+output = ../data/v6/output
 
 # define split files
 split = $(output)/transactions-subset1
@@ -15,7 +15,7 @@ factor.has.pool            = $(split)-factor.has.pool.rsave
 fraction.improvement.value = $(split)-fraction.improvement.value.rsave
 fraction.owner.occupied    = $(split)-fraction.owner.occupied.rsave
 improvement.value          = $(split)-improvement.value.rsave
-land.square.footage        = $(split)-land.square.footgage.rsave
+land.square.footage        = $(split)-land.square.footage.rsave
 land.value                 = $(split)-land.value.rsave
 living.area                = $(split)-living.area.rsave
 log.price                  = $(split)-log.price.rsave
@@ -24,12 +24,15 @@ parking.spaces             = $(split)-parking.spaces.rsave
 price                      = $(split)-price.rsave
 recording.date             = $(split)-recordingDate.rsave
 sale.date                  = $(split)-saleDate.rsave
-year.built                 = $(year_built)-year.built.rsave
+year.built                 = $(split)-year.built.rsave
+
+$(warning apn is $(apn))
+$(warning avg.commute.time is $(avg.commute.time))
 
 # DETERMINE RULES FOR $(NAME); when can I write $NAME
-e-avm-variants = \
+e_avm_variants_splits = \
   $(apn) \
-  $(avg_commute_time) \
+  $(avg.commute.time) \
   $(bathrooms) \
   $(bedrooms) \
   $(factor.is.new.construction) \
@@ -47,21 +50,17 @@ e-avm-variants = \
   $(sale.date) \
   $(year.built)
 
+#e_avm_variants_splits = $(apn) $(avg.commute.time)
 
-
-$(warning e_avm_variantsis $(e_avm_variants))
+$(warning e_avm_variants_splits is $(e_avm_variants_splits))
 
 targets = $(output)/e-avm-variants.rsave
 
-# pattern rule
-# $< is the name of the source file  (on the RHS)
-# $@ is the name of the target file (on the LHS)
-%.rsave : %.R
-	Rscript $<
+$(warning targets is $(targets))
+
 
 .PHONY: all
 all: $(targets)
 
-$(output)/e-avm-variants.rsave: \
-	e-avm-variants.R \
-	$(e_avm_variants_splits)
+$(output)/e-avm-variants.rsave: e-avm-variants.R $(e_avm_variants_splits)
+	Rscript e-avm-variants.R
