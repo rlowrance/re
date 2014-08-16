@@ -1,11 +1,10 @@
-source('Assess.R')
 DataSynthetic <- function( obs.per.day
                           ,first.date
                           ,last.date
                           ,market.bias
-                          ,market.sd
+                          ,market.sd.fraction
                           ,assessment.bias
-                          ,assessment.sd
+                          ,assessment.sd.fraction
                           ) {
     # generate random synthetic data set
     # RETURNS list
@@ -16,9 +15,9 @@ DataSynthetic <- function( obs.per.day
     # first.date               : Date, first saleDate generated
     # last.date                : Date, last saleDate generated
     # market.bias              : num, mean ratio of true value to market value
-    # market.sd                : num, market standard deviation as a fraction of mean true value
+    # market.sd.fraction       : num, market standard deviation as a fraction of mean true value
     # assessment.bias          : num
-    # assessment.sd            : num, assessment standard deviation as a farction of the mean true value
+    # assessment.sd.fraction   : num, assessment standard deviation as a farction of the mean true value
     #
     # call set.seed() before calling me, if you want reproducability
     # NOTE: set the coefficients to give an average price of about $500,000
@@ -55,6 +54,23 @@ DataSynthetic <- function( obs.per.day
             coefficients$has.pool  * features$has.pool
     }
     
+    GenerateFromTrueValues <- function(true.values, bias, sd.fraction) {
+        # return vector of values that randomly differ from the true.values
+        #cat('start GenerateFromTrueValues', bias, sd.fraction, '\n'); browser()
+
+        DriftedValue <- function(true.value) {
+            # return one error
+            #cat('start DriftedValue', true.value, '\n'); browser()
+            drifted <- true.value * bias + rnorm(1, mean = 0, sd = sd.fraction * true.value)
+            drifted
+        }
+
+        result <- sapply( true.values
+                         ,function(true.value) DriftedValue(true.value)
+                         )
+        result
+    }
+
 
     # MAIN BODY STARTS HERE
     #cat('starting DataSynthetic\n'); browser()
@@ -73,20 +89,12 @@ DataSynthetic <- function( obs.per.day
                                  )
     
     true.values <- GenerateTrueValues(coefficients, features)
-    mean.true.value <- mean(true.values)
 
-    GenerateFromTrueValues <- function(bias, sd) {
-        #cat('start GenerateFromTrueValues', bias, sd, '\n'); browser()
-        errors <- rnorm( length(true.values)
-                        ,mean = mean.true.value * (bias - 1)
-                        ,sd = mean.true.value * sd
-                        )
-        result <- true.values + errors
-        result
-    }
+    prices <- GenerateFromTrueValues(true.values, market.bias, market.sd.fraction)
+    assessments <- GenerateFromTrueValues(true.values, assessment.bias, assessment.sd.fraction)
 
-    prices <- GenerateFromTrueValues(market.bias, market.sd)
-    assessments <- GenerateFromTrueValues(assessment.bias, assessment.sd)
+    # some prices and assessments may be negative
+    # when that is so, drop those observations
 
     is.valid.obs <- (prices > 0) & (assessments > 0)
 
@@ -123,9 +131,9 @@ DataSynthetic.test <- function() {
                           ,first.date = as.Date('2007-01-01')
                           ,last.date =  as.Date('2007-01-06')
                           ,market.bias = 1
-                          ,market.sd = .10
+                          ,market.sd.fraction = .10
                           ,assessment.bias = 2
-                          ,assessment.sd = 0
+                          ,assessment.sd.fraction = 0
                           )
 }
 
