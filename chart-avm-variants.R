@@ -56,7 +56,6 @@ Main <- function() {
     experiment.name <- 'e-avm-variants'
     control <- list( response = 'log.price'
                     ,path.in = paste0(path.output, experiment.name, '.rsave')
-                    ,path.in.base = paste0(path.output, 'transactions-subset1')
                     ,path.out.log = paste0(path.output, my.name, '.log')
                     ,path.out.chart1 = paste0(path.output, my.name, '-chart1.txt')
                     )
