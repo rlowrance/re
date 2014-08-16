@@ -108,7 +108,7 @@ Main <- function(split.names) {
     #cat('start Main'); browser()
 
     path.output = '../data/v6/output/'
-    me <- 'e-avm-variants-loglevel10' # response/predictors.form/nfolds
+    me <- 'e-avm-variants' # WAS: response/predictors.form/nfolds
     control <- list( response = 'log.price'
                     ,path.in.base = paste0(path.output, 'transactions-subset1')
                     ,path.out.log = paste0(path.output, me, '.log')
