@@ -66,6 +66,5 @@ $(output)/e-avm-variants.rsave: e-avm-variants.R $(e_avm_variants_splits)
 	Rscript e-avm-variants.R
 
 $(output)/e-avm-variants-synthetic-data.rsave: \
-	e-avm-variants-synthetic-data.R \
-	EAvmVariantsSyntheticDataReport.R
+	e-avm-variants-synthetic-data.R 
 	Rscript e-avm-variants-synthetic-data.R
