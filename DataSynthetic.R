@@ -1,4 +1,5 @@
 DataSynthetic <- function( obs.per.day
+                          ,inflation.annual.rate = 0
                           ,first.date
                           ,last.date
                           ,market.bias
@@ -12,15 +13,22 @@ DataSynthetic <- function( obs.per.day
     # $coefficients : list of actual pre-inflation coefficients used to generate the data
     # ARGS
     # obs.per.day              : num, positive, number of observations in each day
+    # inflation.annual.rate    : num in [0,1], annual rate of inflation (ex: .10 for 10 percent per year)
     # first.date               : Date, first saleDate generated
     # last.date                : Date, last saleDate generated
-    # market.bias              : num, mean ratio of true value to market value
-    # market.sd.fraction       : num, market standard deviation as a fraction of mean true value
-    # assessment.bias          : num
-    # assessment.sd.fraction   : num, assessment standard deviation as a farction of the mean true value
+    # market.bias              : num, mean ratio of true value to market value to true value
+    #                            market.value = true.value * bias + market.error
+    # market.sd.fraction       : num, market standard deviation as a fraction of true value
+    #                            market.error is drawn from N(0, true.value * market.sd.fraction)
+    # assessment.bias          : num, mean ratio of true value to assessment
+    # assessment.sd.fraction   : num, assessment standard deviation as a fraction of the true value
+    #                            assessment.value = like market.value
     #
     # call set.seed() before calling me, if you want reproducability
-    # NOTE: set the coefficients to give an average price of about $500,000
+    #
+    # NOTE: Generating assessment from true values is a problem if the assessment := true.value,
+    # because then a linear model is colinear.
+
 
     GenerateFeatures <- function( land.size.min, land.size.max
                                  ,latitude.min, latitude.max
@@ -29,8 +37,9 @@ DataSynthetic <- function( obs.per.day
         #cat('start GeneratedFeatures\n'); browser()
         elapsed.days <- last.date - first.date + 1
         n <- elapsed.days * obs.per.day
+        dates <- seq(first.date, last.date, by = 1)
         result.1 <- data.frame( stringsAsFactors = FALSE
-                               ,saleDate = seq(from = first.date, to = last.date, length.out = n)
+                               ,saleDate = rep(dates, obs.per.day)
                                ,land.size = runif(n, min = land.size.min, max = land.size.max)
                                ,latitude  = runif(n, min = latitude.min,  max = latitude.max)
                                ,has.pool  = ifelse( runif(n, min = 0, max = 1) > has.pool.frequency
@@ -44,29 +53,38 @@ DataSynthetic <- function( obs.per.day
         result
     }
 
-    GenerateTrueValues <- function(coefficients, features) {
+    GenerateTrueValues <- function(coefficients, features, inflation.annual.rate) {
         # return vector of true values
         #cat('start GenerateTrueValues\n'); browser()
-        true.values <- 
+        
+        true.values.no.inflation <- 
             coefficients$intercept +
             coefficients$land.size * features$land.size +
             coefficients$latitude  * features$latitude +
             coefficients$has.pool  * features$has.pool
+
+        # apply inflation
+        inflation.daily.rate <- (1 + inflation.annual.rate) ^ (1 / 365) - 1
+        lowest.date <- min(features$saleDate)
+        elapsed.days <- as.numeric(features$saleDate - lowest.date)
+        inflation.factors <- (1 + inflation.daily.rate) ^ elapsed.days
+        inflated.values <- true.values.no.inflation * inflation.factors
+        inflated.values
     }
     
-    GenerateFromTrueValues <- function(true.values, bias, sd.fraction) {
-        # return vector of values that randomly differ from the true.values
-        #cat('start GenerateFromTrueValues', bias, sd.fraction, '\n'); browser()
+    GenerateFromKnownValues <- function(known.values, bias, sd.fraction) {
+        # return vector of values that randomly differ from the known.values
+        #cat('start GenerateFromKnownValues', bias, sd.fraction, '\n'); browser()
 
-        DriftedValue <- function(true.value) {
+        DriftedValue <- function(known.value) {
             # return one error
-            #cat('start DriftedValue', true.value, '\n'); browser()
-            drifted <- true.value * bias + rnorm(1, mean = 0, sd = sd.fraction * true.value)
+            #cat('start DriftedValue', known.value, '\n'); browser()
+            drifted <- known.value * bias + rnorm(1, mean = 0, sd = sd.fraction * known.value)
             drifted
         }
 
-        result <- sapply( true.values
-                         ,function(true.value) DriftedValue(true.value)
+        result <- sapply( known.values
+                         ,DriftedValue
                          )
         result
     }
@@ -88,10 +106,10 @@ DataSynthetic <- function( obs.per.day
                                  ,has.pool.frequency = .5
                                  )
     
-    true.values <- GenerateTrueValues(coefficients, features)
+    true.values <- GenerateTrueValues(coefficients, features, inflation.annual.rate)
 
-    prices <- GenerateFromTrueValues(true.values, market.bias, market.sd.fraction)
-    assessments <- GenerateFromTrueValues(true.values, assessment.bias, assessment.sd.fraction)
+    prices <- GenerateFromKnownValues(true.values, market.bias, market.sd.fraction)
+    assessments <- GenerateFromKnownValues(true.values, assessment.bias, assessment.sd.fraction)
 
     # some prices and assessments may be negative
     # when that is so, drop those observations
@@ -125,9 +143,10 @@ DataSynthetic.test <- function() {
     #cat('starting DataSynthetic.test\n'); browser()
     #data <- DataSynthetic(10, as.Date('2007-01-01'), as.Date('2008-12-31'))  # big test set
 
-    set.seed(123)
+    # NOTE: no random seed is set, because this code is run during load time
 
     data <- DataSynthetic( obs.per.day = 10
+                          ,inflation.annual.rate = 1.00  # 100% inflation
                           ,first.date = as.Date('2007-01-01')
                           ,last.date =  as.Date('2007-01-06')
                           ,market.bias = 1
