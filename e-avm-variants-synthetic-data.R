@@ -17,25 +17,15 @@ load_all('/Users/roy/Dropbox/lowranceutilitiesr')
 load_all('/Users/roy/Dropbox/lowrancerealestater')
 
 
-MakeSyntheticData <- function(assessment.bias, assessment.relative.error, control) {
+MakeSyntheticData <- function(assessment.bias.name, assessment.relative.sd.name, control) {
     # return synthetic data in a data.frame and also the coefficients used to generate that data
-    #cat('start MakeSyntheticData', assessment.bias, assessment.relative.error, '\n'); browser()
+    #cat('start MakeSyntheticData', assessment.bias.name, assessment.relative.sd.name, '\n'); browser()
 
-    assessment.bias <- 
-        switch( assessment.bias
-               ,low = control$assessment.bias.low
-               ,zero = control$assessment.bias.zero
-               ,high = control$assessment.bias.high
-               )
+    assessment.bias <- control$assessment.bias.values[[assessment.bias.name]]
+    assessment.ds.fraction <- control$assessment.relative.sd.values[[assessment.relative.sd.name]]
 
-    assessment.ds.fraction <- 
-        switch( assessment.relative.error
-               ,lower = control$market.sd.fraction * control$assessment.relative.sd.lower
-               ,same = control$market.sd.fraction * control$assessment.relative.sd.same
-               ,higher = control$market.sd.fraction * control$assessment.relative.sd.higher
-               )
-
-    ds <- DataSynthetic( obs.per.day = 100
+    ds <- DataSynthetic( obs.per.day = control$obs.per.day
+                        ,inflation.annual.rate = control$inflation.annual.rate
                         ,first.date = as.Date('2007-01-01')
                         ,last.date = as.Date('2008-01-31')
                         ,market.bias = control$market.bias
@@ -43,6 +33,25 @@ MakeSyntheticData <- function(assessment.bias, assessment.relative.error, contro
                         ,assessment.bias = assessment.bias
                         ,assessment.sd.fraction = assessment.ds.fraction
                         )
+
+    debugging <- FALSE
+    if (debugging) {
+        browser()
+        dataframe <- ds$data
+
+        Hash <- function(dataframe) {
+            element.sum <- 0
+            for (column.name in names(dataframe)) {
+                print(column.name)
+                element.sum <- element.sum + sum(as.numeric(dataframe[[column.name]]))
+            }
+
+            element.sum
+        }
+
+        cat('synthetic data hash value', Hash(dataframe), '\n')
+        head(dataframe)
+    }
     ds
 }
 
@@ -51,19 +60,19 @@ TestScenarios <- function(data, actual.coefficients, control) {
     # The test is to determine the error on the January transaction after training for 60 days
     # The model formula is price ~ <predictors>
 
-    TranslateScenarioName <- function(scenario) {
+    Scenario <- function(case.name) {
         # translate local scenario name into name used by MakeModelLinear
-        switch( scenario
-               ,'assessor' = scenario
+        switch( case.name
+               ,'assessor' = 'assessor'
                ,'avm w/o assessment' = 'avm'
                ,'avm w/ assessment' = 'avm'
-               ,'mortgage' = scenario
+               ,'mortgage' = 'mortgage'
                )
     }
 
-    Predictors <- function(scenario) {
+    Predictors <- function(case.name) {
         # return the predictors that we use for the specified scenario
-        switch( scenario
+        switch( case.name
                ,'assessor' =
                ,'avm w/o assessment' = c('land.size', 'latitude', 'has.pool')
                ,'avm w/ assessment' =
@@ -111,14 +120,14 @@ TestScenarios <- function(data, actual.coefficients, control) {
     #cat('start TestScenarios', nrow(data), '\n'); browser()
 
 
-    all.data.indices <- 1:nrow(data)
+    all.data.indices <- rep(TRUE, nrow(data))
     all <- NULL
-    for (scenario in c('assessor', 'avm w/o assessment', 'avm w/ assessment', 'mortgage')) {
-        cat('scenario', scenario, '\n')
+    for (case.name in c('assessor', 'avm w/o assessment', 'avm w/ assessment', 'mortgage')) {
+        cat('scenario', case.name, '\n')
         #browser()
-        CvModel <- MakeModelLinear( scenario = TranslateScenarioName(scenario)
+        CvModel <- MakeModelLinear( scenario = Scenario(case.name)
                                    ,response = 'price'
-                                   ,predictors = Predictors(scenario)
+                                   ,predictors = Predictors(case.name)
                                    ,testing.period = list( first.date = as.Date('2008-01-01')
                                                           ,last.date = as.Date('2008-01-31')
                                                           )
@@ -130,13 +139,13 @@ TestScenarios <- function(data, actual.coefficients, control) {
                              ,training.indices = all.data.indices
                              ,testing.indices = all.data.indices
                              )
-        if (scenario == 'assessor') {
+        if (FALSE && case.name == 'assessor') {
             # the coefficients should be close to what was used to generate the data
             CheckCoefficients(ExtractCoefficients(cv.result), actual.coefficients)
         }
         assess <- Assess(cv.result)
         next.row <- data.frame( stringsAsFactors = FALSE
-                               ,scenario = scenario
+                               ,scenario = case.name
                                ,rmse = assess$rmse
                                )
         all <- IfThenElse(is.null(all), next.row, rbind(all, next.row))
@@ -144,41 +153,40 @@ TestScenarios <- function(data, actual.coefficients, control) {
     all
 }
 
-Experiment <- function(assessment.bias, assessment.relative.error, control) {
+Experiment <- function(assessment.bias.name, assessment.relative.sd.name, control) {
     # return data frame with these columns
     # $scenario = name of scenario, in 'assessor', 'avm w/o assessment', 'avm w/ assessment', 'mortgage'
     # $rmse = error from a log-log model, trained for 60 days and testing on Jan 2008 data
 
-
-
-    # BODY BEGINS HERE
-    #cat('start Experiment', assessment.bias, assessment.relative.error, '\n')
+    cat('start Experiment', assessment.bias.name, assessment.relative.sd.name, '\n')
     #browser()
 
-    sd <- MakeSyntheticData(assessment.bias, assessment.relative.error, control)
+    sd <- MakeSyntheticData(assessment.bias.name, assessment.relative.sd.name, control)
     df <- TestScenarios(sd$data, sd$coefficients)
     df # return data frame containing result of test, one row per test
 }
 
 
-Sweep <- function(f, assessment.biases, assessment.relative.errors, control) {
+Sweep <- function(f, assessment.bias.names, assessment.relative.sd.names, control) {
     # return data.frame containing a row for each element in cross product of list1 and list2
     # and scenario and rmse for that scenario on appropriate synthetic data
     #cat('Sweep\n'); browser()
 
     # build up a data.frame
     all <- NULL
-    for (assessment.bias in assessment.biases) {
-        for (assessment.relative.error in assessment.relative.errors) {
-            one <- f(assessment.bias, assessment.relative.error, control)
+    for (assessment.bias.name in assessment.bias.names) {
+        for (assessment.relative.sd.name in assessment.relative.sd.names) {
+            one <- f(assessment.bias.name, assessment.relative.sd.name, control)
             new.row <- data.frame( stringsAsFactors = FALSE
-                                  ,assessment.bias = assessment.bias
-                                  ,assessment.relative.error = assessment.relative.error
+                                  ,assessment.bias.name = assessment.bias.name
+                                  ,assessment.relative.sd.name = assessment.relative.sd.name
                                   ,scenario = one$scenario
                                   ,rmse = one$rmse
                                   )
             all <- if(is.null(all)) new.row else rbind(all, new.row)
+            if (control$testing) break
         }
+        if (control$testing) break
     }
     all
 }
@@ -188,34 +196,46 @@ Main <- function() {
 
     path.output = '../data/v6/output/'
     me <- 'e-avm-variants-synthetic-data' 
+    market.sd.fraction = .2
     control <- list( response = 'price'
                     ,path.out.log = paste0(path.output, me, '.log')
                     ,path.out.save = paste0(path.output, me, '.rsave')
+                    ,obs.per.day = 10
+                    ,inflation.annual.rate = .10
                     ,testing.period = list( first.date = as.Date('2008-01-01')
                                            ,last.date = as.Date('2008-01-31')
                                            )
                     ,market.bias = 1
-                    ,market.sd.fraction = .2
-                    ,assessment.bias.low = .8
-                    ,assessment.bias.zero = 1
-                    ,assessment.bias.high = 1.2
-                    ,assessment.relative.sd.lower = .5
-                    ,assessment.relative.sd.same = 1
-                    ,assessment.relative.sd.higher = 2
+                    ,market.sd.fraction = market.sd.fraction
+                    ,assessment.bias.names = c('zero', 'lower', 'higher')
+                    ,assessment.bias.values = list( lower = .8
+                                                   ,zero  = 1
+                                                   ,higher = 1.2
+                                                   )
+                    ,assessment.relative.sd.names = c('nearzero', 'lower', 'same', 'higher')
+                    ,assessment.relative.sd.values = list( nearzero = .01
+                                                          ,lower = .5 * market.sd.fraction
+                                                          ,same = market.sd.fraction
+                                                          ,higher = 2 * market.sd.fraction
+                                                          )
                     ,num.training.days = 60
                     ,random.seed = 123
+                    ,testing = FALSE
                     )
 
-    InitializeR(duplex.output.to = control$path.out.log, random.seed = control$andom.seed)
+    #cat('in Main\n'); browser()
+    InitializeR(duplex.output.to = control$path.out.log, random.seed = control$random.seed)
     print(control)
 
     result.df <- Sweep( f = Experiment
-                       ,assessment.biases = c('zero', 'low', 'high')
-                       ,assessment.relative.errors = c('lower', 'same', 'higher')
+                       ,assessment.bias.names = control$assessment.bias.names
+                       ,assessment.relative.sd.names = control$assessment.relative.sd.names
                        ,control = control
                        )
-    cat('main, after Sweep\n'); browser()
-    save(result.df, file = control$path.out.save)
+
+
+    #cat('main, after Sweep\n'); browser()
+    save(control, result.df, file = control$path.out.save)
 
     # write a report to the console
     print(result.df)
