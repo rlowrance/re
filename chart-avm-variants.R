@@ -103,7 +103,7 @@ Main <- function() {
     experiment.name <- 'e-avm-variants'
 
     PathIn <- function() {
-        final.version.available <- FALSE
+        final.version.available <- TRUE
         if (final.version.available) {
             paste0(path.output, experiment.name, '.rsave')
         } else {
