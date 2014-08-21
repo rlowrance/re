@@ -85,7 +85,11 @@ ExperimentResult <- function(cv.result, experiment.names) {
         #cat('start MeanRmse', model.index, '\n'); browser()
         in.model <- fold.assessment$model.index == model.index
         fold.error <- fold.assessment$assessment.rmse[in.model]
-        result <- mean(fold.error)
+        result <- mean(fold.error, na.rm = TRUE)
+        if (is.nan(result) || is.na(result)) {
+            cat('in MeanRmse: strange result', result, '\n')
+            browser()
+        }
         result
     }
 
@@ -93,7 +97,11 @@ ExperimentResult <- function(cv.result, experiment.names) {
         #cat('start Median Rmse', model.index, '\n'); browser()
         in.model <- fold.assessment$model.index == model.index
         fold.error <- fold.assessment$assessment.root.median.squared.error[in.model]
-        result <- median(fold.error)
+        result <- median(fold.error, na.rm = TRUE)
+        if (is.nan(result) || is.na(result)) {
+            cat('in MedianRmse: strange result', result, '\n')
+            browser()
+        }
         result
     }
 
