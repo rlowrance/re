@@ -1,5 +1,5 @@
-# e-avm-variants-loglevel10.R
-# main program to produce file OUTPUT/e-avm-variants-loglevel10.rsave
+# e-avm-variants.R
+# main program to produce file OUTPUT/e-avm-variants.rsave
 # issue resolved: The AVM model performs better than the assessor model. How much
 # of the better performance is caused by using the assessment?
 # Approach: Use k-fold cross validation to compare estimated generalization errors for
