@@ -29,6 +29,17 @@ year.built                 = $(split)-year.built.rsave
 #$(warning apn is $(apn))
 #$(warning avg.commute.time is $(avg.commute.time))
 
+e_assessment_attractor_splits = \
+  $(apn) \
+  $(fraction.improvement.value) \
+  $(improvement.value) \
+  $(land.value) \
+  $(price) \
+  $(saleDate) \
+  $(sale.month) \
+  $(sale.year) \
+  $(recordingDate) \
+
 e_avm_variants_splits = \
   $(apn) \
   $(avg.commute.time) \
@@ -46,7 +57,7 @@ e_avm_variants_splits = \
   $(parking.spaces) \
   $(price) \
   $(recording.date) \
-  $(sale.date) \
+  $(saleDate) \
   $(year.built)
 
 #e_avm_variants_splits = $(apn) $(avg.commute.time)
@@ -54,7 +65,9 @@ e_avm_variants_splits = \
 #$(warning e_avm_variants_splits is $(e_avm_variants_splits))
 
 targets = $(output)/e-avm-variants.rsave \
-		  $(output)/e-avm-variants-synthetic-data.rsave
+		  $(output)/e-avm-variants-synthetic-data.rsave \
+		  $(output)/e-assessment-attractor.rsave
+
 
 $(warning targets is $(targets))
 
@@ -62,6 +75,7 @@ $(warning targets is $(targets))
 .PHONY: all
 all: $(targets)
 
+#(output)/e-assessment-attractor.rsave: e-assessment-attractor.R $(e_assessment_attactor_splits)
 $(output)/e-avm-variants.rsave: e-avm-variants.R $(e_avm_variants_splits)
 	Rscript e-avm-variants.R
 
