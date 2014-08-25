@@ -51,7 +51,9 @@ CreateChart1 <- function(control, description, all.result) {
 }
 
 CreateChart2 <- function(control, experiment.control, description, strata.results) {
-    # return a vector of lines, the txt for chart 2
+    # return a list containing two charts
+    # $all : vector of lines with all information
+    # $legend: vector of lines with just the legend
     #cat('start CreateChart2\n'); browser()
 
     header <- c( 'AVM Variants by Strata'
@@ -84,13 +86,18 @@ CreateChart2 <- function(control, experiment.control, description, strata.result
           ,'middle class neighborhood: all other census tracts'
           )
     }
+    legend <- Legend()
 
-    result <- c( header
-                ,' '
-                ,body
-                ,' '
-                ,Legend()
-                )
+    all <- c( header
+             ,' '
+             ,body
+             ,' '
+             ,legend
+             )
+
+    result <- list ( all = all
+                    ,legend = legend
+                    )
     result
 }
 
@@ -116,6 +123,7 @@ Main <- function() {
                     ,path.out.log = paste0(path.output, my.name, '.log')
                     ,path.out.chart1 = paste0(path.output, my.name, '-chart1.txt')
                     ,path.out.chart2 = paste0(path.output, my.name, '-chart2.txt')
+                    ,path.out.chart2.legend = paste0(path.output, my.name, '-chart2-legend.txt')
                     ,chart1.format.header = '%27s | %20s %20s'
                     ,chart1.format.data =   '%27s | %20.0f %20.0f'
                     )
@@ -138,8 +146,12 @@ Main <- function() {
                            ,description = rs$description
                            ,strata.results = rs$strata.results
                            )
-    writeLines( text = chart2
+    writeLines( text = chart2$all
                ,con = control$path.out.chart2
+               )
+
+    writeLines( text = chart2$legend
+               ,con = control$path.out.chart2.legend
                )
 
     print(control)
