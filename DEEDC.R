@@ -25,27 +25,57 @@ DEEDC <- function(code, kind) {
     # 5. The bank obtains a deficiency judgement based on the appraised value of the property
     #    on the day of the foreclosure sale.
 
-    with.na <- 
-    switch(kind,
-           construction.loan               = code == 'C',
-           correction.deed                 = code == 'CD',  # coorects a previous mistake
-           final.judgement                 = code == 'F',   # the bank has won its case
-           grant.deed                      = code == 'G',   # sale or transfer
-           lis.pendens                     = code == 'L',   # notify public of claim against the property
-           notice.of.default               = code == 'N',
-           quit.claim                      = code == 'Q',   # disdain any interest in a property
-           release                         = code == 'R',   # release a lien on a property
-           loan.assignment                 = code == 'S',   # transfers lien to a new lender
-           deed.of.trust                   = code == 'T',   # gives mortgage lender a lien on a property
-           foreclosure                     = code == 'U',   # grants ownership to the purchaser at a 
-                                                            # foreclosure sale
-           multi.cnty.or.open.end.mortgage = code == 'X',
-           nominal                         = code == 'Z',
-           # composite types NONE FOR NOW
+    result <-
+    if (hasArg('kind')) {
+        with.na <- 
+            switch( kind
+                   ,construction.loan               = code == 'C'
+                   ,correction.deed                 = code == 'CD'  # coorects a previous mistake
+                   ,final.judgement                 = code == 'F'   # the bank has won its case
+                   ,grant.deed                      = code == 'G'   # sale or transfer
+                   ,lis.pendens                     = code == 'L'   # notify public of claim against the property
+                   ,notice.of.default               = code == 'N'
+                   ,quit.claim                      = code == 'Q'   # disdain any interest in a property
+                   ,release                         = code == 'R'   # release a lien on a property
+                   ,loan.assignment                 = code == 'S'   # transfers lien to a new lender
+                   ,deed.of.trust                   = code == 'T'   # gives mortgage lender a lien on a property
+                   ,foreclosure                     = code == 'U'   # grants ownership to the purchaser at a 
+                   # foreclosure sale
+                   ,multi.cnty.or.open.end.mortgage = code == 'X'
+                   ,nominal                         = code == 'Z'
+                   # composite types NONE FOR NOW
 
-           # default
-           ...                             = stop(sprintf('bad kind = %s', kind))
-           )
-    result <- ifelse(is.na(with.na), FALSE, with.na)
+                   # default
+                   ,...                             = stop(sprintf('bad kind = %s', kind))
+                   )
+        ifelse(is.na(with.na), FALSE, with.na)
+    } else if (hasArg('code')) {
+        #cat('in DEEDC\n'); browser()
+        OneCode <- function(one.code) {
+            #cat('start OneCode\n'); browser()
+            switch( one.code
+                   ,'C'   = 'construction.loan'
+                   ,'CD'  = 'correction.deed'
+                   ,'F'   = 'final.judgement'
+                   ,'G'   = 'grant.deed'
+                   ,'L'   = 'lis.pendens'
+                   ,'N'   = 'notice.of.default'
+                   ,'Q'   = 'quit.claim'
+                   ,'R'   = 'release'
+                   ,'S'   = 'loan.assignment'
+                   ,'T'   = 'deed.of.trust'
+                   ,'U'   = 'foreclosure'
+                   ,'X'   = 'multi.city.or.open.end.mortgage'
+                   ,'Z'   = 'nominal'
+                   ,'unknown code'
+                   )
+        }
+        result <- if (length(code) == 1) OneCode(code) else sapply(code, OneCode)
+        result
+    } else {
+        stop('bad call')
+    }
+
+
     result
 }
