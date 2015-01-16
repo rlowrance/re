@@ -25,8 +25,7 @@ DEEDC <- function(code, kind) {
     # 5. The bank obtains a deficiency judgement based on the appraised value of the property
     #    on the day of the foreclosure sale.
 
-    result <-
-    if (hasArg('kind')) {
+    Match <- function(code, kind) {
         with.na <- 
             switch( kind
                    ,construction.loan               = code == 'C'
@@ -49,8 +48,10 @@ DEEDC <- function(code, kind) {
                    ,...                             = stop(sprintf('bad kind = %s', kind))
                    )
         ifelse(is.na(with.na), FALSE, with.na)
-    } else if (hasArg('code')) {
-        #cat('in DEEDC\n'); browser()
+    }
+
+    LookupCode <- function(code) {
+        # lookup one or more codes
         OneCode <- function(one.code) {
             #cat('start OneCode\n'); browser()
             switch( one.code
@@ -72,10 +73,14 @@ DEEDC <- function(code, kind) {
         }
         result <- if (length(code) == 1) OneCode(code) else sapply(code, OneCode)
         result
-    } else {
-        stop('bad call')
     }
 
-
+    result <- 
+        if (hasArg('code') && hasArg('kind')) 
+            Match(code, kind)
+        else if (hasArg('code'))
+            LookupCode(code)
+        else
+            stop('bad call')
     result
 }
