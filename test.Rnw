@@ -1,0 +1,16 @@
+\documentclass{article}
+
+\begin{document}
+\SweaveOpts{concordance=TRUE}
+
+This is a test.
+
+<<test.code>>=
+# comment in the R code
+x <- 1 + 1
+@
+
+The value of $x$ is \Sexpr{x}.
+
+
+\end{document}
